@@ -113,7 +113,7 @@ public class ClimateService {
     private String buildFluxQuery(String measurement, String entityId) {
         return String.format(
                 "from(bucket: \"%s\")"
-                + " |> range(start: -15m)"
+                + " |> range(start: -24h)"
                 + " |> filter(fn: (r) => r._measurement == \"%s\" and r.entity_id == \"%s\" and r._field == \"value\")"
                 + " |> last()",
                 BUCKET, measurement, entityId
