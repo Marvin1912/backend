@@ -1,5 +1,7 @@
 package com.marvin.climate.service;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -9,7 +11,6 @@ import com.influxdb.client.InfluxDBClient;
 import com.influxdb.client.QueryApi;
 import com.influxdb.query.FluxRecord;
 import com.influxdb.query.FluxTable;
-import com.marvin.climate.dto.TemperatureReading;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -54,11 +55,11 @@ class ClimateServiceTest {
         // When / Then
         StepVerifier.create(climateService.getCurrentReadings())
                 .assertNext(reading -> {
-                    assert reading.sensorId().equals(TEST_ENTITY_ID);
-                    assert reading.label().equals("Draußen");
-                    assert reading.location().equals("outdoor");
-                    assert reading.temperatureC() == TEST_TEMPERATURE;
-                    assert reading.measuredAt().equals(measuredAt);
+                    assertEquals(TEST_ENTITY_ID, reading.sensorId());
+                    assertEquals("Draußen", reading.label());
+                    assertEquals("outdoor", reading.location());
+                    assertEquals(TEST_TEMPERATURE, reading.temperatureC());
+                    assertEquals(measuredAt, reading.measuredAt());
                 })
                 .verifyComplete();
     }
@@ -86,8 +87,20 @@ class ClimateServiceTest {
 
         // Then
         verify(queryApi).query(queryCaptor.capture(), eq(TEST_ORG));
-        assert queryCaptor.getValue().contains(TEST_ENTITY_ID)
-                : "Query must contain the configured entity_id";
+        assertTrue(queryCaptor.getValue().contains(TEST_ENTITY_ID), "Query must contain the configured entity_id");
+    }
+
+    @Test
+    @DisplayName("Should propagate InfluxDB query errors")
+    void getCurrentReadings_ShouldPropagateError_WhenInfluxFails() {
+        // Given
+        final RuntimeException influxFailure = new RuntimeException("influx down");
+        when(queryApi.query(anyString(), eq(TEST_ORG))).thenThrow(influxFailure);
+
+        // When / Then
+        StepVerifier.create(climateService.getCurrentReadings())
+                .expectErrorMatches(t -> t == influxFailure || t.getCause() == influxFailure)
+                .verify();
     }
 
     private FluxTable buildTable(double temperature, Instant time) {
@@ -97,13 +110,5 @@ class ClimateServiceTest {
         record.getValues().put("_time", time);
         table.getRecords().add(record);
         return table;
-    }
-
-    private void verifyReading(TemperatureReading reading, Instant measuredAt) {
-        assert reading.sensorId().equals(TEST_ENTITY_ID);
-        assert reading.label().equals("Draußen");
-        assert reading.location().equals("outdoor");
-        assert reading.temperatureC() == TEST_TEMPERATURE;
-        assert reading.measuredAt().equals(measuredAt);
     }
 }

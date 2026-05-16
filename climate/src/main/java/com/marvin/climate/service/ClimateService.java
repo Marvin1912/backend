@@ -57,7 +57,8 @@ public class ClimateService {
 
         return Mono.fromCallable(() -> influxDBClient.getQueryApi().query(flux, org))
                 .subscribeOn(Schedulers.boundedElastic())
-                .flatMapMany(this::mapTablesToReadings);
+                .flatMapMany(this::mapTablesToReadings)
+                .doOnError(e -> LOGGER.error("Failed to fetch climate readings from InfluxDB for entity_id '{}'", outdoorEntityId, e));
     }
 
     private String buildFluxQuery() {
