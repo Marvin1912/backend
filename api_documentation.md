@@ -329,7 +329,7 @@ APIs are configured via application.yaml with environment variables for database
 Exposes current climate sensor readings sourced from InfluxDB.
 
 #### GET /climate/readings
-Returns the most recent temperature reading for each configured climate sensor.
+Returns the most recent temperature reading for each configured climate sensor, optionally enriched with the matching humidity reading.
 
 **Request:**
 - Method: GET
@@ -349,17 +349,20 @@ Returns the most recent temperature reading for each configured climate sensor.
     "label": "Draußen",
     "location": "outdoor",
     "temperatureC": 21.5,
+    "humidityPct": 55.0,
     "measuredAt": "2026-05-16T10:00:00Z"
   }
 ]
 ```
+
+`humidityPct` is optional and is omitted from the JSON payload when the humidity sensor has no recent record.
 
 **Sample curl:**
 ```bash
 curl -s http://localhost:9001/climate/readings | jq .
 ```
 
-**Description:** Queries the `sensor_data` InfluxDB bucket for the latest `°C` measurement matching the configured `entity_id` (default `draussen_temperature`). Returns an empty JSON array when no data is available. The entity ID is configurable via the `CLIMATE_OUTDOOR_ENTITY_ID` environment variable.
+**Description:** Queries the `sensor_data` InfluxDB bucket for the latest `°C` measurement matching the configured temperature `entity_id` (default `draussen_temperature`) and the latest `%` measurement matching the humidity `entity_id` (default `draussen_humidity`). Temperature and humidity are queried in parallel and merged into a single reading; a missing humidity record does not block the response. Returns an empty JSON array when no temperature data is available. The entity IDs are configurable via the `CLIMATE_OUTDOOR_ENTITY_ID` and `CLIMATE_OUTDOOR_HUMIDITY_ENTITY_ID` environment variables.
 
 ## Reactive Programming
 
