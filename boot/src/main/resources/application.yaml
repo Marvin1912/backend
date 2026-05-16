@@ -71,3 +71,4 @@ rss:
 climate:
   outdoor:
     entity-id: ${CLIMATE_OUTDOOR_ENTITY_ID:draussen_temperature}
+    humidity-entity-id: ${CLIMATE_OUTDOOR_HUMIDITY_ENTITY_ID:draussen_humidity}
