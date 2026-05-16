@@ -324,6 +324,43 @@ The application uses Spring Security configuration (see SecurityConfig.java). Sp
 
 APIs are configured via application.yaml with environment variables for database connections, file paths, and external service credentials.
 
+### 6. ClimateController
+
+Exposes current climate sensor readings sourced from InfluxDB.
+
+#### GET /climate/readings
+Returns the most recent temperature reading for each configured climate sensor.
+
+**Request:**
+- Method: GET
+- Content-Type: N/A
+- Body: None
+
+**Response:**
+- Status: 200 OK
+- Content-Type: application/json
+- Body: `TemperatureReading[]`
+
+**TemperatureReading Schema:**
+```json
+[
+  {
+    "sensorId": "draussen_temperature",
+    "label": "Draußen",
+    "location": "outdoor",
+    "temperatureC": 21.5,
+    "measuredAt": "2026-05-16T10:00:00Z"
+  }
+]
+```
+
+**Sample curl:**
+```bash
+curl -s http://localhost:9001/climate/readings | jq .
+```
+
+**Description:** Queries the `sensor_data` InfluxDB bucket for the latest `°C` measurement matching the configured `entity_id` (default `draussen_temperature`). Returns an empty JSON array when no data is available. The entity ID is configurable via the `CLIMATE_OUTDOOR_ENTITY_ID` environment variable.
+
 ## Reactive Programming
 
 All APIs are built with Spring WebFlux and Reactor, supporting non-blocking, asynchronous operations suitable for high-throughput scenarios.

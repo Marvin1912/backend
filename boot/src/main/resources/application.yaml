@@ -67,3 +67,7 @@ management:
 
 rss:
   poll-interval-ms: 1800000
+
+climate:
+  outdoor:
+    entity-id: ${CLIMATE_OUTDOOR_ENTITY_ID:draussen_temperature}
