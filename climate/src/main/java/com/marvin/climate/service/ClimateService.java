@@ -23,9 +23,19 @@ public class ClimateService {
     private static final String BUCKET = "sensor_data";
     private static final String TEMPERATURE_MEASUREMENT = "°C";
     private static final String HUMIDITY_MEASUREMENT = "%";
+    private static final String TEMPERATURE_SUFFIX = "_temperature";
+    private static final String HUMIDITY_SUFFIX = "_humidity";
     private static final String OUTDOOR_LABEL = "Draußen";
     private static final String OUTDOOR_LOCATION = "outdoor";
+    private static final String INDOOR_LOCATION = "indoor";
     private static final FluxRecord MISSING_RECORD = new FluxRecord(-1);
+    private static final List<Room> INDOOR_ROOMS = List.of(
+            new Room("badezimmer", "Badezimmer"),
+            new Room("flur", "Flur"),
+            new Room("kueche", "Küche"),
+            new Room("schlafzimmer", "Schlafzimmer"),
+            new Room("wohnzimmer", "Wohnzimmer")
+    );
 
     private final InfluxDBClient influxDBClient;
     private final String org;
@@ -53,25 +63,49 @@ public class ClimateService {
     }
 
     /**
-     * Retrieves the current climate readings from all configured sensors, merging
-     * temperature and humidity for the outdoor sensor into a single DTO.
+     * Retrieves the current climate readings from the outdoor sensor and every configured
+     * indoor room sensor. Each emitted reading combines temperature and (when available)
+     * humidity for the corresponding location. Sensors that fail to report any data are
+     * silently skipped so that a single broken sensor does not hide the rest.
      *
-     * @return a Flux emitting one {@link TemperatureReading} per outdoor sensor record found in InfluxDB
+     * @return a Flux emitting one {@link TemperatureReading} per sensor that has data
      */
     public Flux<TemperatureReading> getCurrentReadings() {
         LOGGER.info("Fetching current climate readings from InfluxDB");
 
+        final Mono<TemperatureReading> outdoor = fetchReading(
+                outdoorEntityId, outdoorHumidityEntityId, OUTDOOR_LABEL, OUTDOOR_LOCATION);
+        final Flux<TemperatureReading> indoor = Flux.fromIterable(INDOOR_ROOMS)
+                .concatMap(room -> fetchReading(
+                        room.key() + TEMPERATURE_SUFFIX,
+                        room.key() + HUMIDITY_SUFFIX,
+                        room.label(),
+                        INDOOR_LOCATION));
+
+        return Flux.concat(outdoor.flux(), indoor);
+    }
+
+    private Mono<TemperatureReading> fetchReading(
+            String temperatureEntityId,
+            String humidityEntityId,
+            String label,
+            String location
+    ) {
         final Mono<FluxRecord> temperatureMono = queryLatestRecord(
-                buildFluxQuery(TEMPERATURE_MEASUREMENT, outdoorEntityId), outdoorEntityId);
-        final Mono<FluxRecord> humidityMono = queryLatestRecord(
-                buildFluxQuery(HUMIDITY_MEASUREMENT, outdoorHumidityEntityId), outdoorHumidityEntityId)
+                buildFluxQuery(TEMPERATURE_MEASUREMENT, temperatureEntityId), temperatureEntityId)
                 .onErrorResume(e -> {
-                    LOGGER.warn("Humidity query failed for entity_id '{}' - continuing without humidity", outdoorHumidityEntityId, e);
+                    LOGGER.warn("Temperature query failed for entity_id '{}' - skipping sensor", temperatureEntityId, e);
+                    return Mono.just(MISSING_RECORD);
+                });
+        final Mono<FluxRecord> humidityMono = queryLatestRecord(
+                buildFluxQuery(HUMIDITY_MEASUREMENT, humidityEntityId), humidityEntityId)
+                .onErrorResume(e -> {
+                    LOGGER.warn("Humidity query failed for entity_id '{}' - continuing without humidity", humidityEntityId, e);
                     return Mono.just(MISSING_RECORD);
                 });
 
         return Mono.zip(temperatureMono, humidityMono)
-                .flatMapMany(tuple -> mergeReadings(tuple.getT1(), tuple.getT2()));
+                .flatMap(tuple -> toReading(tuple.getT1(), tuple.getT2(), temperatureEntityId, label, location));
     }
 
     private Mono<FluxRecord> queryLatestRecord(String flux, String entityId) {
@@ -92,18 +126,24 @@ public class ClimateService {
                 .orElse(MISSING_RECORD);
     }
 
-    private Flux<TemperatureReading> mergeReadings(FluxRecord temperature, FluxRecord humidity) {
+    private Mono<TemperatureReading> toReading(
+            FluxRecord temperature,
+            FluxRecord humidity,
+            String sensorId,
+            String label,
+            String location
+    ) {
         if (temperature == MISSING_RECORD) {
-            return Flux.empty();
+            return Mono.empty();
         }
         final double temperatureC = ((Number) temperature.getValue()).doubleValue();
         final Double humidityPct = humidity == MISSING_RECORD
                 ? null
                 : ((Number) humidity.getValue()).doubleValue();
-        return Flux.just(new TemperatureReading(
-                outdoorEntityId,
-                OUTDOOR_LABEL,
-                OUTDOOR_LOCATION,
+        return Mono.just(new TemperatureReading(
+                sensorId,
+                label,
+                location,
                 temperatureC,
                 humidityPct,
                 temperature.getTime()
@@ -118,5 +158,8 @@ public class ClimateService {
                 + " |> last()",
                 BUCKET, measurement, entityId
         );
+    }
+
+    private record Room(String key, String label) {
     }
 }
