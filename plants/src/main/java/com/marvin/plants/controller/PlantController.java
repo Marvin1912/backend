@@ -219,9 +219,9 @@ public class PlantController {
      */
     private Mono<ResponseEntity<Object>> updatePlantSynchronously(PlantDTO plantDTO) {
         return Mono.fromCallable(() -> {
-                    plantService.updatePlant(plantDTO);
-                    return ResponseEntity.noContent().build();
-                })
+            plantService.updatePlant(plantDTO);
+            return ResponseEntity.noContent().build();
+        })
                 .subscribeOn(Schedulers.boundedElastic());
     }
 

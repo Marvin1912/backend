@@ -8,6 +8,7 @@ import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -37,12 +38,12 @@ public class PlantService {
     @PostConstruct
     public void initGauges() {
         plantRepository.findAll().forEach(plant -> {
-            AtomicInteger waterState = wateringStates.computeIfAbsent(plant.getId(), id -> new AtomicInteger(0));
+            final AtomicInteger waterState = wateringStates.computeIfAbsent(plant.getId(), id -> new AtomicInteger(0));
             Gauge.builder("water_plant", waterState, AtomicInteger::get)
                     .tag("plant", plant.getName())
                     .register(meterRegistry);
 
-            AtomicInteger fertilizeState = fertilizingStates.computeIfAbsent(plant.getId(), id -> new AtomicInteger(0));
+            final AtomicInteger fertilizeState = fertilizingStates.computeIfAbsent(plant.getId(), id -> new AtomicInteger(0));
             Gauge.builder("fertilize_plant", fertilizeState, AtomicInteger::get)
                     .tag("plant", plant.getName())
                     .register(meterRegistry);
@@ -103,27 +104,40 @@ public class PlantService {
     private void waterPlant(Plant plant, LocalDate lastWatered) {
         plant.setLastWateredDate(lastWatered);
         plant.setNextWateredDate(lastWatered.plusDays(plant.getWateringFrequency()));
+        if (plant.getLastFertilizedDate() != null && plant.getFertilizingFrequency() != null) {
+            fertilizePlant(plant, plant.getLastFertilizedDate());
+        }
     }
 
     private void fertilizePlant(Plant plant, LocalDate lastFertilized) {
         if (lastFertilized != null && plant.getFertilizingFrequency() != null) {
             plant.setLastFertilizedDate(lastFertilized);
-            LocalDate nextFertilized = lastFertilized.plusDays(plant.getFertilizingFrequency());
+            final LocalDate candidate = lastFertilized.plusDays(plant.getFertilizingFrequency());
+            LocalDate snapped = snapToWateringDate(candidate, plant.getLastWateredDate(), plant.getWateringFrequency());
 
             // Fertilizing period is April (month 4) to October (month 10)
             // If next fertilizing date is outside this range, set to April 15th
-            int month = nextFertilized.getMonthValue();
+            final int month = snapped.getMonthValue();
             if (month < 4 || month > 10) {
-                int year = nextFertilized.getYear();
+                int year = snapped.getYear();
                 // If current month is October, November, or December, increment year
                 if (month >= 10) {
                     year++;
                 }
-                nextFertilized = LocalDate.of(year, 4, 15);
+                snapped = LocalDate.of(year, 4, 15);
             }
 
-            plant.setNextFertilizedDate(nextFertilized);
+            plant.setNextFertilizedDate(snapped);
         }
+    }
+
+    private LocalDate snapToWateringDate(LocalDate candidate, LocalDate lastWatered, int wateringFrequency) {
+        if (!candidate.isAfter(lastWatered)) {
+            return lastWatered.plusDays(wateringFrequency);
+        }
+        final long days = ChronoUnit.DAYS.between(lastWatered, candidate);
+        final long n = (days + wateringFrequency - 1) / wateringFrequency;
+        return lastWatered.plusDays(n * wateringFrequency);
     }
 
     public void sendWateringNotification() {
