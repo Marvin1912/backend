@@ -4,8 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.never;
@@ -19,13 +17,11 @@ import com.marvin.plants.entity.Plant;
 import com.marvin.plants.mapper.PlantMapper;
 import com.marvin.plants.repository.PlantRepository;
 import java.time.LocalDate;
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -206,7 +202,11 @@ class PlantServiceTest {
     @Test
     void updatePlant_ShouldUpdateExistingPlant_WhenPlantExists() {
         // Given
-        final LocalDate waterDate = LocalDate.now();
+        final LocalDate waterDate = LocalDate.of(2026, 6, 1);
+        final LocalDate lastFertilizedDate = LocalDate.of(2026, 6, 1);
+        // wateringFrequency=7, fertilizingFrequency=10 => candidate 2026-06-11 => snapped 2026-06-15
+        final LocalDate expectedNextFertilizedDate = LocalDate.of(2026, 6, 15);
+
         final PlantDTO updateDTO = new PlantDTO(
                 1L,
                 "Updated Plant",
@@ -218,11 +218,13 @@ class PlantServiceTest {
                 waterDate,
                 waterDate.plusDays(10),
                 "updated-image.jpg",
-                null,
-                null,
+                10,
+                lastFertilizedDate,
                 null
         );
 
+        testPlant.setWateringFrequency(7);
+        testPlant.setFertilizingFrequency(10);
         when(plantRepository.findById(1L)).thenReturn(Optional.of(testPlant));
         doNothing().when(plantMapper).toPlant(testPlant, updateDTO);
 
@@ -235,6 +237,7 @@ class PlantServiceTest {
         assertEquals(waterDate, testPlant.getLastWateredDate());
         // The next watering date should be calculated using the plant's existing watering frequency (7 days)
         assertEquals(waterDate.plusDays(7), testPlant.getNextWateredDate());
+        assertEquals(expectedNextFertilizedDate, testPlant.getNextFertilizedDate());
     }
 
     @Test
@@ -320,6 +323,179 @@ class PlantServiceTest {
         // Then
         assertEquals(waterDate, localTestPlant.getLastWateredDate());
         assertEquals(expectedNextWaterDate, localTestPlant.getNextWateredDate());
+    }
+
+    @Test
+    void fertilizePlant_SnapsToNextWateringDate() {
+        // Given: lastWatered=2026-06-01, wateringFrequency=7, lastFertilized=2026-06-01, fertilizingFrequency=10
+        // candidate = 2026-06-11, which is between watering dates 2026-06-08 and 2026-06-15 => snapped = 2026-06-15
+        final Plant plant = new Plant();
+        plant.setId(1);
+        plant.setWateringFrequency(7);
+        plant.setLastWateredDate(LocalDate.of(2026, 6, 1));
+        plant.setFertilizingFrequency(10);
+
+        when(plantRepository.findById(1L)).thenReturn(Optional.of(plant));
+        when(plantMapper.toPlantDTO(plant)).thenReturn(testPlantDTO);
+
+        // When
+        plantService.fertilizePlant(1L, LocalDate.of(2026, 6, 1));
+
+        // Then
+        assertEquals(LocalDate.of(2026, 6, 1), plant.getLastFertilizedDate());
+        assertEquals(LocalDate.of(2026, 6, 15), plant.getNextFertilizedDate());
+    }
+
+    @Test
+    void fertilizePlant_AlignsWhenCandidateIsAlreadyOnWateringDate() {
+        // Given: lastWatered=2026-06-01, wateringFrequency=5, lastFertilized=2026-06-01, fertilizingFrequency=10
+        // candidate = 2026-06-11 = lastWatered + 2*5 => already on schedule => snapped = 2026-06-11
+        final Plant plant = new Plant();
+        plant.setId(1);
+        plant.setWateringFrequency(5);
+        plant.setLastWateredDate(LocalDate.of(2026, 6, 1));
+        plant.setFertilizingFrequency(10);
+
+        when(plantRepository.findById(1L)).thenReturn(Optional.of(plant));
+        when(plantMapper.toPlantDTO(plant)).thenReturn(testPlantDTO);
+
+        // When
+        plantService.fertilizePlant(1L, LocalDate.of(2026, 6, 1));
+
+        // Then
+        assertEquals(LocalDate.of(2026, 6, 11), plant.getNextFertilizedDate());
+    }
+
+    @Test
+    void fertilizePlant_SeasonalReset_PushesToAprilFifteenth_WhenSnappedInNovember() {
+        // Given: snapped date lands in November => year++ => April 15 of next year
+        // lastWatered=2026-10-25, wateringFrequency=7, lastFertilized=2026-10-25, fertilizingFrequency=7
+        // candidate=2026-11-01, snapped=2026-11-01 (7 days exactly), month=11 > 10 and >= 10 => year=2027 => 2027-04-15
+        final Plant plant = new Plant();
+        plant.setId(1);
+        plant.setWateringFrequency(7);
+        plant.setLastWateredDate(LocalDate.of(2026, 10, 25));
+        plant.setFertilizingFrequency(7);
+
+        when(plantRepository.findById(1L)).thenReturn(Optional.of(plant));
+        when(plantMapper.toPlantDTO(plant)).thenReturn(testPlantDTO);
+
+        // When
+        plantService.fertilizePlant(1L, LocalDate.of(2026, 10, 25));
+
+        // Then
+        assertEquals(LocalDate.of(2027, 4, 15), plant.getNextFertilizedDate());
+    }
+
+    @Test
+    void fertilizePlant_SeasonalReset_PushesToAprilFifteenth_WhenSnappedInFebruary() {
+        // Given: snapped date lands in February => month < 4, month < 10 => same year => 2026-04-15
+        // lastWatered=2026-01-20, wateringFrequency=7, lastFertilized=2026-01-20, fertilizingFrequency=14
+        // candidate=2026-02-03, snapped=2026-02-03 (14 days exactly), month=2 < 4 => 2026-04-15
+        final Plant plant = new Plant();
+        plant.setId(1);
+        plant.setWateringFrequency(7);
+        plant.setLastWateredDate(LocalDate.of(2026, 1, 20));
+        plant.setFertilizingFrequency(14);
+
+        when(plantRepository.findById(1L)).thenReturn(Optional.of(plant));
+        when(plantMapper.toPlantDTO(plant)).thenReturn(testPlantDTO);
+
+        // When
+        plantService.fertilizePlant(1L, LocalDate.of(2026, 1, 20));
+
+        // Then
+        assertEquals(LocalDate.of(2026, 4, 15), plant.getNextFertilizedDate());
+    }
+
+    @Test
+    void fertilizePlant_NoOp_WhenLastFertilizedNull() {
+        // Given
+        final Plant plant = new Plant();
+        plant.setId(1);
+        plant.setWateringFrequency(7);
+        plant.setLastWateredDate(LocalDate.of(2026, 6, 1));
+        plant.setFertilizingFrequency(10);
+        plant.setLastFertilizedDate(null);
+        plant.setNextFertilizedDate(null);
+
+        when(plantRepository.findById(1L)).thenReturn(Optional.of(plant));
+        when(plantMapper.toPlantDTO(plant)).thenReturn(testPlantDTO);
+
+        // When
+        plantService.fertilizePlant(1L, null);
+
+        // Then
+        assertNull(plant.getLastFertilizedDate());
+        assertNull(plant.getNextFertilizedDate());
+    }
+
+    @Test
+    void fertilizePlant_NoOp_WhenFrequencyNull() {
+        // Given
+        final Plant plant = new Plant();
+        plant.setId(1);
+        plant.setWateringFrequency(7);
+        plant.setLastWateredDate(LocalDate.of(2026, 6, 1));
+        plant.setFertilizingFrequency(null);
+        plant.setLastFertilizedDate(null);
+        plant.setNextFertilizedDate(null);
+
+        when(plantRepository.findById(1L)).thenReturn(Optional.of(plant));
+        when(plantMapper.toPlantDTO(plant)).thenReturn(testPlantDTO);
+
+        // When
+        plantService.fertilizePlant(1L, LocalDate.of(2026, 6, 1));
+
+        // Then
+        assertNull(plant.getLastFertilizedDate());
+        assertNull(plant.getNextFertilizedDate());
+    }
+
+    @Test
+    void waterPlant_RecomputesFertilizingDate_WhenLastFertilizedSet() {
+        // Given: plant last watered 2026-06-01, lastFertilized=2026-06-01, fertilizingFrequency=10
+        // After waterPlant with newDate=2026-06-08, lastWatered becomes 2026-06-08
+        // candidate = 2026-06-01 + 10 = 2026-06-11, snapped against new schedule anchored at 2026-06-08 step 7
+        // days=3, n=ceil(3/7)=1, snapped=2026-06-08+7=2026-06-15
+        final Plant plant = new Plant();
+        plant.setId(1);
+        plant.setWateringFrequency(7);
+        plant.setLastWateredDate(LocalDate.of(2026, 6, 1));
+        plant.setLastFertilizedDate(LocalDate.of(2026, 6, 1));
+        plant.setFertilizingFrequency(10);
+
+        when(plantRepository.findById(1L)).thenReturn(Optional.of(plant));
+        when(plantMapper.toPlantDTO(plant)).thenReturn(testPlantDTO);
+
+        // When
+        plantService.waterPlant(1L, LocalDate.of(2026, 6, 8));
+
+        // Then
+        assertEquals(LocalDate.of(2026, 6, 8), plant.getLastWateredDate());
+        assertEquals(LocalDate.of(2026, 6, 15), plant.getNextWateredDate());
+        assertEquals(LocalDate.of(2026, 6, 15), plant.getNextFertilizedDate());
+    }
+
+    @Test
+    void waterPlant_LeavesFertilizingUntouched_WhenLastFertilizedNull() {
+        // Given
+        final Plant plant = new Plant();
+        plant.setId(1);
+        plant.setWateringFrequency(7);
+        plant.setLastWateredDate(LocalDate.of(2026, 6, 1));
+        plant.setLastFertilizedDate(null);
+        plant.setNextFertilizedDate(null);
+        plant.setFertilizingFrequency(10);
+
+        when(plantRepository.findById(1L)).thenReturn(Optional.of(plant));
+        when(plantMapper.toPlantDTO(plant)).thenReturn(testPlantDTO);
+
+        // When
+        plantService.waterPlant(1L, LocalDate.of(2026, 6, 8));
+
+        // Then
+        assertNull(plant.getNextFertilizedDate());
     }
 
     @Test
