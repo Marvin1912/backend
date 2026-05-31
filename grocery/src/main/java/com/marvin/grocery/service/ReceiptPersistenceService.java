@@ -43,18 +43,16 @@ public class ReceiptPersistenceService {
      * Parses the given OCR text, persists the receipt and all its line items in a single transaction,
      * and returns the UUID of the newly created receipt.
      *
-     * @param imageBytes raw image bytes to store on the receipt record
-     * @param ocrText    the raw OCR text extracted from the image
+     * @param ocrText the raw OCR text extracted from the image
      * @return the UUID of the saved receipt
      */
     @Transactional
-    public UUID saveReceipt(byte[] imageBytes, String ocrText) {
+    public UUID saveReceipt(String ocrText) {
         LOGGER.info("Parsing OCR text ({} chars):\n{}", ocrText.length(), ocrText);
         final ParsedReceipt parsed = parserService.parse(ocrText);
         LOGGER.info("Parsed {} items, receiptDate={}", parsed.items().size(), parsed.receiptDate());
 
         final ReceiptEntity receipt = new ReceiptEntity();
-        receipt.setImageContent(imageBytes);
         receipt.setRawOcrText(ocrText);
         receipt.setReceiptDate(parsed.receiptDate());
 

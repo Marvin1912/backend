@@ -61,7 +61,7 @@ public class ReceiptService {
         LOGGER.info("Starting receipt processing for image of {} bytes", imageBytes.length);
         return ocrProvider.extractText(imageBytes)
                 .doOnError(e -> LOGGER.error("OCR extraction failed", e))
-                .flatMap(ocrText -> Mono.fromCallable(() -> persistenceService.saveReceipt(imageBytes, ocrText))
+                .flatMap(ocrText -> Mono.fromCallable(() -> persistenceService.saveReceipt(ocrText))
                         .subscribeOn(Schedulers.boundedElastic()));
     }
 
