@@ -107,7 +107,7 @@ public class ReceiptService {
      * @return the UUID of the saved receipt
      */
     @Transactional
-    private UUID saveReceipt(byte[] imageBytes, String ocrText) {
+    protected UUID saveReceipt(byte[] imageBytes, String ocrText) {
         LOGGER.info("Parsing OCR text ({} chars):\n{}", ocrText.length(), ocrText);
         final ParsedReceipt parsed = parserService.parse(ocrText);
         LOGGER.info("Parsed {} items, receiptDate={}", parsed.items().size(), parsed.receiptDate());

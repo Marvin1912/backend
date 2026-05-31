@@ -9,9 +9,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Primary;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
 
 /** Claude Vision-backed OCR provider. Sends the receipt image to the Anthropic API for robust text extraction. */
@@ -24,8 +26,9 @@ public class ClaudeVisionOcrProvider implements OcrProvider {
     private static final int MAX_TOKENS = 1024;
     private static final String RECEIPT_PROMPT = """
             Extract all purchased items from this German grocery receipt.
-            For each item output it on its own line as: item name  price
-            Use exactly two spaces between the item name and the price.
+            For each item output it on its own line as: item name  price  quantity  total price
+            If quantity is not available, use value 1 instead.
+            Use exactly two spaces between the information of an item.
             Format prices with a period as decimal separator (e.g. 1.09).
             Include the receipt date on its own line in DD.MM.YYYY format if visible.
             Skip totals, taxes, payment method lines, and store header information.
