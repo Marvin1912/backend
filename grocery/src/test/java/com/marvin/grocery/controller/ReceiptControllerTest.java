@@ -50,7 +50,7 @@ class ReceiptControllerTest {
     @BeforeEach
     void setUp() {
         testReceiptId = UUID.randomUUID();
-        testItemDTO = new ReceiptItemDTO(1L, "Vollmilch", new BigDecimal("1.09"));
+        testItemDTO = new ReceiptItemDTO(1L, "Vollmilch", new BigDecimal("1.09"), 1, new BigDecimal("1.09"));
         testReceiptDTO = new ReceiptDTO(
                 testReceiptId,
                 LocalDate.of(2024, 3, 15),
