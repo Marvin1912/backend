@@ -17,4 +17,5 @@ dependencies {
     implementation project(':mental-arithmetic')
     implementation project(':it-news')
     implementation project(':climate')
+    implementation project(':grocery')
 }

@@ -84,13 +84,13 @@ subprojects {
 		}
 
 		// Only Spring Boot dependencies for modules that need them
-		if (name in ['api', 'vocabulary', 'image-server', 'mental-arithmetic', 'plants', 'it-news', 'climate']) {
+		if (name in ['api', 'vocabulary', 'image-server', 'mental-arithmetic', 'plants', 'it-news', 'climate', 'grocery']) {
 			implementation 'org.springframework.boot:spring-boot-starter-webflux'
 			implementation 'org.springframework.boot:spring-boot-starter-security'
 		}
 
 		// Common dependencies for modules that need Jackson/Spring annotations
-		if (name in ['common', 'api', 'costs', 'backup', 'camt', 'consul', 'plants', 'image-server', 'vocabulary', 'influxdb', 'uploader', 'mental-arithmetic', 'it-news', 'climate']) {
+		if (name in ['common', 'api', 'costs', 'backup', 'camt', 'consul', 'plants', 'image-server', 'vocabulary', 'influxdb', 'uploader', 'mental-arithmetic', 'it-news', 'climate', 'grocery']) {
 			implementation 'org.springframework.boot:spring-boot-starter'
 			implementation 'com.fasterxml.jackson.core:jackson-databind'
 			implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
