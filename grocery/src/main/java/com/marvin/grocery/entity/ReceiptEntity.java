@@ -33,9 +33,6 @@ public class ReceiptEntity extends BasicEntity {
     @Column(name = "receipt_date")
     private LocalDate receiptDate;
 
-    @Column(name = "image_content")
-    private byte[] imageContent;
-
     @Column(name = "raw_ocr_text", columnDefinition = "TEXT")
     private String rawOcrText;
 
