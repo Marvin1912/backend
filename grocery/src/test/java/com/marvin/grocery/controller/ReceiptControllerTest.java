@@ -16,6 +16,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -145,5 +146,35 @@ class ReceiptControllerTest {
                 .verifyComplete();
 
         verify(receiptService).findAll();
+    }
+
+    @Test
+    @DisplayName("Should return 204 No Content after successful deletion")
+    void deleteReceipt_Exists_Returns204() {
+        when(receiptService.deleteReceipt(testReceiptId)).thenReturn(Mono.empty());
+
+        final Mono<ResponseEntity<Void>> result = receiptController.deleteReceipt(testReceiptId);
+
+        StepVerifier.create(result)
+                .assertNext(response -> assertEquals(204, response.getStatusCode().value()))
+                .verifyComplete();
+
+        verify(receiptService).deleteReceipt(testReceiptId);
+    }
+
+    @Test
+    @DisplayName("Should return 404 Not Found when receipt does not exist")
+    void deleteReceipt_NotFound_Returns404() {
+        final UUID unknownId = UUID.randomUUID();
+        when(receiptService.deleteReceipt(unknownId))
+                .thenReturn(Mono.error(new NoSuchElementException("Receipt not found: " + unknownId)));
+
+        final Mono<ResponseEntity<Void>> result = receiptController.deleteReceipt(unknownId);
+
+        StepVerifier.create(result)
+                .assertNext(response -> assertEquals(404, response.getStatusCode().value()))
+                .verifyComplete();
+
+        verify(receiptService).deleteReceipt(unknownId);
     }
 }

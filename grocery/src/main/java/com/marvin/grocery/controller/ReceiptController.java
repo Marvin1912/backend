@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.net.URI;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,6 +20,7 @@ import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.codec.multipart.FilePart;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -125,6 +127,30 @@ public class ReceiptController {
                 .map(optItems -> optItems
                         .map(ResponseEntity::ok)
                         .orElse(ResponseEntity.notFound().build()));
+    }
+
+    /**
+     * Deletes the receipt with the given id and all its associated items.
+     *
+     * @param id the UUID of the receipt to delete
+     * @return a Mono with 204 No Content on success, or 404 Not Found if the receipt does not exist
+     */
+    @DeleteMapping("/{id}")
+    @Operation(
+            summary = "Delete a receipt",
+            description = "Permanently removes the receipt and all its parsed line items.",
+            responses = {
+                @ApiResponse(responseCode = "204", description = "Receipt deleted"),
+                @ApiResponse(responseCode = "404", description = "Receipt not found")
+            }
+    )
+    public Mono<ResponseEntity<Void>> deleteReceipt(
+            @PathVariable @Parameter(description = "UUID of the receipt to delete") UUID id) {
+        final ResponseEntity<Void> noContent = ResponseEntity.<Void>noContent().build();
+        final ResponseEntity<Void> notFound = ResponseEntity.<Void>notFound().build();
+        return receiptService.deleteReceipt(id)
+                .thenReturn(noContent)
+                .onErrorReturn(NoSuchElementException.class, notFound);
     }
 
     /**

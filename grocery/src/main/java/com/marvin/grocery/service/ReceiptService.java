@@ -8,6 +8,7 @@ import com.marvin.grocery.ocr.OcrProvider;
 import com.marvin.grocery.repository.ReceiptItemRepository;
 import com.marvin.grocery.repository.ReceiptRepository;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -92,5 +93,22 @@ public class ReceiptService {
             final List<ReceiptItemEntity> items = receiptItemRepository.findByReceiptId(receiptId);
             return Optional.of(receiptMapper.toReceiptItemDTOList(items));
         }).subscribeOn(Schedulers.boundedElastic());
+    }
+
+    /**
+     * Deletes the receipt with the given id and all its associated items.
+     * Emits {@link NoSuchElementException} if no receipt with that id exists.
+     *
+     * @param id the UUID of the receipt to delete
+     * @return an empty Mono on success, or an error Mono if the receipt does not exist
+     */
+    public Mono<Void> deleteReceipt(UUID id) {
+        return Mono.fromCallable(() -> {
+            if (!receiptRepository.existsById(id)) {
+                throw new NoSuchElementException("Receipt not found: " + id);
+            }
+            receiptRepository.deleteById(id);
+            return null;
+        }).subscribeOn(Schedulers.boundedElastic()).then();
     }
 }
