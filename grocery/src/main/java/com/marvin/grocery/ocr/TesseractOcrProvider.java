@@ -9,14 +9,12 @@ import net.sourceforge.tess4j.TesseractException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 /** Tesseract-backed OCR provider. Runs OCR on the bounded-elastic scheduler to avoid blocking the event loop. */
 @Service
-@Primary
 public class TesseractOcrProvider implements OcrProvider {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(TesseractOcrProvider.class);
@@ -53,8 +51,10 @@ public class TesseractOcrProvider implements OcrProvider {
         tesseract.setLanguage("deu");
         tesseract.setPageSegMode(6);
 
+        LOGGER.info("Running Tesseract OCR on image of {} bytes (datapath={})", imageBytes.length, tesseractDatapath);
         final BufferedImage image = ImageIO.read(new ByteArrayInputStream(imageBytes));
-        LOGGER.debug("Running Tesseract OCR on image of size {} bytes", imageBytes.length);
-        return tesseract.doOCR(image);
+        final String result = tesseract.doOCR(image);
+        LOGGER.info("Tesseract OCR completed, extracted {} characters", result.length());
+        return result;
     }
 }

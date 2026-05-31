@@ -63,7 +63,9 @@ public class ReceiptService {
      * @return a Mono emitting the UUID of the newly created receipt
      */
     public Mono<UUID> processAndSave(byte[] imageBytes) {
+        LOGGER.info("Starting receipt processing for image of {} bytes", imageBytes.length);
         return ocrProvider.extractText(imageBytes)
+                .doOnError(e -> LOGGER.error("OCR extraction failed", e))
                 .flatMap(ocrText -> Mono.fromCallable(() -> saveReceipt(imageBytes, ocrText))
                         .subscribeOn(Schedulers.boundedElastic()));
     }
@@ -74,8 +76,11 @@ public class ReceiptService {
      * @return a Flux emitting all stored receipts
      */
     public Flux<ReceiptDTO> findAll() {
-        return Flux.fromIterable(receiptRepository.findAll())
-                .map(receiptMapper::toReceiptDTO);
+        return Mono.fromCallable(() -> receiptRepository.findAllWithItems().stream()
+                        .map(receiptMapper::toReceiptDTO)
+                        .toList())
+                .subscribeOn(Schedulers.boundedElastic())
+                .flatMapIterable(list -> list);
     }
 
     /**
@@ -103,7 +108,9 @@ public class ReceiptService {
      */
     @Transactional
     private UUID saveReceipt(byte[] imageBytes, String ocrText) {
+        LOGGER.info("Parsing OCR text ({} chars):\n{}", ocrText.length(), ocrText);
         final ParsedReceipt parsed = parserService.parse(ocrText);
+        LOGGER.info("Parsed {} items, receiptDate={}", parsed.items().size(), parsed.receiptDate());
 
         final ReceiptEntity receipt = new ReceiptEntity();
         receipt.setImageContent(imageBytes);
@@ -111,7 +118,7 @@ public class ReceiptService {
         receipt.setReceiptDate(parsed.receiptDate());
 
         final ReceiptEntity saved = receiptRepository.save(receipt);
-        LOGGER.debug("Saved receipt {} with {} items", saved.getId(), parsed.items().size());
+        LOGGER.info("Saved receipt {} with {} items", saved.getId(), parsed.items().size());
 
         for (final ParsedItem item : parsed.items()) {
             final ReceiptItemEntity itemEntity = new ReceiptItemEntity();

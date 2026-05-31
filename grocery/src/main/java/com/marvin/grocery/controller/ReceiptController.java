@@ -69,8 +69,10 @@ public class ReceiptController {
     public Mono<ResponseEntity<Object>> uploadReceipt(
             @RequestPart("file")
             @Parameter(description = "Receipt image file (JPEG, PNG, etc.)") FilePart filePart) {
+        LOGGER.info("Received receipt upload: filename={}", filePart.filename());
         return extractBytes(filePart)
                 .flatMap(receiptService::processAndSave)
+                .doOnError(e -> LOGGER.error("Receipt processing failed for file '{}'", filePart.filename(), e))
                 .map(uuid -> {
                     final URI location = URI.create(RECEIPTS_LOCATION_PREFIX + uuid);
                     return ResponseEntity.created(location).build();
