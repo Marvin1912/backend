@@ -38,6 +38,12 @@ public class ReceiptItemEntity {
     @Column(name = "price", nullable = false, precision = 10, scale = 2)
     private BigDecimal price;
 
+    @Column(name = "single_price", nullable = false, precision = 10, scale = 2)
+    private BigDecimal singlePrice;
+
+    @Column(name = "quantity", nullable = false)
+    private int quantity;
+
     @Override
     public boolean equals(Object o) {
         if (o == null || getClass() != o.getClass()) {

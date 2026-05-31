@@ -2,13 +2,9 @@ package com.marvin.grocery.service;
 
 import com.marvin.grocery.dto.ReceiptDTO;
 import com.marvin.grocery.dto.ReceiptItemDTO;
-import com.marvin.grocery.entity.ReceiptEntity;
 import com.marvin.grocery.entity.ReceiptItemEntity;
 import com.marvin.grocery.mapper.ReceiptMapper;
 import com.marvin.grocery.ocr.OcrProvider;
-import com.marvin.grocery.parser.ParsedItem;
-import com.marvin.grocery.parser.ParsedReceipt;
-import com.marvin.grocery.parser.ReceiptParserService;
 import com.marvin.grocery.repository.ReceiptItemRepository;
 import com.marvin.grocery.repository.ReceiptRepository;
 import java.util.List;
@@ -17,7 +13,6 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -29,7 +24,7 @@ public class ReceiptService {
     private static final Logger LOGGER = LoggerFactory.getLogger(ReceiptService.class);
 
     private final OcrProvider ocrProvider;
-    private final ReceiptParserService parserService;
+    private final ReceiptPersistenceService persistenceService;
     private final ReceiptRepository receiptRepository;
     private final ReceiptItemRepository receiptItemRepository;
     private final ReceiptMapper receiptMapper;
@@ -37,20 +32,20 @@ public class ReceiptService {
     /**
      * Creates a new ReceiptService with all required dependencies.
      *
-     * @param ocrProvider           the OCR provider to use for text extraction
-     * @param parserService         the parser for structured item extraction
-     * @param receiptRepository     the JPA repository for receipts
+     * @param ocrProvider        the OCR provider to use for text extraction
+     * @param persistenceService the service responsible for transactional receipt persistence
+     * @param receiptRepository  the JPA repository for receipts
      * @param receiptItemRepository the JPA repository for receipt items
-     * @param receiptMapper         the MapStruct mapper for DTO conversion
+     * @param receiptMapper      the MapStruct mapper for DTO conversion
      */
     public ReceiptService(
             OcrProvider ocrProvider,
-            ReceiptParserService parserService,
+            ReceiptPersistenceService persistenceService,
             ReceiptRepository receiptRepository,
             ReceiptItemRepository receiptItemRepository,
             ReceiptMapper receiptMapper) {
         this.ocrProvider = ocrProvider;
-        this.parserService = parserService;
+        this.persistenceService = persistenceService;
         this.receiptRepository = receiptRepository;
         this.receiptItemRepository = receiptItemRepository;
         this.receiptMapper = receiptMapper;
@@ -66,7 +61,7 @@ public class ReceiptService {
         LOGGER.info("Starting receipt processing for image of {} bytes", imageBytes.length);
         return ocrProvider.extractText(imageBytes)
                 .doOnError(e -> LOGGER.error("OCR extraction failed", e))
-                .flatMap(ocrText -> Mono.fromCallable(() -> saveReceipt(imageBytes, ocrText))
+                .flatMap(ocrText -> Mono.fromCallable(() -> persistenceService.saveReceipt(imageBytes, ocrText))
                         .subscribeOn(Schedulers.boundedElastic()));
     }
 
@@ -97,37 +92,5 @@ public class ReceiptService {
             final List<ReceiptItemEntity> items = receiptItemRepository.findByReceiptId(receiptId);
             return Optional.of(receiptMapper.toReceiptItemDTOList(items));
         }).subscribeOn(Schedulers.boundedElastic());
-    }
-
-    /**
-     * Saves the receipt and its parsed items transactionally.
-     *
-     * @param imageBytes raw image bytes to store
-     * @param ocrText    the raw OCR text extracted from the image
-     * @return the UUID of the saved receipt
-     */
-    @Transactional
-    protected UUID saveReceipt(byte[] imageBytes, String ocrText) {
-        LOGGER.info("Parsing OCR text ({} chars):\n{}", ocrText.length(), ocrText);
-        final ParsedReceipt parsed = parserService.parse(ocrText);
-        LOGGER.info("Parsed {} items, receiptDate={}", parsed.items().size(), parsed.receiptDate());
-
-        final ReceiptEntity receipt = new ReceiptEntity();
-        receipt.setImageContent(imageBytes);
-        receipt.setRawOcrText(ocrText);
-        receipt.setReceiptDate(parsed.receiptDate());
-
-        final ReceiptEntity saved = receiptRepository.save(receipt);
-        LOGGER.info("Saved receipt {} with {} items", saved.getId(), parsed.items().size());
-
-        for (final ParsedItem item : parsed.items()) {
-            final ReceiptItemEntity itemEntity = new ReceiptItemEntity();
-            itemEntity.setReceipt(saved);
-            itemEntity.setName(item.name());
-            itemEntity.setPrice(item.price());
-            receiptItemRepository.save(itemEntity);
-        }
-
-        return saved.getId();
     }
 }

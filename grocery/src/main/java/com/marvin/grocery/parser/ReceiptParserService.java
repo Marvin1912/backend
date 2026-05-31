@@ -19,7 +19,7 @@ public class ReceiptParserService {
     private static final Logger LOGGER = LoggerFactory.getLogger(ReceiptParserService.class);
 
     private static final Pattern ITEM_PATTERN =
-            Pattern.compile("^(.+?)\\s{2,}(\\d{1,4}[.,]\\d{2})\\s*[ABab*]?\\s*$");
+            Pattern.compile("^(.+?)\\s{2,}(-?\\d{1,4}[.,]\\d{2})\\s{2,}(\\d{1,4})\\s{2,}(-?\\d{1,4}[.,]\\d{2})\\s*$");
 
     private static final Pattern TOTAL_LINE_PATTERN =
             Pattern.compile("(?i)(summe|gesamt|total|zwischensumme|zu zahlen|bar|ec.karte|mwst|ust)");
@@ -87,7 +87,7 @@ public class ReceiptParserService {
      * Attempts to parse a single receipt line into a ParsedItem.
      *
      * @param line the text line to parse
-     * @return a ParsedItem if the line matches an item pattern, otherwise null
+     * @return a ParsedItem if the line matches the four-column item pattern, otherwise null
      */
     private ParsedItem tryParseItem(String line) {
         if (TOTAL_LINE_PATTERN.matcher(line).find()) {
@@ -100,13 +100,17 @@ public class ReceiptParserService {
         }
 
         final String name = matcher.group(1).trim();
-        final String priceRaw = matcher.group(2).replace(',', '.');
+        final String singlePriceRaw = matcher.group(2).replace(',', '.');
+        final String quantityRaw = matcher.group(3);
+        final String totalPriceRaw = matcher.group(4).replace(',', '.');
 
         try {
-            final BigDecimal price = new BigDecimal(priceRaw);
-            return new ParsedItem(name, price);
+            final BigDecimal singlePrice = new BigDecimal(singlePriceRaw);
+            final int quantity = Integer.parseInt(quantityRaw);
+            final BigDecimal totalPrice = new BigDecimal(totalPriceRaw);
+            return new ParsedItem(name, singlePrice, quantity, totalPrice);
         } catch (NumberFormatException e) {
-            LOGGER.debug("Could not parse price from: {}", priceRaw);
+            LOGGER.debug("Could not parse item fields from line: {}", line);
             return null;
         }
     }
