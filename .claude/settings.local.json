@@ -11,7 +11,10 @@
       "Bash(xargs:*)",
       "Bash(ls:*)",
       "Bash(gh:*)",
-      "Bash(git:*)"
+      "Bash(git:*)",
+      "Bash(kubectl rollout *)",
+      "Bash(kubectl logs *)",
+      "Bash(kubectl wait *)"
     ],
     "deny": [],
     "ask": []
