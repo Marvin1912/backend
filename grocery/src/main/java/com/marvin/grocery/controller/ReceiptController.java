@@ -2,6 +2,7 @@ package com.marvin.grocery.controller;
 
 import com.marvin.grocery.dto.ReceiptDTO;
 import com.marvin.grocery.dto.ReceiptItemDTO;
+import com.marvin.grocery.dto.UpdateReceiptItemRequest;
 import com.marvin.grocery.service.ReceiptService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -24,6 +25,8 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
@@ -127,6 +130,36 @@ public class ReceiptController {
                 .map(optItems -> optItems
                         .map(ResponseEntity::ok)
                         .orElse(ResponseEntity.notFound().build()));
+    }
+
+    /**
+     * Updates the editable fields of a single receipt item.
+     *
+     * @param receiptId the UUID of the parent receipt
+     * @param itemId    the id of the item to update
+     * @param request   the updated field values
+     * @return a Mono with 200 OK and the updated item, or 404 if not found
+     */
+    @PutMapping("/{receiptId}/items/{itemId}")
+    @Operation(
+            summary = "Update a receipt item",
+            description = "Updates name, quantity, and single price of an item; recalculates the total line price.",
+            responses = {
+                @ApiResponse(
+                        responseCode = "200",
+                        description = "Item updated",
+                        content = @Content(schema = @Schema(implementation = ReceiptItemDTO.class))
+                ),
+                @ApiResponse(responseCode = "404", description = "Receipt or item not found")
+            }
+    )
+    public Mono<ResponseEntity<ReceiptItemDTO>> updateItem(
+            @PathVariable @Parameter(description = "UUID of the receipt") UUID receiptId,
+            @PathVariable @Parameter(description = "Id of the item") Long itemId,
+            @RequestBody UpdateReceiptItemRequest request) {
+        return receiptService.updateItem(receiptId, itemId, request)
+                .map(ResponseEntity::ok)
+                .onErrorReturn(NoSuchElementException.class, ResponseEntity.notFound().build());
     }
 
     /**
