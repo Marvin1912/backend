@@ -1,8 +1,10 @@
 package com.marvin.grocery.service;
 
+import com.marvin.grocery.dto.AddReceiptItemRequest;
 import com.marvin.grocery.dto.ReceiptDTO;
 import com.marvin.grocery.dto.ReceiptItemDTO;
 import com.marvin.grocery.dto.UpdateReceiptItemRequest;
+import com.marvin.grocery.entity.ReceiptEntity;
 import com.marvin.grocery.entity.ReceiptItemEntity;
 import com.marvin.grocery.mapper.ReceiptMapper;
 import com.marvin.grocery.ocr.OcrProvider;
@@ -94,6 +96,28 @@ public class ReceiptService {
             }
             final List<ReceiptItemEntity> items = receiptItemRepository.findByReceiptId(receiptId);
             return Optional.of(receiptMapper.toReceiptItemDTOList(items));
+        }).subscribeOn(Schedulers.boundedElastic());
+    }
+
+    /**
+     * Manually adds a new item to the given receipt and persists it.
+     * Emits {@link NoSuchElementException} if the receipt does not exist.
+     *
+     * @param receiptId the UUID of the parent receipt
+     * @param request   the new item fields
+     * @return a Mono emitting the created item DTO
+     */
+    public Mono<ReceiptItemDTO> addItem(UUID receiptId, AddReceiptItemRequest request) {
+        return Mono.fromCallable(() -> {
+            final ReceiptEntity receipt = receiptRepository.findById(receiptId)
+                    .orElseThrow(() -> new NoSuchElementException("Receipt not found: " + receiptId));
+            final ReceiptItemEntity item = new ReceiptItemEntity();
+            item.setReceipt(receipt);
+            item.setName(request.name());
+            item.setQuantity(request.quantity());
+            item.setSinglePrice(request.singlePrice());
+            item.setPrice(request.singlePrice().multiply(BigDecimal.valueOf(request.quantity())));
+            return receiptMapper.toReceiptItemDTO(receiptItemRepository.save(item));
         }).subscribeOn(Schedulers.boundedElastic());
     }
 
