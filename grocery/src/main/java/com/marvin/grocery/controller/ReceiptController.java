@@ -1,5 +1,6 @@
 package com.marvin.grocery.controller;
 
+import com.marvin.grocery.dto.AddReceiptItemRequest;
 import com.marvin.grocery.dto.ReceiptDTO;
 import com.marvin.grocery.dto.ReceiptItemDTO;
 import com.marvin.grocery.dto.UpdateReceiptItemRequest;
@@ -15,6 +16,7 @@ import java.net.URI;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.UUID;
+import org.springframework.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.buffer.DataBufferUtils;
@@ -130,6 +132,34 @@ public class ReceiptController {
                 .map(optItems -> optItems
                         .map(ResponseEntity::ok)
                         .orElse(ResponseEntity.notFound().build()));
+    }
+
+    /**
+     * Manually adds a new item to the given receipt.
+     *
+     * @param receiptId the UUID of the receipt to add the item to
+     * @param request   the new item fields
+     * @return a Mono with 201 Created and the new item, or 404 if the receipt is not found
+     */
+    @PostMapping("/{receiptId}/items")
+    @Operation(
+            summary = "Add an item to a receipt",
+            description = "Manually adds a new line item to the specified receipt.",
+            responses = {
+                @ApiResponse(
+                        responseCode = "201",
+                        description = "Item created",
+                        content = @Content(schema = @Schema(implementation = ReceiptItemDTO.class))
+                ),
+                @ApiResponse(responseCode = "404", description = "Receipt not found")
+            }
+    )
+    public Mono<ResponseEntity<ReceiptItemDTO>> addItem(
+            @PathVariable @Parameter(description = "UUID of the receipt") UUID receiptId,
+            @RequestBody AddReceiptItemRequest request) {
+        return receiptService.addItem(receiptId, request)
+                .map(item -> ResponseEntity.status(HttpStatus.CREATED).body(item))
+                .onErrorReturn(NoSuchElementException.class, ResponseEntity.notFound().build());
     }
 
     /**
