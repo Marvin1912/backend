@@ -4,12 +4,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.marvin.grocery.dto.ReceiptDTO;
 import com.marvin.grocery.dto.ReceiptItemDTO;
+import com.marvin.grocery.dto.UpdateSupermarketRequest;
+import com.marvin.grocery.entity.Supermarket;
 import com.marvin.grocery.service.ReceiptService;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -57,6 +60,7 @@ class ReceiptControllerTest {
                 LocalDate.of(2024, 3, 15),
                 new BigDecimal("1.09"),
                 LocalDateTime.now(),
+                null,
                 null
         );
     }
@@ -87,7 +91,7 @@ class ReceiptControllerTest {
     @DisplayName("Should return all receipts as Flux")
     void listReceipts_ReturnsFluxOfReceipts() {
         final ReceiptDTO second = new ReceiptDTO(
-                UUID.randomUUID(), LocalDate.of(2024, 4, 1), new BigDecimal("5.00"), LocalDateTime.now(), null);
+                UUID.randomUUID(), LocalDate.of(2024, 4, 1), new BigDecimal("5.00"), LocalDateTime.now(), null, null);
         when(receiptService.findAll()).thenReturn(Flux.just(testReceiptDTO, second));
 
         final Flux<ReceiptDTO> result = receiptController.listReceipts();
@@ -176,5 +180,45 @@ class ReceiptControllerTest {
                 .verifyComplete();
 
         verify(receiptService).deleteReceipt(unknownId);
+    }
+
+    @Test
+    @DisplayName("Should return 200 with updated DTO after supermarket update")
+    void updateSupermarket_Exists_Returns200() {
+        final ReceiptDTO updated = new ReceiptDTO(
+                testReceiptId, LocalDate.of(2024, 3, 15),
+                new BigDecimal("1.09"), LocalDateTime.now(), null, Supermarket.LIDL);
+        when(receiptService.updateSupermarket(eq(testReceiptId), eq(Supermarket.LIDL)))
+                .thenReturn(Mono.just(updated));
+
+        final Mono<ResponseEntity<ReceiptDTO>> result =
+                receiptController.updateSupermarket(testReceiptId, new UpdateSupermarketRequest(Supermarket.LIDL));
+
+        StepVerifier.create(result)
+                .assertNext(response -> {
+                    assertEquals(200, response.getStatusCode().value());
+                    assertNotNull(response.getBody());
+                    assertEquals(Supermarket.LIDL, response.getBody().supermarket());
+                })
+                .verifyComplete();
+
+        verify(receiptService).updateSupermarket(testReceiptId, Supermarket.LIDL);
+    }
+
+    @Test
+    @DisplayName("Should return 404 when receipt does not exist for supermarket update")
+    void updateSupermarket_NotFound_Returns404() {
+        final UUID unknownId = UUID.randomUUID();
+        when(receiptService.updateSupermarket(eq(unknownId), any()))
+                .thenReturn(Mono.error(new NoSuchElementException("Receipt not found: " + unknownId)));
+
+        final Mono<ResponseEntity<ReceiptDTO>> result =
+                receiptController.updateSupermarket(unknownId, new UpdateSupermarketRequest(Supermarket.REWE));
+
+        StepVerifier.create(result)
+                .assertNext(response -> assertEquals(404, response.getStatusCode().value()))
+                .verifyComplete();
+
+        verify(receiptService).updateSupermarket(unknownId, Supermarket.REWE);
     }
 }
