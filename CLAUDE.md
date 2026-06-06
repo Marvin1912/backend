@@ -45,8 +45,8 @@ This is a **multi-module Gradle monolith** using Spring Boot with an orthogonal 
 
 - **boot** - Application entry point (`com.marvin.Application`). Aggregates all 16 modules, enables scheduling. Only module that produces a bootJar.
 - **common** - Shared utilities (JacksonMapper, DTOs, NullSafeUtil). No dependencies of its own.
-- **entities** - JPA entity definitions. All entities extend `BasicEntity` which provides `creationDate` and `lastModified` fields.
-- **api** - REST API facade and orchestration layer. Depends on costs, backup, exporter, uploader, camt, entities.
+- **entities** - Orphaned. Directory has no sources and is not in `settings.gradle`. JPA entities now live within their owning modules; the shared `BasicEntity` (providing `creationDate`/`lastModified`) lives in `costs` (`com.marvin.costs.entity.BasicEntity`).
+- **api** - REST API facade and orchestration layer. Depends on costs, backup, exporter, uploader, camt.
 
 ### Domain Modules
 
@@ -70,6 +70,8 @@ Self-contained vertical slices, each with own Flyway migrations in separate sche
 - **vocabulary** - Language learning with Anki sync integration. Uses OpenAPI generator.
 - **mental-arithmetic** - Arithmetic exercises with difficulty levels and performance tracking.
 - **image-server** - Image upload/storage and retrieval service.
+- **climate** - Temperature/climate readings. Depends on influxdb.
+- **grocery** - Receipt/grocery tracking with Tesseract OCR (`tess4j`) and receipt parsing. Depends on costs; owns Flyway migrations.
 
 ### Legacy (not in settings.gradle)
 
@@ -92,3 +94,4 @@ The `database/` and `importer/` directories exist but are not included as Gradle
 
 - **All development tasks** must use the `java-developer` agent.
 - **After development is complete** and a PR has been created, use the `java-code-reviewer` agent to review the changes before merging.
+- **When a GitHub issue has been finished**, a PR must be created and merged into `master`.
