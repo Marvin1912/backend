@@ -1,5 +1,6 @@
 package com.marvin.grocery.dto;
 
+import com.marvin.grocery.entity.Supermarket;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -15,6 +16,7 @@ import java.util.UUID;
  * @param totalAmount  total amount computed as sum of all items
  * @param creationDate timestamp when the receipt was created in the system
  * @param items        parsed line items; null when listing receipts without items
+ * @param supermarket  supermarket where the receipt was issued; null if not yet set
  */
 @Schema(description = "A scanned and parsed grocery receipt")
 public record ReceiptDTO(
@@ -31,6 +33,9 @@ public record ReceiptDTO(
         LocalDateTime creationDate,
 
         @Schema(description = "Parsed line items; null when listing receipts without items")
-        List<ReceiptItemDTO> items
+        List<ReceiptItemDTO> items,
+
+        @Schema(description = "Supermarket where the receipt was issued; null if not yet set")
+        Supermarket supermarket
 ) {
 }

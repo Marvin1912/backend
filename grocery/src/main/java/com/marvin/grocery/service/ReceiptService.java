@@ -6,6 +6,7 @@ import com.marvin.grocery.dto.ReceiptItemDTO;
 import com.marvin.grocery.dto.UpdateReceiptItemRequest;
 import com.marvin.grocery.entity.ReceiptEntity;
 import com.marvin.grocery.entity.ReceiptItemEntity;
+import com.marvin.grocery.entity.Supermarket;
 import com.marvin.grocery.mapper.ReceiptMapper;
 import com.marvin.grocery.ocr.OcrProvider;
 import com.marvin.grocery.repository.ReceiptItemRepository;
@@ -139,6 +140,24 @@ public class ReceiptService {
             item.setSinglePrice(request.singlePrice());
             item.setPrice(request.singlePrice().multiply(BigDecimal.valueOf(request.quantity())));
             return receiptMapper.toReceiptItemDTO(receiptItemRepository.save(item));
+        }).subscribeOn(Schedulers.boundedElastic());
+    }
+
+    /**
+     * Updates the supermarket field on the given receipt.
+     * Emits {@link NoSuchElementException} if the receipt does not exist.
+     *
+     * @param receiptId   the UUID of the receipt to update
+     * @param supermarket the supermarket to set
+     * @return a Mono emitting the updated receipt DTO
+     */
+    public Mono<ReceiptDTO> updateSupermarket(UUID receiptId, Supermarket supermarket) {
+        return Mono.fromCallable(() -> {
+            final ReceiptEntity receipt = receiptRepository.findById(receiptId)
+                    .orElseThrow(() -> new NoSuchElementException("Receipt not found: " + receiptId));
+            receipt.setSupermarket(supermarket);
+            final ReceiptEntity saved = receiptRepository.save(receipt);
+            return receiptMapper.toReceiptDTO(saved);
         }).subscribeOn(Schedulers.boundedElastic());
     }
 

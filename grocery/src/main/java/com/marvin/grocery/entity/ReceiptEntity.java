@@ -4,6 +4,8 @@ import com.marvin.costs.entity.BasicEntity;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -35,6 +37,10 @@ public class ReceiptEntity extends BasicEntity {
 
     @Column(name = "raw_ocr_text", columnDefinition = "TEXT")
     private String rawOcrText;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "supermarket")
+    private Supermarket supermarket;
 
     @OneToMany(mappedBy = "receipt", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
     private List<ReceiptItemEntity> items = new ArrayList<>();
