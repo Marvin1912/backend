@@ -1,6 +1,7 @@
 package com.marvin.nutrition.controller;
 
 import com.marvin.nutrition.service.LabelReadException;
+import com.marvin.nutrition.service.MealEstimateException;
 import com.marvin.nutrition.service.TargetCalculationException;
 import jakarta.persistence.EntityNotFoundException;
 import java.util.NoSuchElementException;
@@ -69,6 +70,17 @@ public class NutritionExceptionHandler {
      */
     @ExceptionHandler(LabelReadException.class)
     public ResponseEntity<String> handleLabelRead(LabelReadException ex) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(ex.getMessage());
+    }
+
+    /**
+     * Maps {@link MealEstimateException} to HTTP 422 Unprocessable Entity.
+     *
+     * @param ex the exception indicating the meal macro estimation failed
+     * @return 422 response with the exception message
+     */
+    @ExceptionHandler(MealEstimateException.class)
+    public ResponseEntity<String> handleMealEstimate(MealEstimateException ex) {
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(ex.getMessage());
     }
 
