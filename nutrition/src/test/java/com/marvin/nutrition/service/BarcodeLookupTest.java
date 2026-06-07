@@ -8,7 +8,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.marvin.nutrition.dto.FoodDraftDTO;
 import java.math.BigDecimal;
 import java.util.Map;
@@ -58,7 +57,7 @@ class BarcodeLookupTest {
         when(webClientBuilder.defaultHeader(any(String.class), any(String.class))).thenReturn(webClientBuilder);
         when(webClientBuilder.build()).thenReturn(webClient);
 
-        barcodeLookup = new BarcodeLookup(webClientBuilder, "https://world.openfoodfacts.org", new ObjectMapper());
+        barcodeLookup = new BarcodeLookup(webClientBuilder, "https://world.openfoodfacts.org");
     }
 
     @SuppressWarnings("unchecked")

@@ -1,11 +1,11 @@
 package com.marvin.nutrition.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.marvin.nutrition.dto.FoodDraftDTO;
 import java.math.BigDecimal;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -27,20 +27,36 @@ public class BarcodeLookup {
     private static final String USER_AGENT = "backend-nutrition/1.0 (geitnermarvin@googlemail.com)";
     private static final String EAN_PATTERN = "\\d{8,14}";
 
+    /**
+     * Maximum number of barcodes retained in the LRU cache.
+     * Once this limit is reached the least-recently-accessed entry is evicted,
+     * keeping memory consumption bounded regardless of how many distinct barcodes are scanned.
+     */
+    private static final int MAX_CACHE_ENTRIES = 500;
+
     private final WebClient webClient;
-    private final Map<String, FoodDraftDTO> cache = new ConcurrentHashMap<>();
+
+    /**
+     * Bounded LRU cache: access-order {@link LinkedHashMap} capped at {@link #MAX_CACHE_ENTRIES},
+     * wrapped in {@link Collections#synchronizedMap} for thread safety.
+     */
+    private final Map<String, FoodDraftDTO> cache = Collections.synchronizedMap(
+            new LinkedHashMap<>(MAX_CACHE_ENTRIES, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, FoodDraftDTO> eldest) {
+                    return size() > MAX_CACHE_ENTRIES;
+                }
+            });
 
     /**
      * Creates a new BarcodeLookup service.
      *
      * @param webClientBuilder the Spring WebClient builder
      * @param baseUrl          the OpenFoodFacts base URL (from {@code nutrition.openfoodfacts.base-url})
-     * @param objectMapper     Jackson mapper (reserved for future use; kept for consistency with LabelReader)
      */
     public BarcodeLookup(
             WebClient.Builder webClientBuilder,
-            @Value("${nutrition.openfoodfacts.base-url:https://world.openfoodfacts.org}") String baseUrl,
-            ObjectMapper objectMapper) {
+            @Value("${nutrition.openfoodfacts.base-url:https://world.openfoodfacts.org}") String baseUrl) {
         this.webClient = webClientBuilder
                 .baseUrl(baseUrl)
                 .defaultHeader("User-Agent", USER_AGENT)

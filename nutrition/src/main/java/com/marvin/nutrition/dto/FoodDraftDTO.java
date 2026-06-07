@@ -5,20 +5,20 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 
 /**
- * Transient draft food parsed from a nutrition label photo.
- * This record is never persisted — it represents raw values read by Claude
- * directly from a packaged food's nutrition label image.
+ * Transient draft food sourced from either a Claude nutrition-label scan or an OpenFoodFacts
+ * barcode lookup. This record is never persisted — it carries raw per-100 g values and an
+ * optional serving size until the caller decides whether to save a {@code FoodEntity}.
  *
  * @param name          food product name
- * @param brand         optional brand name; null if not visible on label
- * @param kcalPer100    kilocalories per 100 g, normalised from the label
- * @param proteinPer100 grams of protein per 100 g, normalised from the label
- * @param carbsPer100   grams of carbohydrates per 100 g, normalised from the label
- * @param fatPer100     grams of fat per 100 g, normalised from the label
- * @param fiberPer100   grams of dietary fibre per 100 g; null if not present on label
- * @param servingG      suggested serving size in grams; null if not present on label
+ * @param brand         optional brand name; null if not available from the source
+ * @param kcalPer100    kilocalories per 100 g
+ * @param proteinPer100 grams of protein per 100 g
+ * @param carbsPer100   grams of carbohydrates per 100 g
+ * @param fatPer100     grams of fat per 100 g
+ * @param fiberPer100   grams of dietary fibre per 100 g; null if not provided by the source
+ * @param servingG      suggested serving size in grams; null if not provided by the source
  */
-@Schema(description = "Transient food draft parsed from a nutrition label photo — never persisted")
+@Schema(description = "Transient food draft from a label scan or barcode lookup — never persisted")
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record FoodDraftDTO(
         @Schema(description = "Food product name", example = "Müsli")
