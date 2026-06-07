@@ -11,6 +11,8 @@ import static org.mockito.Mockito.when;
 import com.marvin.nutrition.dto.FoodDTO;
 import com.marvin.nutrition.dto.FoodDraftDTO;
 import com.marvin.nutrition.entity.FoodSource;
+import com.marvin.nutrition.service.BarcodeLookup;
+import com.marvin.nutrition.service.BarcodeLookupException;
 import com.marvin.nutrition.service.FoodService;
 import com.marvin.nutrition.service.LabelReadException;
 import com.marvin.nutrition.service.LabelReader;
@@ -43,6 +45,9 @@ class FoodControllerTest {
 
     @Mock
     private LabelReader labelReader;
+
+    @Mock
+    private BarcodeLookup barcodeLookup;
 
     @Mock
     private FilePart filePart;
@@ -289,5 +294,61 @@ class FoodControllerTest {
         StepVerifier.create(result)
                 .expectError(LabelReadException.class)
                 .verify();
+    }
+
+    @Test
+    @DisplayName("lookupBarcode returns 200 with draft DTO when barcode lookup succeeds")
+    void lookupBarcode_Success_Returns200WithDraft() {
+        final FoodDraftDTO draft = new FoodDraftDTO(
+                "Nutella", "Ferrero",
+                new BigDecimal("539"), new BigDecimal("6.3"),
+                new BigDecimal("57.5"), new BigDecimal("30.9"),
+                new BigDecimal("0"), new BigDecimal("15")
+        );
+        when(barcodeLookup.lookup("3017620422003")).thenReturn(Mono.just(draft));
+
+        final Mono<ResponseEntity<FoodDraftDTO>> result = foodController.lookupBarcode("3017620422003");
+
+        StepVerifier.create(result)
+                .assertNext(response -> {
+                    assertEquals(200, response.getStatusCode().value());
+                    assertNotNull(response.getBody());
+                    assertEquals("Nutella", response.getBody().name());
+                    assertEquals("Ferrero", response.getBody().brand());
+                    assertEquals(MediaType.APPLICATION_JSON, response.getHeaders().getContentType());
+                })
+                .verifyComplete();
+
+        verify(barcodeLookup).lookup("3017620422003");
+    }
+
+    @Test
+    @DisplayName("lookupBarcode propagates NoSuchElementException when barcode is not found")
+    void lookupBarcode_NotFound_PropagatesNoSuchElementException() {
+        when(barcodeLookup.lookup("9999999999999"))
+                .thenReturn(Mono.error(new NoSuchElementException("Barcode not found: 9999999999999")));
+
+        final Mono<ResponseEntity<FoodDraftDTO>> result = foodController.lookupBarcode("9999999999999");
+
+        StepVerifier.create(result)
+                .expectError(NoSuchElementException.class)
+                .verify();
+
+        verify(barcodeLookup).lookup("9999999999999");
+    }
+
+    @Test
+    @DisplayName("lookupBarcode propagates BarcodeLookupException when no usable nutrition data")
+    void lookupBarcode_NoUsableData_PropagatesBarcodeLookupException() {
+        when(barcodeLookup.lookup("3017620422003"))
+                .thenReturn(Mono.error(new BarcodeLookupException("OpenFoodFacts returned no usable nutrition data")));
+
+        final Mono<ResponseEntity<FoodDraftDTO>> result = foodController.lookupBarcode("3017620422003");
+
+        StepVerifier.create(result)
+                .expectError(BarcodeLookupException.class)
+                .verify();
+
+        verify(barcodeLookup).lookup("3017620422003");
     }
 }
