@@ -3,6 +3,8 @@ package com.marvin.nutrition.dto;
 import com.marvin.nutrition.entity.MealType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.util.UUID;
 
@@ -30,21 +32,27 @@ public record CreateMealEntryRequest(
         @Schema(description = "Food catalog item UUID; null for ad-hoc entries")
         UUID foodId,
 
+        @PositiveOrZero
         @Schema(description = "Portion size in grams; required for food-backed entries", example = "150.00")
         BigDecimal quantityG,
 
+        @Size(max = 255)
         @Schema(description = "Free-text description; required for ad-hoc entries", example = "Homemade soup")
         String description,
 
+        @PositiveOrZero
         @Schema(description = "Kilocalories; required for ad-hoc entries", example = "250.00")
         BigDecimal kcal,
 
+        @PositiveOrZero
         @Schema(description = "Grams of protein; required for ad-hoc entries", example = "15.00")
         BigDecimal proteinG,
 
+        @PositiveOrZero
         @Schema(description = "Grams of carbohydrates; required for ad-hoc entries", example = "30.00")
         BigDecimal carbsG,
 
+        @PositiveOrZero
         @Schema(description = "Grams of fat; required for ad-hoc entries", example = "8.00")
         BigDecimal fatG
 ) {

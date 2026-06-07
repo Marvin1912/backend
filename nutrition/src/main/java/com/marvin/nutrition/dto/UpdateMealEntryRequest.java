@@ -2,6 +2,8 @@ package com.marvin.nutrition.dto;
 
 import com.marvin.nutrition.entity.MealType;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 
 /**
@@ -23,21 +25,27 @@ public record UpdateMealEntryRequest(
         @Schema(description = "Updated meal category (nullable)", example = "DINNER")
         MealType mealType,
 
+        @PositiveOrZero
         @Schema(description = "Updated portion size in grams; triggers macro re-snapshot for food-backed entries", example = "200.00")
         BigDecimal quantityG,
 
+        @Size(max = 255)
         @Schema(description = "Updated free-text description for ad-hoc entries", example = "Updated soup")
         String description,
 
+        @PositiveOrZero
         @Schema(description = "Updated kilocalories for ad-hoc entries", example = "350.00")
         BigDecimal kcal,
 
+        @PositiveOrZero
         @Schema(description = "Updated grams of protein for ad-hoc entries", example = "20.00")
         BigDecimal proteinG,
 
+        @PositiveOrZero
         @Schema(description = "Updated grams of carbohydrates for ad-hoc entries", example = "40.00")
         BigDecimal carbsG,
 
+        @PositiveOrZero
         @Schema(description = "Updated grams of fat for ad-hoc entries", example = "10.00")
         BigDecimal fatG
 ) {

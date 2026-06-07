@@ -82,8 +82,9 @@ public class MealEntryService {
 
     /**
      * Updates an existing meal entry.
-     * For food-backed entries, a new {@code quantityG} triggers macro re-snapshotting.
-     * For ad-hoc entries, any non-null macro values and description from the request are applied.
+     * For food-backed entries, a new {@code quantityG} triggers macro re-snapshotting from the food catalog.
+     * For ad-hoc entries, any non-null macro values and description from the request are applied directly;
+     * {@code quantityG} is ignored for ad-hoc entries because there is no food catalog item to re-snapshot from.
      * Emits {@link NoSuchElementException} if no entry with the given id exists.
      *
      * @param id  the UUID of the entry to update
@@ -211,6 +212,8 @@ public class MealEntryService {
 
     /**
      * Applies update fields for an ad-hoc entry.
+     * Note: {@code req.quantityG()} is intentionally ignored here — it is only meaningful for
+     * food-backed entries where it drives macro re-snapshotting from the food catalog.
      *
      * @param entity the entity to update
      * @param req    the update request
