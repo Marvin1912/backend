@@ -9,8 +9,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.marvin.nutrition.dto.FoodDTO;
+import com.marvin.nutrition.dto.FoodDraftDTO;
 import com.marvin.nutrition.entity.FoodSource;
 import com.marvin.nutrition.service.FoodService;
+import com.marvin.nutrition.service.LabelReadException;
+import com.marvin.nutrition.service.LabelReader;
 import java.math.BigDecimal;
 import java.util.NoSuchElementException;
 import java.util.UUID;
@@ -21,18 +24,28 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.core.io.buffer.DefaultDataBufferFactory;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.codec.multipart.FilePart;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
-/** Unit tests for {@link FoodController} covering all CRUD and search endpoints. */
+/** Unit tests for {@link FoodController} covering all CRUD, search and scan-label endpoints. */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("FoodController Tests")
 class FoodControllerTest {
 
     @Mock
     private FoodService foodService;
+
+    @Mock
+    private LabelReader labelReader;
+
+    @Mock
+    private FilePart filePart;
 
     @InjectMocks
     private FoodController foodController;
@@ -228,5 +241,53 @@ class FoodControllerTest {
                 .verifyComplete();
 
         verify(foodService).delete(unknownId);
+    }
+
+    @Test
+    @DisplayName("scanLabel returns 200 with draft DTO when label reader succeeds")
+    void scanLabel_Success_Returns200WithDraft() {
+        final FoodDraftDTO draft = new FoodDraftDTO(
+                "Müsli", "Kellogg's",
+                new BigDecimal("370.0"), new BigDecimal("8.5"),
+                new BigDecimal("67.0"), new BigDecimal("6.0"),
+                new BigDecimal("5.5"), new BigDecimal("45.0")
+        );
+
+        final byte[] imageBytes = new byte[]{(byte) 0x89, 'P', 'N', 'G'};
+        final DataBuffer dataBuffer = new DefaultDataBufferFactory().wrap(imageBytes);
+
+        when(filePart.content()).thenReturn(Flux.just(dataBuffer));
+        when(labelReader.readLabel(any(byte[].class))).thenReturn(Mono.just(draft));
+
+        final Mono<ResponseEntity<FoodDraftDTO>> result = foodController.scanLabel(filePart);
+
+        StepVerifier.create(result)
+                .assertNext(response -> {
+                    assertEquals(200, response.getStatusCode().value());
+                    assertNotNull(response.getBody());
+                    assertEquals("Müsli", response.getBody().name());
+                    assertEquals("Kellogg's", response.getBody().brand());
+                    assertEquals(MediaType.APPLICATION_JSON, response.getHeaders().getContentType());
+                })
+                .verifyComplete();
+
+        verify(labelReader).readLabel(any(byte[].class));
+    }
+
+    @Test
+    @DisplayName("scanLabel propagates LabelReadException when label reader fails")
+    void scanLabel_LabelReadException_PropagatesError() {
+        final byte[] imageBytes = new byte[]{(byte) 0xFF, (byte) 0xD8};
+        final DataBuffer dataBuffer = new DefaultDataBufferFactory().wrap(imageBytes);
+
+        when(filePart.content()).thenReturn(Flux.just(dataBuffer));
+        when(labelReader.readLabel(any(byte[].class)))
+                .thenReturn(Mono.error(new LabelReadException("Claude returned non-JSON response")));
+
+        final Mono<ResponseEntity<FoodDraftDTO>> result = foodController.scanLabel(filePart);
+
+        StepVerifier.create(result)
+                .expectError(LabelReadException.class)
+                .verify();
     }
 }
