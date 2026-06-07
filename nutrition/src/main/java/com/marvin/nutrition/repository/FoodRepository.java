@@ -19,6 +19,6 @@ public interface FoodRepository extends JpaRepository<FoodEntity, UUID> {
      * @param q the pre-escaped substring to search for within food names
      * @return list of matching food entities ordered by name
      */
-    @Query("SELECT f FROM FoodEntity f WHERE LOWER(f.name) LIKE LOWER(CONCAT('%', :q, '%')) ESCAPE '\\\\' ORDER BY f.name")
+    @Query("SELECT f FROM FoodEntity f WHERE LOWER(f.name) LIKE LOWER(CONCAT('%', :q, '%')) ESCAPE '\\' ORDER BY f.name")
     List<FoodEntity> searchByName(String q);
 }
