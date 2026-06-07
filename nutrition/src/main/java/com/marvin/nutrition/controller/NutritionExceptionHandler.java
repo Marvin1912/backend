@@ -4,6 +4,7 @@ import com.marvin.nutrition.service.TargetCalculationException;
 import jakarta.persistence.EntityNotFoundException;
 import java.util.NoSuchElementException;
 import java.util.stream.Collectors;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -34,6 +35,18 @@ public class NutritionExceptionHandler {
     @ExceptionHandler(EntityNotFoundException.class)
     public ResponseEntity<String> handleEntityNotFound(EntityNotFoundException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ex.getMessage());
+    }
+
+    /**
+     * Maps {@link DataIntegrityViolationException} to HTTP 409 Conflict.
+     *
+     * @param ex the exception
+     * @return 409 response indicating a duplicate weight entry for the same date
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<String> handleDataIntegrityViolation(DataIntegrityViolationException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body("A weight entry for this date already exists");
     }
 
     /**

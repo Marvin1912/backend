@@ -63,13 +63,13 @@ public class TargetService {
         final int targetKcal = maintenanceKcal + goalAdjustment(profile.getGoal());
 
         final int proteinG = (int) Math.round(profile.getProteinPerKg().doubleValue() * weightKg);
-        final int fatG = (int) (profile.getFatPct()
+        final int fatG = profile.getFatPct()
                 .multiply(BigDecimal.valueOf(targetKcal))
                 .divide(BigDecimal.valueOf(KCAL_PER_GRAM_FAT), 4, RoundingMode.HALF_UP)
-                .intValue());
+                .intValue();
         final int proteinKcal = proteinG * KCAL_PER_GRAM_PROTEIN;
         final int fatKcal = fatG * KCAL_PER_GRAM_FAT;
-        final int remaining = targetKcal - proteinKcal - fatKcal;
+        final int remaining = Math.max(0, targetKcal - proteinKcal - fatKcal);
         final int carbsG = remaining / KCAL_PER_GRAM_CARBS;
 
         final String basis = profile.getBasalKcal() != null

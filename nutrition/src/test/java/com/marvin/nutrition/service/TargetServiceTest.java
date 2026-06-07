@@ -265,6 +265,30 @@ class TargetServiceTest {
     }
 
     // -----------------------------------------------------------------------
+    // Carbs clamp
+    // -----------------------------------------------------------------------
+
+    /**
+     * Very low weight + aggressive CUT + high protein/fat can push proteinKcal + fatKcal above targetKcal.
+     * basalKcal = 1400, weight = 45 kg, SEDENTARY → maintenance = round(1400 * 1.2) = 1680, CUT target = 1180.
+     * protein = round(3.5 * 45) = 158 g → 158 * 4 = 632 kcal.
+     * fat = floor(0.55 * 1180 / 9) = floor(72.11) = 72 g → 72 * 9 = 648 kcal.
+     * remaining = 1180 - 632 - 648 = -100 kcal → clamped to 0, carbsG must be 0.
+     */
+    @Test
+    @DisplayName("Carbs are clamped to 0 when protein+fat kcal exceeds targetKcal")
+    void compute_HighProteinFatExceedsTarget_CarbsClampedToZero() {
+        final LocalDate birthDate = LocalDate.now().minusYears(30);
+        final ProfileEntity p = profile(Sex.FEMALE, birthDate, 160.0,
+                ActivityLevel.SEDENTARY, Goal.CUT, 3.5, 0.55, 1400);
+        final WeightEntryEntity w = weight(45.0);
+
+        final TargetsDTO result = targetService.computeTargets(p, w);
+
+        assertEquals(0, result.carbsG());
+    }
+
+    // -----------------------------------------------------------------------
     // Error cases
     // -----------------------------------------------------------------------
 
