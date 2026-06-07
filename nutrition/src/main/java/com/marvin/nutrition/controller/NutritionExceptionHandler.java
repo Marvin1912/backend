@@ -1,5 +1,6 @@
 package com.marvin.nutrition.controller;
 
+import com.marvin.nutrition.service.BarcodeLookupException;
 import com.marvin.nutrition.service.LabelReadException;
 import com.marvin.nutrition.service.MealEstimateException;
 import com.marvin.nutrition.service.TargetCalculationException;
@@ -81,6 +82,17 @@ public class NutritionExceptionHandler {
      */
     @ExceptionHandler(MealEstimateException.class)
     public ResponseEntity<String> handleMealEstimate(MealEstimateException ex) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(ex.getMessage());
+    }
+
+    /**
+     * Maps {@link BarcodeLookupException} to HTTP 422 Unprocessable Entity.
+     *
+     * @param ex the exception indicating the barcode was found but returned no usable nutrition data
+     * @return 422 response with the exception message
+     */
+    @ExceptionHandler(BarcodeLookupException.class)
+    public ResponseEntity<String> handleBarcodeLookup(BarcodeLookupException ex) {
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(ex.getMessage());
     }
 

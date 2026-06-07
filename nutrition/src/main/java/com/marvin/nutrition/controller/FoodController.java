@@ -2,6 +2,7 @@ package com.marvin.nutrition.controller;
 
 import com.marvin.nutrition.dto.FoodDTO;
 import com.marvin.nutrition.dto.FoodDraftDTO;
+import com.marvin.nutrition.service.BarcodeLookup;
 import com.marvin.nutrition.service.FoodService;
 import com.marvin.nutrition.service.LabelReader;
 import io.swagger.v3.oas.annotations.Operation;
@@ -50,16 +51,19 @@ public class FoodController {
 
     private final FoodService foodService;
     private final LabelReader labelReader;
+    private final BarcodeLookup barcodeLookup;
 
     /**
      * Creates a new FoodController with the required services.
      *
-     * @param foodService the service handling food catalog operations
-     * @param labelReader the service that reads nutrition labels via Claude
+     * @param foodService   the service handling food catalog operations
+     * @param labelReader   the service that reads nutrition labels via Claude
+     * @param barcodeLookup the service that looks up food data by EAN barcode on OpenFoodFacts
      */
-    public FoodController(FoodService foodService, LabelReader labelReader) {
+    public FoodController(FoodService foodService, LabelReader labelReader, BarcodeLookup barcodeLookup) {
         this.foodService = foodService;
         this.labelReader = labelReader;
+        this.barcodeLookup = barcodeLookup;
     }
 
     /**
@@ -219,6 +223,38 @@ public class FoodController {
         LOGGER.info("Received scan-label request: filename={}", filePart.filename());
         return extractBytes(filePart)
                 .flatMap(labelReader::readLabel)
+                .map(draft -> ResponseEntity.ok()
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(draft));
+    }
+
+    /**
+     * Looks up a food product by EAN barcode on OpenFoodFacts and returns a transient draft food.
+     * Nothing is persisted. Results are cached in-memory for repeated lookups.
+     *
+     * @param ean the EAN-8, EAN-13 or EAN-14 barcode (digits only, 8–14 characters)
+     * @return a Mono with 200 OK and the parsed draft food DTO
+     */
+    @GetMapping("/barcode/{ean}")
+    @Operation(
+            summary = "Look up food by barcode",
+            description = "Queries OpenFoodFacts for the given EAN barcode and returns a transient draft food with per-100g macros. "
+                    + "Results are cached. Nothing is persisted.",
+            responses = {
+                @ApiResponse(
+                        responseCode = "200",
+                        description = "Barcode found; draft food returned",
+                        content = @Content(schema = @Schema(implementation = FoodDraftDTO.class))
+                ),
+                @ApiResponse(responseCode = "400", description = "Invalid barcode format"),
+                @ApiResponse(responseCode = "404", description = "Barcode not found on OpenFoodFacts"),
+                @ApiResponse(responseCode = "422", description = "Barcode found but no usable nutrition data")
+            }
+    )
+    public Mono<ResponseEntity<FoodDraftDTO>> lookupBarcode(
+            @PathVariable @Parameter(description = "EAN-8, EAN-13 or EAN-14 barcode (digits only)") String ean) {
+        LOGGER.info("Received barcode lookup request: ean={}", ean);
+        return barcodeLookup.lookup(ean)
                 .map(draft -> ResponseEntity.ok()
                         .contentType(MediaType.APPLICATION_JSON)
                         .body(draft));
