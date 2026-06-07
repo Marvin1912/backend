@@ -4,6 +4,7 @@ import com.marvin.nutrition.dto.FoodDTO;
 import com.marvin.nutrition.entity.FoodEntity;
 import java.util.List;
 import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 
 /** MapStruct mapper for converting between {@link FoodEntity} and {@link FoodDTO}. */
 @Mapper(componentModel = "spring")
@@ -18,11 +19,13 @@ public interface FoodMapper {
     FoodDTO toDTO(FoodEntity entity);
 
     /**
-     * Maps a food DTO to an entity.
+     * Maps a food DTO to an entity. The {@code id} field is always ignored so that
+     * the database-generated value is used; a client-supplied id is never honoured.
      *
      * @param dto the DTO to map
-     * @return the corresponding entity (id will be null for new entities)
+     * @return the corresponding entity with a null id (assigned by {@code @GeneratedValue})
      */
+    @Mapping(target = "id", ignore = true)
     FoodEntity toEntity(FoodDTO dto);
 
     /**

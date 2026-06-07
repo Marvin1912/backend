@@ -13,11 +13,12 @@ public interface FoodRepository extends JpaRepository<FoodEntity, UUID> {
 
     /**
      * Searches for food entries whose name contains the given query string, case-insensitively,
-     * ordered alphabetically by name.
+     * ordered alphabetically by name. The caller must pre-escape LIKE special characters
+     * ({@code \}, {@code %}, {@code _}) using {@code ESCAPE '\\'}.
      *
-     * @param q the substring to search for within food names
+     * @param q the pre-escaped substring to search for within food names
      * @return list of matching food entities ordered by name
      */
-    @Query("SELECT f FROM FoodEntity f WHERE LOWER(f.name) LIKE LOWER(CONCAT('%', :q, '%')) ORDER BY f.name")
+    @Query("SELECT f FROM FoodEntity f WHERE LOWER(f.name) LIKE LOWER(CONCAT('%', :q, '%')) ESCAPE '\\\\' ORDER BY f.name")
     List<FoodEntity> searchByName(String q);
 }

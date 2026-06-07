@@ -8,6 +8,7 @@ import com.marvin.nutrition.repository.FoodRepository;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.UUID;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -35,6 +36,8 @@ public class FoodService {
      * Returns all food entries, or those matching the given name query.
      * If {@code q} is null or blank, all foods ordered by name are returned.
      * Otherwise, a case-insensitive name-contains search is performed.
+     * LIKE special characters ({@code \}, {@code %}, {@code _}) in the query are
+     * escaped before being passed to the repository.
      *
      * @param q optional search string to filter by name
      * @return a Flux emitting matching food DTOs
@@ -43,10 +46,9 @@ public class FoodService {
         return Mono.fromCallable(() -> {
             final List<FoodEntity> entities;
             if (q == null || q.isBlank()) {
-                entities = foodRepository.findAll(
-                        org.springframework.data.domain.Sort.by("name"));
+                entities = foodRepository.findAll(Sort.by("name"));
             } else {
-                entities = foodRepository.searchByName(q);
+                entities = foodRepository.searchByName(escapeLike(q));
             }
             return foodMapper.toDTOList(entities);
         }).subscribeOn(Schedulers.boundedElastic())
@@ -77,15 +79,14 @@ public class FoodService {
     public Mono<FoodDTO> create(FoodDTO dto) {
         return Mono.fromCallable(() -> {
             final FoodEntity entity = foodMapper.toEntity(dto);
-            if (entity.getSource() == null) {
-                entity.setSource(FoodSource.MANUAL);
-            }
+            entity.setSource(resolveSource(dto.source()));
             return foodMapper.toDTO(foodRepository.save(entity));
         }).subscribeOn(Schedulers.boundedElastic());
     }
 
     /**
-     * Updates an existing food entry.
+     * Updates an existing food entry. All fields are replaced unconditionally;
+     * if {@code source} is null in the DTO it defaults to {@link FoodSource#MANUAL}.
      * Emits {@link NoSuchElementException} if no entry with that id exists.
      *
      * @param id  the UUID of the food entry to update
@@ -104,9 +105,7 @@ public class FoodService {
             entity.setFatPer100(dto.fatPer100());
             entity.setFiberPer100(dto.fiberPer100());
             entity.setDefaultServingG(dto.defaultServingG());
-            if (dto.source() != null) {
-                entity.setSource(dto.source());
-            }
+            entity.setSource(resolveSource(dto.source()));
             return foodMapper.toDTO(foodRepository.save(entity));
         }).subscribeOn(Schedulers.boundedElastic());
     }
@@ -126,5 +125,29 @@ public class FoodService {
             foodRepository.deleteById(id);
             return null;
         }).subscribeOn(Schedulers.boundedElastic()).then();
+    }
+
+    /**
+     * Returns the given source if non-null, otherwise {@link FoodSource#MANUAL}.
+     *
+     * @param source the source value from the DTO, may be null
+     * @return a non-null FoodSource
+     */
+    private FoodSource resolveSource(FoodSource source) {
+        return source != null ? source : FoodSource.MANUAL;
+    }
+
+    /**
+     * Escapes LIKE special characters ({@code \}, {@code %}, {@code _}) in the given string
+     * so that they are matched literally by the repository query.
+     * Backslash is escaped first to avoid double-escaping.
+     *
+     * @param q the raw user query
+     * @return the escaped query safe for use in a LIKE pattern with {@code ESCAPE '\\'}
+     */
+    private String escapeLike(String q) {
+        return q.replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
     }
 }
