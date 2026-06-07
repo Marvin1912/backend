@@ -18,4 +18,5 @@ dependencies {
     implementation project(':it-news')
     implementation project(':climate')
     implementation project(':grocery')
+    implementation project(':nutrition')
 }
