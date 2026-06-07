@@ -10,6 +10,9 @@ dependencies {
     implementation 'org.hibernate.validator:hibernate-validator'
     annotationProcessor 'org.mapstruct:mapstruct-processor:1.6.3'
 
+    // EL implementation required by Hibernate Validator at test time
+    testImplementation 'org.glassfish.expressly:expressly:5.0.0'
+
     // Test dependencies
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testImplementation 'org.junit.platform:junit-platform-launcher'
