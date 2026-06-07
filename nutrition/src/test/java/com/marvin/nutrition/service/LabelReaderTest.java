@@ -1,5 +1,7 @@
 package com.marvin.nutrition.service;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.when;
@@ -14,7 +16,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpHeaders;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
@@ -87,14 +91,14 @@ class LabelReaderTest {
         final byte[] pngBytes = new byte[]{(byte) 0x89, 'P', 'N', 'G'};
         StepVerifier.create(labelReader.readLabel(pngBytes))
                 .assertNext(dto -> {
-                    assert "Müsli".equals(dto.name());
-                    assert "Kellogg's".equals(dto.brand());
-                    assert new BigDecimal("370.0").compareTo(dto.kcalPer100()) == 0;
-                    assert new BigDecimal("8.5").compareTo(dto.proteinPer100()) == 0;
-                    assert new BigDecimal("67.0").compareTo(dto.carbsPer100()) == 0;
-                    assert new BigDecimal("6.0").compareTo(dto.fatPer100()) == 0;
-                    assert new BigDecimal("5.5").compareTo(dto.fiberPer100()) == 0;
-                    assert new BigDecimal("45.0").compareTo(dto.servingG()) == 0;
+                    assertEquals("Müsli", dto.name());
+                    assertEquals("Kellogg's", dto.brand());
+                    assertEquals(0, new BigDecimal("370.0").compareTo(dto.kcalPer100()));
+                    assertEquals(0, new BigDecimal("8.5").compareTo(dto.proteinPer100()));
+                    assertEquals(0, new BigDecimal("67.0").compareTo(dto.carbsPer100()));
+                    assertEquals(0, new BigDecimal("6.0").compareTo(dto.fatPer100()));
+                    assertEquals(0, new BigDecimal("5.5").compareTo(dto.fiberPer100()));
+                    assertEquals(0, new BigDecimal("45.0").compareTo(dto.servingG()));
                 })
                 .verifyComplete();
     }
@@ -121,10 +125,10 @@ class LabelReaderTest {
         final byte[] jpegBytes = new byte[]{(byte) 0xFF, (byte) 0xD8};
         StepVerifier.create(labelReader.readLabel(jpegBytes))
                 .assertNext(dto -> {
-                    assert "Plain Rice".equals(dto.name());
-                    assert dto.brand() == null;
-                    assert dto.fiberPer100() == null;
-                    assert dto.servingG() == null;
+                    assertEquals("Plain Rice", dto.name());
+                    assertNull(dto.brand());
+                    assertNull(dto.fiberPer100());
+                    assertNull(dto.servingG());
                 })
                 .verifyComplete();
     }
@@ -151,6 +155,33 @@ class LabelReaderTest {
         stubWebClientChain(Mono.just(claudeResponse));
 
         final byte[] imageBytes = new byte[]{(byte) 0xFF, (byte) 0xD8};
+        StepVerifier.create(labelReader.readLabel(imageBytes))
+                .expectError(LabelReadException.class)
+                .verify();
+    }
+
+    @Test
+    @DisplayName("readLabel emits LabelReadException when Claude API returns HTTP 401")
+    void readLabel_ApiReturns401_EmitsLabelReadException() {
+        final WebClientResponseException unauthorizedException = WebClientResponseException.create(
+                401, "Unauthorized", HttpHeaders.EMPTY, new byte[0], null);
+        stubWebClientChain(Mono.error(unauthorizedException));
+
+        final byte[] imageBytes = new byte[]{(byte) 0x89, 'P', 'N', 'G'};
+        StepVerifier.create(labelReader.readLabel(imageBytes))
+                .expectError(LabelReadException.class)
+                .verify();
+    }
+
+    @Test
+    @DisplayName("readLabel emits LabelReadException when Claude returns valid JSON with no usable fields")
+    void readLabel_EmptyJsonObject_EmitsLabelReadException() {
+        final Map<String, Object> claudeResponse = Map.of(
+                "content", List.of(Map.of("text", "{}"))
+        );
+        stubWebClientChain(Mono.just(claudeResponse));
+
+        final byte[] imageBytes = new byte[]{(byte) 0x89, 'P', 'N', 'G'};
         StepVerifier.create(labelReader.readLabel(imageBytes))
                 .expectError(LabelReadException.class)
                 .verify();

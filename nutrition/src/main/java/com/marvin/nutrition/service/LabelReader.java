@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
 
 /**
@@ -73,6 +74,8 @@ public class LabelReader {
                 .bodyValue(request)
                 .retrieve()
                 .bodyToMono(Map.class)
+                .onErrorMap(WebClientResponseException.class,
+                        e -> new LabelReadException("Claude API request failed: " + e.getStatusCode(), e))
                 .flatMap(this::parseClaudeResponse)
                 .doOnError(e -> LOGGER.error("Label read failed", e));
     }
@@ -88,6 +91,9 @@ public class LabelReader {
         final String text = textObj != null ? textObj.toString().trim() : "";
         try {
             final FoodDraftDTO draft = objectMapper.readValue(text, FoodDraftDTO.class);
+            if (draft.name() == null || draft.name().isBlank() || draft.kcalPer100() == null) {
+                return Mono.error(new LabelReadException("Claude returned no usable nutrition data"));
+            }
             LOGGER.info("Parsed nutrition label draft: name={}", draft.name());
             return Mono.just(draft);
         } catch (Exception e) {
