@@ -1,7 +1,9 @@
 package com.marvin.nutrition.controller;
 
 import com.marvin.nutrition.dto.FoodDTO;
+import com.marvin.nutrition.dto.FoodDraftDTO;
 import com.marvin.nutrition.service.FoodService;
+import com.marvin.nutrition.service.LabelReader;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -13,8 +15,13 @@ import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.NoSuchElementException;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.codec.multipart.FilePart;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -23,30 +30,36 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 /**
  * REST controller for managing the nutrition food catalog.
- * Provides endpoints to create, read, update, delete, and search food entries.
+ * Provides endpoints to create, read, update, delete, search food entries,
+ * and scan a nutrition label photo to produce a transient draft food.
  */
 @RestController
 @RequestMapping("/nutrition/foods")
 @Tag(name = "Nutrition", description = "Nutrition profile, weight tracking and target calculation")
 public class FoodController {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(FoodController.class);
     private static final String FOODS_LOCATION_PREFIX = "/nutrition/foods/";
 
     private final FoodService foodService;
+    private final LabelReader labelReader;
 
     /**
-     * Creates a new FoodController with the required service.
+     * Creates a new FoodController with the required services.
      *
      * @param foodService the service handling food catalog operations
+     * @param labelReader the service that reads nutrition labels via Claude
      */
-    public FoodController(FoodService foodService) {
+    public FoodController(FoodService foodService, LabelReader labelReader) {
         this.foodService = foodService;
+        this.labelReader = labelReader;
     }
 
     /**
@@ -177,5 +190,54 @@ public class FoodController {
         return foodService.delete(id)
                 .thenReturn(noContent)
                 .onErrorReturn(NoSuchElementException.class, notFound);
+    }
+
+    /**
+     * Accepts a food packaging photo, sends it to Claude, and returns a transient draft food.
+     * Nothing is persisted — the returned draft is only held in memory.
+     *
+     * @param filePart the multipart file containing the food label image (JPEG or PNG)
+     * @return a Mono with 200 OK and the parsed draft food DTO
+     */
+    @PostMapping(path = "/scan-label", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(
+            summary = "Scan a nutrition label photo",
+            description = "Sends the uploaded label image to Claude and returns a transient draft food with parsed values. "
+                    + "All macros are normalised to per 100 g. The draft is never persisted.",
+            responses = {
+                @ApiResponse(
+                        responseCode = "200",
+                        description = "Label successfully read; draft food returned",
+                        content = @Content(schema = @Schema(implementation = FoodDraftDTO.class))
+                ),
+                @ApiResponse(responseCode = "422", description = "Label could not be read or parsed")
+            }
+    )
+    public Mono<ResponseEntity<FoodDraftDTO>> scanLabel(
+            @RequestPart("file")
+            @Parameter(description = "Nutrition label image file (JPEG or PNG)") FilePart filePart) {
+        LOGGER.info("Received scan-label request: filename={}", filePart.filename());
+        return extractBytes(filePart)
+                .flatMap(labelReader::readLabel)
+                .map(draft -> ResponseEntity.ok()
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(draft));
+    }
+
+    /**
+     * Reads all bytes from the given FilePart reactively.
+     *
+     * @param filePart the file part to read
+     * @return a Mono emitting the complete file bytes
+     */
+    private Mono<byte[]> extractBytes(FilePart filePart) {
+        return DataBufferUtils.join(filePart.content())
+                .map(dataBuffer -> {
+                    final byte[] bytes = new byte[dataBuffer.readableByteCount()];
+                    dataBuffer.read(bytes);
+                    DataBufferUtils.release(dataBuffer);
+                    return bytes;
+                })
+                .doOnError(e -> LOGGER.error("Failed to read uploaded label image", e));
     }
 }
