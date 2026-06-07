@@ -1,0 +1,51 @@
+package com.marvin.nutrition.service;
+
+import com.marvin.nutrition.dto.TargetsDTO;
+import com.marvin.nutrition.entity.ProfileEntity;
+import com.marvin.nutrition.entity.WeightEntryEntity;
+import com.marvin.nutrition.repository.ProfileRepository;
+import com.marvin.nutrition.repository.WeightEntryRepository;
+import java.util.List;
+import org.springframework.stereotype.Service;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
+
+/** Orchestrating service that loads profile and latest weight, then delegates to {@link TargetService}. */
+@Service
+public class NutritionTargetService {
+
+    private final ProfileRepository profileRepository;
+    private final WeightEntryRepository weightEntryRepository;
+    private final TargetService targetService;
+
+    /**
+     * Creates a new NutritionTargetService.
+     *
+     * @param profileRepository     JPA repository for the profile row
+     * @param weightEntryRepository JPA repository for weight entries
+     * @param targetService         pure calculation service
+     */
+    public NutritionTargetService(
+            ProfileRepository profileRepository,
+            WeightEntryRepository weightEntryRepository,
+            TargetService targetService) {
+        this.profileRepository = profileRepository;
+        this.weightEntryRepository = weightEntryRepository;
+        this.targetService = targetService;
+    }
+
+    /**
+     * Loads the current profile and latest weight entry, computes and returns daily nutrition targets.
+     * Emits {@link TargetCalculationException} if profile or weight data is missing.
+     *
+     * @return a Mono emitting the computed targets DTO
+     */
+    public Mono<TargetsDTO> getTargets() {
+        return Mono.fromCallable(() -> {
+            final List<ProfileEntity> profiles = profileRepository.findAll();
+            final ProfileEntity profile = profiles.isEmpty() ? null : profiles.get(0);
+            final WeightEntryEntity latestWeight = weightEntryRepository.findTopByOrderByEntryDateDesc().orElse(null);
+            return targetService.computeTargets(profile, latestWeight);
+        }).subscribeOn(Schedulers.boundedElastic());
+    }
+}
