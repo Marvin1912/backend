@@ -73,6 +73,17 @@ public class NutritionExceptionHandler {
     }
 
     /**
+     * Maps {@link IllegalArgumentException} to HTTP 400.
+     *
+     * @param ex the exception
+     * @return 400 response with the exception message
+     */
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<String> handleIllegalArgument(IllegalArgumentException ex) {
+        return ResponseEntity.badRequest().body(ex.getMessage());
+    }
+
+    /**
      * Maps bean-validation failures ({@link MethodArgumentNotValidException}) to HTTP 400.
      *
      * @param ex the exception carrying field error details
