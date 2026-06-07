@@ -90,8 +90,19 @@ The `database/` and `importer/` directories exist but are not included as Gradle
 - JUnit 5 + Mockito + `reactor-test` (StepVerifier for reactive assertions)
 - Tests use `@ExtendWith(MockitoExtension.class)` for unit tests
 
+### Test-Driven Development (mandatory)
+
+- **Write the test first.** For every piece of logic, write a failing test before writing the
+  implementation. Follow the red → green → refactor cycle.
+- **Tests are the contract — do not change them to make code pass.** Once a test is written, the
+  implementation (logic) is what must change. The logic has the highest priority and must be
+  adapted to satisfy the tests, never the other way around.
+- **If a test genuinely needs to change, ask the user first** before modifying it.
+
 ## Agent Workflow
 
 - **All development tasks** must use the `java-developer` agent.
 - **After development is complete** and a PR has been created, use the `java-code-reviewer` agent to review the changes before merging.
 - **When a GitHub issue has been finished**, a PR must be created and merged into `master`.
+- **For every new feature**, use the `tdd-test-guardian` agent to verify that existing tests were
+  not modified. If tests were changed, it must stop and ask the user before anything proceeds.
