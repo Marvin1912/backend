@@ -2,7 +2,6 @@ package com.marvin.nutrition.mapper;
 
 import com.marvin.nutrition.dto.MealEntryDTO;
 import com.marvin.nutrition.entity.MealEntryEntity;
-import java.util.List;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
@@ -30,14 +29,4 @@ public interface MealEntryMapper {
      */
     @Mapping(target = "foodName", source = "foodName")
     MealEntryDTO toDTO(MealEntryEntity entity, String foodName);
-
-    /**
-     * Maps a list of meal entry entities to their DTO representations with {@code foodName} null.
-     * Callers that need resolved food names should use {@link #toDTO(MealEntryEntity, String)} per entry.
-     *
-     * @param entities the list of meal entry entities to map
-     * @return the list of corresponding DTOs with {@code foodName} null for each entry
-     */
-    @Mapping(target = "foodName", ignore = true)
-    List<MealEntryDTO> toDTOList(List<MealEntryEntity> entities);
 }
