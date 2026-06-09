@@ -22,7 +22,7 @@ public class ReceiptParserService {
             Pattern.compile("^(.+?)\\s{2,}(-?\\d{1,4}[.,]\\d{2})\\s{2,}(\\d{1,4})\\s{2,}(-?\\d{1,4}[.,]\\d{2})\\s*$");
 
     private static final Pattern TOTAL_LINE_PATTERN =
-            Pattern.compile("(?i)(summe|gesamt|total|zwischensumme|zu zahlen|bar|ec.karte|mwst|ust)");
+            Pattern.compile("(?i)\\b(summe|gesamt|total|zwischensumme|zu zahlen|bar|ec[ .-]?karte|mwst|ust)\\b");
 
     private static final Pattern DATE_PATTERN =
             Pattern.compile("(\\d{2}\\.\\d{2}\\.\\d{4})");

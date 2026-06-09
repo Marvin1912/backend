@@ -13,6 +13,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -153,12 +154,13 @@ public class ReceiptController {
                         description = "Item created",
                         content = @Content(schema = @Schema(implementation = ReceiptItemDTO.class))
                 ),
+                @ApiResponse(responseCode = "400", description = "Invalid request body (validation failed)"),
                 @ApiResponse(responseCode = "404", description = "Receipt not found")
             }
     )
     public Mono<ResponseEntity<ReceiptItemDTO>> addItem(
             @PathVariable @Parameter(description = "UUID of the receipt") UUID receiptId,
-            @RequestBody AddReceiptItemRequest request) {
+            @Valid @RequestBody AddReceiptItemRequest request) {
         return receiptService.addItem(receiptId, request)
                 .map(item -> ResponseEntity.status(HttpStatus.CREATED).body(item))
                 .onErrorReturn(NoSuchElementException.class, ResponseEntity.notFound().build());
@@ -182,13 +184,14 @@ public class ReceiptController {
                         description = "Item updated",
                         content = @Content(schema = @Schema(implementation = ReceiptItemDTO.class))
                 ),
+                @ApiResponse(responseCode = "400", description = "Invalid request body (validation failed)"),
                 @ApiResponse(responseCode = "404", description = "Receipt or item not found")
             }
     )
     public Mono<ResponseEntity<ReceiptItemDTO>> updateItem(
             @PathVariable @Parameter(description = "UUID of the receipt") UUID receiptId,
             @PathVariable @Parameter(description = "Id of the item") Long itemId,
-            @RequestBody UpdateReceiptItemRequest request) {
+            @Valid @RequestBody UpdateReceiptItemRequest request) {
         return receiptService.updateItem(receiptId, itemId, request)
                 .map(ResponseEntity::ok)
                 .onErrorReturn(NoSuchElementException.class, ResponseEntity.notFound().build());
