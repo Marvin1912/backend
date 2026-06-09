@@ -80,10 +80,11 @@ public class ClaudeVisionOcrProvider implements OcrProvider {
         if (response == null || response.content() == null || response.content().isEmpty()) {
             throw new OcrExtractionException("Claude Vision returned no content blocks");
         }
-        final String text = response.content().get(0).text();
-        if (text == null) {
+        final ClaudeResponse.ContentBlock firstBlock = response.content().get(0);
+        if (firstBlock == null || firstBlock.text() == null) {
             throw new OcrExtractionException("Claude Vision returned a content block without text");
         }
+        final String text = firstBlock.text();
         if (STOP_REASON_MAX_TOKENS.equals(response.stopReason())) {
             LOGGER.warn("Claude Vision response was truncated at max_tokens={}; receipt items may be incomplete", MAX_TOKENS);
         }

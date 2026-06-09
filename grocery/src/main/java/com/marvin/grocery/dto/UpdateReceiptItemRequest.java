@@ -24,7 +24,9 @@ public record UpdateReceiptItemRequest(
         @Positive
         int quantity,
 
-        @Schema(description = "Price per unit in euros", example = "1.29")
+        // Intentionally @NotNull only — negative prices are allowed to represent discount /
+        // "Preisvorteil" lines that the parser accepts. Do not add @Positive here.
+        @Schema(description = "Price per unit in euros; may be negative for discount lines", example = "1.29")
         @NotNull
         BigDecimal singlePrice
 ) {

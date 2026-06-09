@@ -155,6 +155,39 @@ class ReceiptParserServiceTest {
     }
 
     @Test
+    @DisplayName("Should exclude 'EC-Karte' (hyphen) payment line")
+    void parse_EcKarteHyphen_IsExcluded() {
+        final String text = "Butter  1.79  1  1.79\nEC-Karte  10,00";
+
+        final ParsedReceipt result = parserService.parse(text);
+
+        assertEquals(1, result.items().size());
+        assertEquals("Butter", result.items().get(0).name());
+    }
+
+    @Test
+    @DisplayName("Should exclude 'EC Karte' (space) payment line")
+    void parse_EcKarteSpace_IsExcluded() {
+        final String text = "Butter  1.79  1  1.79\nEC Karte  10,00";
+
+        final ParsedReceipt result = parserService.parse(text);
+
+        assertEquals(1, result.items().size());
+        assertEquals("Butter", result.items().get(0).name());
+    }
+
+    @Test
+    @DisplayName("Should exclude 'EC.Karte' (dot) payment line")
+    void parse_EcKarteDot_IsExcluded() {
+        final String text = "Butter  1.79  1  1.79\nEC.Karte  10,00";
+
+        final ParsedReceipt result = parserService.parse(text);
+
+        assertEquals(1, result.items().size());
+        assertEquals("Butter", result.items().get(0).name());
+    }
+
+    @Test
     @DisplayName("Should parse Claude Vision OCR sample with negative prices, quantities, and date")
     void parse_ClaudeVisionSample_ReturnsAllItemsAndDate() {
         final String text = "Cherrystrauchtomaten  2.99  2  5.98\n"

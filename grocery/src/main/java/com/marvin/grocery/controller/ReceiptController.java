@@ -154,6 +154,7 @@ public class ReceiptController {
                         description = "Item created",
                         content = @Content(schema = @Schema(implementation = ReceiptItemDTO.class))
                 ),
+                @ApiResponse(responseCode = "400", description = "Invalid request body (validation failed)"),
                 @ApiResponse(responseCode = "404", description = "Receipt not found")
             }
     )
@@ -183,6 +184,7 @@ public class ReceiptController {
                         description = "Item updated",
                         content = @Content(schema = @Schema(implementation = ReceiptItemDTO.class))
                 ),
+                @ApiResponse(responseCode = "400", description = "Invalid request body (validation failed)"),
                 @ApiResponse(responseCode = "404", description = "Receipt or item not found")
             }
     )

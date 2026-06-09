@@ -63,4 +63,14 @@ class ClaudeVisionOcrProviderTest {
 
         assertThrows(OcrExtractionException.class, () -> provider.extractTextFromResponse(response));
     }
+
+    @Test
+    @DisplayName("Should throw when the first element of the content list is null (e.g. JSON [null])")
+    void extractTextFromResponse_nullFirstElement_throws() {
+        final List<ContentBlock> contentWithNullElement = new java.util.ArrayList<>();
+        contentWithNullElement.add(null);
+        final ClaudeResponse response = new ClaudeResponse("end_turn", contentWithNullElement);
+
+        assertThrows(OcrExtractionException.class, () -> provider.extractTextFromResponse(response));
+    }
 }
