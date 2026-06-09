@@ -21,7 +21,8 @@ public class ClaudeVisionOcrProvider implements OcrProvider {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ClaudeVisionOcrProvider.class);
     private static final String MODEL = "claude-sonnet-4-6";
-    private static final int MAX_TOKENS = 1024;
+    private static final int MAX_TOKENS = 4096;
+    private static final String STOP_REASON_MAX_TOKENS = "max_tokens";
     private static final String RECEIPT_PROMPT = """
             Extract all purchased items from this German grocery receipt.
             For each item output it on its own line as: item name  price  quantity  total price
@@ -63,12 +64,31 @@ public class ClaudeVisionOcrProvider implements OcrProvider {
                 .bodyValue(request)
                 .retrieve()
                 .bodyToMono(ClaudeResponse.class)
-                .map(response -> {
-                    final String text = response.content().get(0).text();
-                    LOGGER.info("Claude Vision extracted {} characters", text.length());
-                    return text;
-                })
+                .map(this::extractTextFromResponse)
                 .doOnError(e -> LOGGER.error("Claude Vision API call failed", e));
+    }
+
+    /**
+     * Extracts the text of the first content block from a Claude response, guarding against
+     * empty or text-less responses and warning when the response was truncated.
+     *
+     * @param response the deserialized Claude API response
+     * @return the extracted text
+     * @throws OcrExtractionException if the response contains no usable text block
+     */
+    String extractTextFromResponse(ClaudeResponse response) {
+        if (response == null || response.content() == null || response.content().isEmpty()) {
+            throw new OcrExtractionException("Claude Vision returned no content blocks");
+        }
+        final String text = response.content().get(0).text();
+        if (text == null) {
+            throw new OcrExtractionException("Claude Vision returned a content block without text");
+        }
+        if (STOP_REASON_MAX_TOKENS.equals(response.stopReason())) {
+            LOGGER.warn("Claude Vision response was truncated at max_tokens={}; receipt items may be incomplete", MAX_TOKENS);
+        }
+        LOGGER.info("Claude Vision extracted {} characters", text.length());
+        return text;
     }
 
     private Map<String, Object> buildRequest(String base64, String mediaType) {
@@ -93,7 +113,9 @@ public class ClaudeVisionOcrProvider implements OcrProvider {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    record ClaudeResponse(@JsonProperty("content") List<ContentBlock> content) {
+    record ClaudeResponse(
+            @JsonProperty("stop_reason") String stopReason,
+            @JsonProperty("content") List<ContentBlock> content) {
 
         @JsonIgnoreProperties(ignoreUnknown = true)
         record ContentBlock(@JsonProperty("text") String text) { }

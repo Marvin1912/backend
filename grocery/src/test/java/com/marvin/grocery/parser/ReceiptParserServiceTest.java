@@ -129,6 +129,32 @@ class ReceiptParserServiceTest {
     }
 
     @Test
+    @DisplayName("Should keep an item whose name merely contains a total keyword as a substring")
+    void parse_ItemNameContainingTotalKeyword_IsKept() {
+        final String text = "Rhabarber  2.99  1  2.99";
+
+        final ParsedReceipt result = parserService.parse(text);
+
+        assertEquals(1, result.items().size());
+        assertEquals("Rhabarber", result.items().get(0).name());
+    }
+
+    @Test
+    @DisplayName("Should keep substring-keyword items but still exclude genuine total lines")
+    void parse_MixedKeywordItemsAndTotals_KeepsItemsExcludesTotals() {
+        final String text = "Rhabarber  2.99  1  2.99\n"
+                + "Bratwurst  3.49  2  6.98\n"
+                + "Summe  9,97\n"
+                + "Bar  10,00";
+
+        final ParsedReceipt result = parserService.parse(text);
+
+        assertEquals(2, result.items().size());
+        assertEquals("Rhabarber", result.items().get(0).name());
+        assertEquals("Bratwurst", result.items().get(1).name());
+    }
+
+    @Test
     @DisplayName("Should parse Claude Vision OCR sample with negative prices, quantities, and date")
     void parse_ClaudeVisionSample_ReturnsAllItemsAndDate() {
         final String text = "Cherrystrauchtomaten  2.99  2  5.98\n"
