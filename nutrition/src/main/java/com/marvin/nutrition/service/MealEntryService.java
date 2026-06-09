@@ -15,9 +15,11 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -71,11 +73,11 @@ public class MealEntryService {
             entity.setMealType(req.mealType());
 
             if (req.foodId() != null) {
-                buildFoodEntry(entity, req);
-            } else {
-                buildAdHocEntry(entity, req);
+                final String foodName = buildFoodEntry(entity, req);
+                return mealEntryMapper.toDTO(mealEntryRepository.save(entity), foodName);
             }
 
+            buildAdHocEntry(entity, req);
             return mealEntryMapper.toDTO(mealEntryRepository.save(entity));
         }).subscribeOn(Schedulers.boundedElastic());
     }
@@ -101,11 +103,11 @@ public class MealEntryService {
             }
 
             if (entity.getFoodId() != null) {
-                applyFoodEntryUpdate(entity, req);
-            } else {
-                applyAdHocEntryUpdate(entity, req);
+                final String foodName = applyFoodEntryUpdate(entity, req);
+                return mealEntryMapper.toDTO(mealEntryRepository.save(entity), foodName);
             }
 
+            applyAdHocEntryUpdate(entity, req);
             return mealEntryMapper.toDTO(mealEntryRepository.save(entity));
         }).subscribeOn(Schedulers.boundedElastic());
     }
@@ -138,7 +140,16 @@ public class MealEntryService {
         final Mono<List<MealEntryDTO>> entriesMono = Mono.fromCallable(() -> {
             final List<MealEntryEntity> entities =
                     mealEntryRepository.findByEntryDateOrderByCreationDateAsc(date);
-            return mealEntryMapper.toDTOList(entities);
+            final List<UUID> foodIds = entities.stream()
+                    .map(MealEntryEntity::getFoodId)
+                    .filter(fid -> fid != null)
+                    .distinct()
+                    .collect(Collectors.toList());
+            final Map<UUID, String> foodNameById = foodRepository.findAllById(foodIds).stream()
+                    .collect(Collectors.toMap(FoodEntity::getId, FoodEntity::getName));
+            return entities.stream()
+                    .map(e -> mealEntryMapper.toDTO(e, foodNameById.get(e.getFoodId())))
+                    .collect(Collectors.toList());
         }).subscribeOn(Schedulers.boundedElastic());
 
         final Mono<Optional<TargetsDTO>> targetsMono = nutritionTargetService.getTargets()
@@ -154,8 +165,9 @@ public class MealEntryService {
      *
      * @param entity the entity to populate
      * @param req    the create request
+     * @return the name of the referenced food item
      */
-    private void buildFoodEntry(MealEntryEntity entity, CreateMealEntryRequest req) {
+    private String buildFoodEntry(MealEntryEntity entity, CreateMealEntryRequest req) {
         final FoodEntity food = foodRepository.findById(req.foodId())
                 .orElseThrow(() -> new NoSuchElementException("Food not found: " + req.foodId()));
 
@@ -170,6 +182,7 @@ public class MealEntryService {
         entity.setProteinG(snapshot(food.getProteinPer100(), req.quantityG()));
         entity.setCarbsG(snapshot(food.getCarbsPer100(), req.quantityG()));
         entity.setFatG(snapshot(food.getFatPer100(), req.quantityG()));
+        return food.getName();
     }
 
     /**
@@ -194,20 +207,23 @@ public class MealEntryService {
 
     /**
      * Applies update fields for a food-backed entry, re-snapshotting macros if quantity changed.
+     * Always resolves and returns the food name so the caller can populate {@code foodName} on the DTO.
      *
      * @param entity the entity to update
      * @param req    the update request
+     * @return the name of the referenced food item
      */
-    private void applyFoodEntryUpdate(MealEntryEntity entity, UpdateMealEntryRequest req) {
+    private String applyFoodEntryUpdate(MealEntryEntity entity, UpdateMealEntryRequest req) {
+        final FoodEntity food = foodRepository.findById(entity.getFoodId())
+                .orElseThrow(() -> new NoSuchElementException("Food not found: " + entity.getFoodId()));
         if (req.quantityG() != null) {
-            final FoodEntity food = foodRepository.findById(entity.getFoodId())
-                    .orElseThrow(() -> new NoSuchElementException("Food not found: " + entity.getFoodId()));
             entity.setQuantityG(req.quantityG());
             entity.setKcal(snapshot(food.getKcalPer100(), req.quantityG()));
             entity.setProteinG(snapshot(food.getProteinPer100(), req.quantityG()));
             entity.setCarbsG(snapshot(food.getCarbsPer100(), req.quantityG()));
             entity.setFatG(snapshot(food.getFatPer100(), req.quantityG()));
         }
+        return food.getName();
     }
 
     /**

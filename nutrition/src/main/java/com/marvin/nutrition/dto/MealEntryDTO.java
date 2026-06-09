@@ -19,6 +19,7 @@ import java.util.UUID;
  * @param proteinG    snapshotted grams of protein
  * @param carbsG      snapshotted grams of carbohydrates
  * @param fatG        snapshotted grams of fat
+ * @param foodName    resolved name of the referenced food item (null for ad-hoc entries)
  */
 @Schema(description = "A logged meal entry for a given day")
 public record MealEntryDTO(
@@ -50,6 +51,9 @@ public record MealEntryDTO(
         BigDecimal carbsG,
 
         @Schema(description = "Snapshotted grams of fat", example = "7.50")
-        BigDecimal fatG
+        BigDecimal fatG,
+
+        @Schema(description = "Resolved name of the referenced food item (null for ad-hoc entries)", example = "Chicken Breast")
+        String foodName
 ) {
 }

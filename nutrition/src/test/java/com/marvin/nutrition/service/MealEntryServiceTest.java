@@ -1,7 +1,10 @@
 package com.marvin.nutrition.service;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -67,6 +70,7 @@ class MealEntryServiceTest {
         today = LocalDate.of(2026, 6, 7);
 
         foodEntity = new FoodEntity();
+        foodEntity.setName("Test Food");
         foodEntity.setKcalPer100(new BigDecimal("200.00"));
         foodEntity.setProteinPer100(new BigDecimal("20.00"));
         foodEntity.setCarbsPer100(new BigDecimal("10.00"));
@@ -84,7 +88,7 @@ class MealEntryServiceTest {
                 entryId, today, MealType.LUNCH, foodId, null,
                 new BigDecimal("150.00"),
                 new BigDecimal("300.00"), new BigDecimal("30.00"),
-                new BigDecimal("15.00"), new BigDecimal("7.50")
+                new BigDecimal("15.00"), new BigDecimal("7.50"), "Test Food"
         );
     }
 
@@ -101,7 +105,7 @@ class MealEntryServiceTest {
 
         when(foodRepository.findById(foodId)).thenReturn(Optional.of(foodEntity));
         when(mealEntryRepository.save(any(MealEntryEntity.class))).thenReturn(mealEntryEntity);
-        when(mealEntryMapper.toDTO(mealEntryEntity)).thenReturn(mealEntryDTO);
+        when(mealEntryMapper.toDTO(mealEntryEntity, "Test Food")).thenReturn(mealEntryDTO);
 
         StepVerifier.create(mealEntryService.addEntry(today, req))
                 .expectNext(mealEntryDTO)
@@ -126,7 +130,7 @@ class MealEntryServiceTest {
 
         when(foodRepository.findById(foodId)).thenReturn(Optional.of(foodEntity));
         when(mealEntryRepository.save(any(MealEntryEntity.class))).thenReturn(mealEntryEntity);
-        when(mealEntryMapper.toDTO(mealEntryEntity)).thenReturn(mealEntryDTO);
+        when(mealEntryMapper.toDTO(mealEntryEntity, "Test Food")).thenReturn(mealEntryDTO);
 
         StepVerifier.create(mealEntryService.addEntry(today, req))
                 .expectNextCount(1)
@@ -160,7 +164,7 @@ class MealEntryServiceTest {
         final MealEntryDTO adHocDTO = new MealEntryDTO(
                 UUID.randomUUID(), today, MealType.SNACK, null, "Homemade soup", null,
                 new BigDecimal("250.00"), new BigDecimal("15.00"),
-                new BigDecimal("30.00"), new BigDecimal("8.00")
+                new BigDecimal("30.00"), new BigDecimal("8.00"), null
         );
 
         when(mealEntryRepository.save(any(MealEntryEntity.class))).thenReturn(saved);
@@ -263,7 +267,7 @@ class MealEntryServiceTest {
         when(mealEntryRepository.findById(entryId)).thenReturn(Optional.of(mealEntryEntity));
         when(foodRepository.findById(foodId)).thenReturn(Optional.of(foodEntity));
         when(mealEntryRepository.save(any(MealEntryEntity.class))).thenReturn(mealEntryEntity);
-        when(mealEntryMapper.toDTO(mealEntryEntity)).thenReturn(mealEntryDTO);
+        when(mealEntryMapper.toDTO(mealEntryEntity, "Test Food")).thenReturn(mealEntryDTO);
 
         StepVerifier.create(mealEntryService.updateEntry(entryId, req))
                 .expectNextCount(1)
@@ -300,7 +304,7 @@ class MealEntryServiceTest {
         final MealEntryDTO updatedDTO = new MealEntryDTO(
                 entryId, today, MealType.DINNER, null, "New soup", null,
                 new BigDecimal("350.00"), new BigDecimal("20.00"),
-                new BigDecimal("40.00"), new BigDecimal("10.00")
+                new BigDecimal("40.00"), new BigDecimal("10.00"), null
         );
 
         when(mealEntryRepository.findById(entryId)).thenReturn(Optional.of(mealEntryEntity));
@@ -383,20 +387,21 @@ class MealEntryServiceTest {
         final MealEntryDTO dto1 = new MealEntryDTO(
                 UUID.randomUUID(), today, MealType.BREAKFAST, null, "Oats", null,
                 new BigDecimal("400.00"), new BigDecimal("30.00"),
-                new BigDecimal("50.00"), new BigDecimal("10.00")
+                new BigDecimal("50.00"), new BigDecimal("10.00"), null
         );
         final MealEntryDTO dto2 = new MealEntryDTO(
                 UUID.randomUUID(), today, MealType.LUNCH, null, "Salad", null,
                 new BigDecimal("200.00"), new BigDecimal("10.00"),
-                new BigDecimal("25.00"), new BigDecimal("5.00")
+                new BigDecimal("25.00"), new BigDecimal("5.00"), null
         );
 
         final TargetsDTO targets = new TargetsDTO(1700, 2200, 2000, 150, 67, 248, "MIFFLIN_ST_JEOR");
 
         when(mealEntryRepository.findByEntryDateOrderByCreationDateAsc(today))
                 .thenReturn(List.of(entry1, entry2));
-        when(mealEntryMapper.toDTOList(List.of(entry1, entry2)))
-                .thenReturn(List.of(dto1, dto2));
+        when(foodRepository.findAllById(any())).thenReturn(List.of());
+        when(mealEntryMapper.toDTO(any(MealEntryEntity.class), isNull()))
+                .thenReturn(dto1, dto2);
         when(nutritionTargetService.getTargets()).thenReturn(Mono.just(targets));
 
         StepVerifier.create(mealEntryService.getDay(today))
@@ -426,7 +431,7 @@ class MealEntryServiceTest {
     void getDay_TargetCalculationException_ReturnsNullTargetsAndRemaining() {
         when(mealEntryRepository.findByEntryDateOrderByCreationDateAsc(today))
                 .thenReturn(List.of());
-        when(mealEntryMapper.toDTOList(List.of())).thenReturn(List.of());
+        when(foodRepository.findAllById(List.of())).thenReturn(List.of());
         when(nutritionTargetService.getTargets())
                 .thenReturn(Mono.error(new TargetCalculationException("No profile")));
 
@@ -444,7 +449,7 @@ class MealEntryServiceTest {
     void getDay_EmptyDay_ReturnsZeroTotals() {
         when(mealEntryRepository.findByEntryDateOrderByCreationDateAsc(today))
                 .thenReturn(List.of());
-        when(mealEntryMapper.toDTOList(List.of())).thenReturn(List.of());
+        when(foodRepository.findAllById(List.of())).thenReturn(List.of());
         when(nutritionTargetService.getTargets())
                 .thenReturn(Mono.error(new TargetCalculationException("No data")));
 
@@ -456,5 +461,161 @@ class MealEntryServiceTest {
                     assert BigDecimal.ZERO.compareTo(summary.totals().fatG()) == 0;
                 })
                 .verifyComplete();
+    }
+
+    // -----------------------------------------------------------------------
+    // foodName population
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("addEntry populates foodName from food catalog for food-backed entry")
+    void addEntry_FoodEntry_PopulatesFoodName() {
+        final CreateMealEntryRequest req = new CreateMealEntryRequest(
+                MealType.LUNCH, foodId, new BigDecimal("150"), null, null, null, null, null
+        );
+
+        when(foodRepository.findById(foodId)).thenReturn(Optional.of(foodEntity));
+        when(mealEntryRepository.save(any(MealEntryEntity.class))).thenReturn(mealEntryEntity);
+        when(mealEntryMapper.toDTO(mealEntryEntity, "Test Food")).thenReturn(mealEntryDTO);
+
+        StepVerifier.create(mealEntryService.addEntry(today, req))
+                .assertNext(dto -> assertEquals("Test Food", dto.foodName()))
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("addEntry leaves foodName null for ad-hoc entry")
+    void addEntry_AdHocEntry_FoodNameIsNull() {
+        final CreateMealEntryRequest req = new CreateMealEntryRequest(
+                MealType.SNACK, null, null, "Homemade soup",
+                new BigDecimal("250.00"), new BigDecimal("15.00"),
+                new BigDecimal("30.00"), new BigDecimal("8.00")
+        );
+
+        final MealEntryEntity saved = new MealEntryEntity();
+        saved.setDescription("Homemade soup");
+        saved.setKcal(new BigDecimal("250.00"));
+        saved.setProteinG(new BigDecimal("15.00"));
+        saved.setCarbsG(new BigDecimal("30.00"));
+        saved.setFatG(new BigDecimal("8.00"));
+
+        final MealEntryDTO adHocDTO = new MealEntryDTO(
+                UUID.randomUUID(), today, MealType.SNACK, null, "Homemade soup", null,
+                new BigDecimal("250.00"), new BigDecimal("15.00"),
+                new BigDecimal("30.00"), new BigDecimal("8.00"), null
+        );
+
+        when(mealEntryRepository.save(any(MealEntryEntity.class))).thenReturn(saved);
+        when(mealEntryMapper.toDTO(saved)).thenReturn(adHocDTO);
+
+        StepVerifier.create(mealEntryService.addEntry(today, req))
+                .assertNext(dto -> assertNull(dto.foodName()))
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("updateEntry populates foodName for food-backed entry")
+    void updateEntry_FoodEntry_PopulatesFoodName() {
+        mealEntryEntity.setFoodId(foodId);
+        mealEntryEntity.setQuantityG(new BigDecimal("150"));
+
+        final UpdateMealEntryRequest req = new UpdateMealEntryRequest(
+                null, new BigDecimal("150"), null, null, null, null, null
+        );
+
+        when(mealEntryRepository.findById(entryId)).thenReturn(Optional.of(mealEntryEntity));
+        when(foodRepository.findById(foodId)).thenReturn(Optional.of(foodEntity));
+        when(mealEntryRepository.save(any(MealEntryEntity.class))).thenReturn(mealEntryEntity);
+        when(mealEntryMapper.toDTO(mealEntryEntity, "Test Food")).thenReturn(mealEntryDTO);
+
+        StepVerifier.create(mealEntryService.updateEntry(entryId, req))
+                .assertNext(dto -> assertEquals("Test Food", dto.foodName()))
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("updateEntry leaves foodName null for ad-hoc entry")
+    void updateEntry_AdHocEntry_FoodNameIsNull() {
+        mealEntryEntity.setFoodId(null);
+        mealEntryEntity.setDescription("Old soup");
+        mealEntryEntity.setKcal(new BigDecimal("100.00"));
+
+        final UpdateMealEntryRequest req = new UpdateMealEntryRequest(
+                null, null, "Updated soup", null, null, null, null
+        );
+
+        final MealEntryEntity savedEntity = new MealEntryEntity();
+        savedEntity.setDescription("Updated soup");
+
+        final MealEntryDTO adHocDTO = new MealEntryDTO(
+                entryId, today, MealType.LUNCH, null, "Updated soup", null,
+                new BigDecimal("100.00"), new BigDecimal("0.00"),
+                new BigDecimal("0.00"), new BigDecimal("0.00"), null
+        );
+
+        when(mealEntryRepository.findById(entryId)).thenReturn(Optional.of(mealEntryEntity));
+        when(mealEntryRepository.save(any(MealEntryEntity.class))).thenReturn(savedEntity);
+        when(mealEntryMapper.toDTO(savedEntity)).thenReturn(adHocDTO);
+
+        StepVerifier.create(mealEntryService.updateEntry(entryId, req))
+                .assertNext(dto -> assertNull(dto.foodName()))
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("getDay resolves foodName via batch lookup for food-backed entries")
+    void getDay_FoodBackedEntries_ResolvesFoodNameViaBatchLookup() {
+        final UUID foodId2 = UUID.randomUUID();
+
+        final FoodEntity food2 = new FoodEntity();
+        food2.setId(foodId2);
+        food2.setName("Brown Rice");
+
+        foodEntity.setId(foodId);
+
+        final MealEntryEntity foodEntry1 = new MealEntryEntity();
+        foodEntry1.setFoodId(foodId);
+        foodEntry1.setKcal(new BigDecimal("300.00"));
+        foodEntry1.setProteinG(new BigDecimal("20.00"));
+        foodEntry1.setCarbsG(new BigDecimal("30.00"));
+        foodEntry1.setFatG(new BigDecimal("10.00"));
+
+        final MealEntryEntity foodEntry2 = new MealEntryEntity();
+        foodEntry2.setFoodId(foodId2);
+        foodEntry2.setKcal(new BigDecimal("200.00"));
+        foodEntry2.setProteinG(new BigDecimal("5.00"));
+        foodEntry2.setCarbsG(new BigDecimal("40.00"));
+        foodEntry2.setFatG(new BigDecimal("2.00"));
+
+        final MealEntryDTO dtoWithFoodName1 = new MealEntryDTO(
+                UUID.randomUUID(), today, MealType.LUNCH, foodId, null,
+                new BigDecimal("150.00"),
+                new BigDecimal("300.00"), new BigDecimal("20.00"),
+                new BigDecimal("30.00"), new BigDecimal("10.00"), "Test Food"
+        );
+        final MealEntryDTO dtoWithFoodName2 = new MealEntryDTO(
+                UUID.randomUUID(), today, MealType.DINNER, foodId2, null,
+                new BigDecimal("100.00"),
+                new BigDecimal("200.00"), new BigDecimal("5.00"),
+                new BigDecimal("40.00"), new BigDecimal("2.00"), "Brown Rice"
+        );
+
+        when(mealEntryRepository.findByEntryDateOrderByCreationDateAsc(today))
+                .thenReturn(List.of(foodEntry1, foodEntry2));
+        when(foodRepository.findAllById(any())).thenReturn(List.of(foodEntity, food2));
+        when(mealEntryMapper.toDTO(foodEntry1, "Test Food")).thenReturn(dtoWithFoodName1);
+        when(mealEntryMapper.toDTO(foodEntry2, "Brown Rice")).thenReturn(dtoWithFoodName2);
+        when(nutritionTargetService.getTargets())
+                .thenReturn(Mono.error(new TargetCalculationException("No profile")));
+
+        StepVerifier.create(mealEntryService.getDay(today))
+                .assertNext(summary -> {
+                    assertEquals(2, summary.entries().size());
+                    assertEquals("Test Food", summary.entries().get(0).foodName());
+                    assertEquals("Brown Rice", summary.entries().get(1).foodName());
+                })
+                .verifyComplete();
+
+        verify(foodRepository).findAllById(any());
     }
 }

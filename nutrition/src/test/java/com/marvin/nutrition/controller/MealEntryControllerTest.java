@@ -58,7 +58,7 @@ class MealEntryControllerTest {
         mealEntryDTO = new MealEntryDTO(
                 entryId, today, MealType.LUNCH, null, "Salad", null,
                 new BigDecimal("300.00"), new BigDecimal("20.00"),
-                new BigDecimal("40.00"), new BigDecimal("10.00")
+                new BigDecimal("40.00"), new BigDecimal("10.00"), null
         );
 
         createRequest = new CreateMealEntryRequest(
@@ -146,7 +146,7 @@ class MealEntryControllerTest {
         final MealEntryDTO updatedDTO = new MealEntryDTO(
                 entryId, today, MealType.DINNER, null, "Updated salad", null,
                 new BigDecimal("300.00"), new BigDecimal("20.00"),
-                new BigDecimal("40.00"), new BigDecimal("10.00")
+                new BigDecimal("40.00"), new BigDecimal("10.00"), null
         );
 
         when(mealEntryService.updateEntry(eq(entryId), any(UpdateMealEntryRequest.class)))
