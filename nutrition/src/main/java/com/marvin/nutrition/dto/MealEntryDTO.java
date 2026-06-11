@@ -19,7 +19,8 @@ import java.util.UUID;
  * @param proteinG    snapshotted grams of protein
  * @param carbsG      snapshotted grams of carbohydrates
  * @param fatG        snapshotted grams of fat
- * @param foodName    resolved name of the referenced food item (null for ad-hoc entries)
+ * @param foodName    resolved name of the referenced food item; uses the live catalog name if the food
+ *                     still exists, otherwise falls back to the snapshotted name (null for ad-hoc entries)
  */
 @Schema(description = "A logged meal entry for a given day")
 public record MealEntryDTO(

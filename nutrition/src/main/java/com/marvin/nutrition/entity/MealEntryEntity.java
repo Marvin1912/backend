@@ -41,6 +41,9 @@ public class MealEntryEntity extends BasicEntity {
     @Column(name = "description", length = 255)
     private String description;
 
+    @Column(name = "food_name", length = 255)
+    private String foodName;
+
     @Column(name = "quantity_g", precision = 10, scale = 2)
     private BigDecimal quantityG;
 
