@@ -86,43 +86,43 @@ class FoodControllerTest {
                 new BigDecimal("10.00"), new BigDecimal("40.00"),
                 FoodSource.MANUAL
         );
-        when(foodService.findAll(null)).thenReturn(Flux.just(testFoodDTO, second));
+        when(foodService.findAll(null, 0, 50)).thenReturn(Flux.just(testFoodDTO, second));
 
-        final Flux<FoodDTO> result = foodController.listFoods(null);
+        final Flux<FoodDTO> result = foodController.listFoods(null, 0, 50);
 
         StepVerifier.create(result)
                 .expectNext(testFoodDTO)
                 .expectNext(second)
                 .verifyComplete();
 
-        verify(foodService).findAll(null);
+        verify(foodService).findAll(null, 0, 50);
     }
 
     @Test
     @DisplayName("Should return matching foods as Flux when query parameter is provided")
     void listFoods_WithQuery_ReturnsMatchingFoods() {
-        when(foodService.findAll("chicken")).thenReturn(Flux.just(testFoodDTO));
+        when(foodService.findAll("chicken", 0, 50)).thenReturn(Flux.just(testFoodDTO));
 
-        final Flux<FoodDTO> result = foodController.listFoods("chicken");
+        final Flux<FoodDTO> result = foodController.listFoods("chicken", 0, 50);
 
         StepVerifier.create(result)
                 .expectNext(testFoodDTO)
                 .verifyComplete();
 
-        verify(foodService).findAll("chicken");
+        verify(foodService).findAll("chicken", 0, 50);
     }
 
     @Test
     @DisplayName("Should return empty Flux when no foods match the query")
     void listFoods_NoMatch_ReturnsEmptyFlux() {
-        when(foodService.findAll("xyz")).thenReturn(Flux.empty());
+        when(foodService.findAll("xyz", 0, 50)).thenReturn(Flux.empty());
 
-        final Flux<FoodDTO> result = foodController.listFoods("xyz");
+        final Flux<FoodDTO> result = foodController.listFoods("xyz", 0, 50);
 
         StepVerifier.create(result)
                 .verifyComplete();
 
-        verify(foodService).findAll("xyz");
+        verify(foodService).findAll("xyz", 0, 50);
     }
 
     @Test

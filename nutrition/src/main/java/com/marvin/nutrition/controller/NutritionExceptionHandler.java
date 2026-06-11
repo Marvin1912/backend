@@ -5,6 +5,7 @@ import com.marvin.nutrition.service.LabelReadException;
 import com.marvin.nutrition.service.MealEstimateException;
 import com.marvin.nutrition.service.TargetCalculationException;
 import jakarta.persistence.EntityNotFoundException;
+import jakarta.validation.ConstraintViolationException;
 import java.util.NoSuchElementException;
 import java.util.stream.Collectors;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -117,6 +118,20 @@ public class NutritionExceptionHandler {
     public ResponseEntity<String> handleValidation(MethodArgumentNotValidException ex) {
         final String errors = ex.getBindingResult().getFieldErrors().stream()
                 .map(e -> e.getField() + ": " + e.getDefaultMessage())
+                .collect(Collectors.joining(", "));
+        return ResponseEntity.badRequest().body(errors);
+    }
+
+    /**
+     * Maps method-parameter constraint violations ({@link ConstraintViolationException}) to HTTP 400.
+     *
+     * @param ex the exception carrying constraint violation details
+     * @return 400 response with comma-separated constraint violation messages
+     */
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<String> handleConstraintViolation(ConstraintViolationException ex) {
+        final String errors = ex.getConstraintViolations().stream()
+                .map(v -> v.getPropertyPath() + ": " + v.getMessage())
                 .collect(Collectors.joining(", "));
         return ResponseEntity.badRequest().body(errors);
     }
