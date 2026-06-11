@@ -84,7 +84,7 @@ class LabelReaderTest {
                     "servingG": 45.0
                 }""";
         final Map<String, Object> claudeResponse = Map.of(
-                "content", List.of(Map.of("text", jsonText))
+                "content", List.of(Map.of("type", "text", "text", jsonText))
         );
         stubWebClientChain(Mono.just(claudeResponse));
 
@@ -118,7 +118,7 @@ class LabelReaderTest {
                     "servingG": null
                 }""";
         final Map<String, Object> claudeResponse = Map.of(
-                "content", List.of(Map.of("text", jsonText))
+                "content", List.of(Map.of("type", "text", "text", jsonText))
         );
         stubWebClientChain(Mono.just(claudeResponse));
 
@@ -138,7 +138,7 @@ class LabelReaderTest {
     void readLabel_GarbageText_EmitsLabelReadException() {
         final String garbageText = "Sorry, I cannot read the label in this image.";
         final Map<String, Object> claudeResponse = Map.of(
-                "content", List.of(Map.of("text", garbageText))
+                "content", List.of(Map.of("type", "text", "text", garbageText))
         );
         stubWebClientChain(Mono.just(claudeResponse));
 
@@ -177,7 +177,51 @@ class LabelReaderTest {
     @DisplayName("readLabel emits LabelReadException when Claude returns valid JSON with no usable fields")
     void readLabel_EmptyJsonObject_EmitsLabelReadException() {
         final Map<String, Object> claudeResponse = Map.of(
-                "content", List.of(Map.of("text", "{}"))
+                "content", List.of(Map.of("type", "text", "text", "{}"))
+        );
+        stubWebClientChain(Mono.just(claudeResponse));
+
+        final byte[] imageBytes = new byte[]{(byte) 0x89, 'P', 'N', 'G'};
+        StepVerifier.create(labelReader.readLabel(imageBytes))
+                .expectError(LabelReadException.class)
+                .verify();
+    }
+
+    @Test
+    @DisplayName("readLabel returns parsed FoodDraftDTO when a non-text block precedes the text block")
+    void readLabel_LeadingNonTextBlock_ReturnsParsedDTO() {
+        final String jsonText = """
+                {
+                    "name": "Haferflocken",
+                    "brand": "Bio",
+                    "kcalPer100": 350.0,
+                    "proteinPer100": 12.0,
+                    "carbsPer100": 60.0,
+                    "fatPer100": 7.0,
+                    "fiberPer100": 10.0,
+                    "servingG": 50.0
+                }""";
+        final Map<String, Object> claudeResponse = Map.of(
+                "content", List.of(
+                        Map.of("type", "thinking", "thinking", "Let me look at this label..."),
+                        Map.of("type", "text", "text", jsonText))
+        );
+        stubWebClientChain(Mono.just(claudeResponse));
+
+        final byte[] pngBytes = new byte[]{(byte) 0x89, 'P', 'N', 'G'};
+        StepVerifier.create(labelReader.readLabel(pngBytes))
+                .assertNext(dto -> {
+                    assertEquals("Haferflocken", dto.name());
+                    assertEquals(0, new BigDecimal("350.0").compareTo(dto.kcalPer100()));
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("readLabel emits LabelReadException when no content block has type text")
+    void readLabel_NoTextBlock_EmitsLabelReadException() {
+        final Map<String, Object> claudeResponse = Map.of(
+                "content", List.of(Map.of("type", "thinking", "thinking", "Hmm..."))
         );
         stubWebClientChain(Mono.just(claudeResponse));
 

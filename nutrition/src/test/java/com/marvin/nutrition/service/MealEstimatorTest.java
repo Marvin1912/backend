@@ -80,7 +80,7 @@ class MealEstimatorTest {
                     "assumptions": "Estimated for a standard canteen portion of 400 g"
                 }""";
         final Map<String, Object> claudeResponse = Map.of(
-                "content", List.of(Map.of("text", jsonText))
+                "content", List.of(Map.of("type", "text", "text", jsonText))
         );
         stubWebClientChain(Mono.just(claudeResponse));
 
@@ -107,7 +107,7 @@ class MealEstimatorTest {
                     "assumptions": "Used the provided portion hint of one small plate"
                 }""";
         final Map<String, Object> claudeResponse = Map.of(
-                "content", List.of(Map.of("text", jsonText))
+                "content", List.of(Map.of("type", "text", "text", jsonText))
         );
         stubWebClientChain(Mono.just(claudeResponse));
 
@@ -125,7 +125,7 @@ class MealEstimatorTest {
     void estimate_GarbageText_EmitsMealEstimateException() {
         final String garbageText = "Sorry, I cannot estimate the meal from that description.";
         final Map<String, Object> claudeResponse = Map.of(
-                "content", List.of(Map.of("text", garbageText))
+                "content", List.of(Map.of("type", "text", "text", garbageText))
         );
         stubWebClientChain(Mono.just(claudeResponse));
 
@@ -161,7 +161,46 @@ class MealEstimatorTest {
     @DisplayName("estimate emits MealEstimateException when Claude returns valid JSON with null kcal")
     void estimate_EmptyJsonObject_EmitsMealEstimateException() {
         final Map<String, Object> claudeResponse = Map.of(
-                "content", List.of(Map.of("text", "{}"))
+                "content", List.of(Map.of("type", "text", "text", "{}"))
+        );
+        stubWebClientChain(Mono.just(claudeResponse));
+
+        StepVerifier.create(mealEstimator.estimate("mystery dish", null))
+                .expectError(MealEstimateException.class)
+                .verify();
+    }
+
+    @Test
+    @DisplayName("estimate returns parsed MealEstimateDTO when a non-text block precedes the text block")
+    void estimate_LeadingNonTextBlock_ReturnsParsedDTO() {
+        final String jsonText = """
+                {
+                    "kcal": 500.0,
+                    "proteinG": 35.0,
+                    "carbsG": 55.0,
+                    "fatG": 15.0,
+                    "assumptions": "Estimated for a standard portion"
+                }""";
+        final Map<String, Object> claudeResponse = Map.of(
+                "content", List.of(
+                        Map.of("type", "thinking", "thinking", "Let me think about this..."),
+                        Map.of("type", "text", "text", jsonText))
+        );
+        stubWebClientChain(Mono.just(claudeResponse));
+
+        StepVerifier.create(mealEstimator.estimate("Burger mit Pommes", null))
+                .assertNext(dto -> {
+                    assertEquals(0, new BigDecimal("500.0").compareTo(dto.kcal()));
+                    assertEquals("Estimated for a standard portion", dto.assumptions());
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("estimate emits MealEstimateException when no content block has type text")
+    void estimate_NoTextBlock_EmitsMealEstimateException() {
+        final Map<String, Object> claudeResponse = Map.of(
+                "content", List.of(Map.of("type", "thinking", "thinking", "Hmm..."))
         );
         stubWebClientChain(Mono.just(claudeResponse));
 
