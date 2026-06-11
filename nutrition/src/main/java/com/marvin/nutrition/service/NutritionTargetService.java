@@ -5,7 +5,6 @@ import com.marvin.nutrition.entity.ProfileEntity;
 import com.marvin.nutrition.entity.WeightEntryEntity;
 import com.marvin.nutrition.repository.ProfileRepository;
 import com.marvin.nutrition.repository.WeightEntryRepository;
-import java.util.List;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -42,8 +41,7 @@ public class NutritionTargetService {
      */
     public Mono<TargetsDTO> getTargets() {
         return Mono.fromCallable(() -> {
-            final List<ProfileEntity> profiles = profileRepository.findAll();
-            final ProfileEntity profile = profiles.isEmpty() ? null : profiles.get(0);
+            final ProfileEntity profile = profileRepository.findById(ProfileEntity.SINGLETON_ID).orElse(null);
             final WeightEntryEntity latestWeight = weightEntryRepository.findTopByOrderByEntryDateDesc().orElse(null);
             return targetService.computeTargets(profile, latestWeight);
         }).subscribeOn(Schedulers.boundedElastic());

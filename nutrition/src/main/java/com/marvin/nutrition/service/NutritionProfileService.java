@@ -4,7 +4,6 @@ import com.marvin.nutrition.dto.ProfileDTO;
 import com.marvin.nutrition.entity.ProfileEntity;
 import com.marvin.nutrition.mapper.ProfileMapper;
 import com.marvin.nutrition.repository.ProfileRepository;
-import java.util.List;
 import java.util.NoSuchElementException;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
@@ -34,13 +33,10 @@ public class NutritionProfileService {
      * @return a Mono emitting the profile DTO
      */
     public Mono<ProfileDTO> getProfile() {
-        return Mono.fromCallable(() -> {
-            final List<ProfileEntity> all = profileRepository.findAll();
-            if (all.isEmpty()) {
-                throw new NoSuchElementException("No nutrition profile has been created yet.");
-            }
-            return profileMapper.toDTO(all.get(0));
-        }).subscribeOn(Schedulers.boundedElastic());
+        return Mono.fromCallable(() -> profileRepository.findById(ProfileEntity.SINGLETON_ID)
+                .map(profileMapper::toDTO)
+                .orElseThrow(() -> new NoSuchElementException("No nutrition profile has been created yet.")))
+                .subscribeOn(Schedulers.boundedElastic());
     }
 
     /**
@@ -51,13 +47,9 @@ public class NutritionProfileService {
      */
     public Mono<ProfileDTO> upsertProfile(ProfileDTO dto) {
         return Mono.fromCallable(() -> {
-            final List<ProfileEntity> all = profileRepository.findAll();
-            final ProfileEntity entity;
-            if (all.isEmpty()) {
-                entity = new ProfileEntity();
-            } else {
-                entity = all.get(0);
-            }
+            final ProfileEntity entity = profileRepository.findById(ProfileEntity.SINGLETON_ID)
+                    .orElseGet(ProfileEntity::new);
+            entity.setId(ProfileEntity.SINGLETON_ID);
             entity.setSex(dto.sex());
             entity.setBirthDate(dto.birthDate());
             entity.setHeightCm(dto.heightCm());
