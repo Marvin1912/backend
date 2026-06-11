@@ -1,5 +1,6 @@
 package com.marvin.nutrition.dto;
 
+import com.marvin.nutrition.dto.validation.NullOrNotBlank;
 import com.marvin.nutrition.entity.MealType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.PositiveOrZero;
@@ -30,6 +31,7 @@ public record UpdateMealEntryRequest(
         BigDecimal quantityG,
 
         @Size(max = 255)
+        @NullOrNotBlank
         @Schema(description = "Updated free-text description for ad-hoc entries", example = "Updated soup")
         String description,
 
