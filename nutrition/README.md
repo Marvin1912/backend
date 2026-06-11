@@ -2,6 +2,31 @@
 
 Self-contained vertical slice for nutrition tracking: food catalog, daily meal logging, weight tracking, and target calculation.
 
+## Design assumptions
+
+### Single-user / single-tenant
+
+This module is intentionally built for a **single user**. There is no authentication, no `userId`, and no tenancy column anywhere. These assumptions are baked into the schema:
+
+- **The profile is a hard singleton.** `ProfileEntity.SINGLETON_ID = 1`; the row's `id` is fixed at `1` and a DB-level `CHECK` constraint enforces that no other id can exist. There is exactly one nutrition profile.
+- **Weight entries are globally unique per date.** `weight_entry.entry_date` carries a global `UNIQUE` constraint (one weight per calendar day for the whole table, not per user).
+- **No user scoping.** Foods, meal entries, weight entries and targets are all global.
+
+> ⚠️ **Adding multi-tenancy later is a schema-breaking change.** Supporting more than one user would require dropping the profile singleton `CHECK`, relaxing the `entry_date` uniqueness to `(user_id, entry_date)`, introducing a `user_id` foreign key on every table, and adding authentication. Treat the single-user assumption as a deliberate constraint, not an oversight.
+
+### Transaction boundaries
+
+Every write runs in its **own implicit transaction**. The services follow the reactive pattern
+
+```java
+Mono.fromCallable(() -> { /* blocking JPA work */ })
+    .subscribeOn(Schedulers.boundedElastic());
+```
+
+so each repository `save`/`delete` is auto-committed independently. There are no `@Transactional` boundaries because every current write touches a **single entity**, for which an implicit transaction is sufficient.
+
+> ⚠️ **No cross-entity atomicity today.** If an operation is ever introduced that mutates more than one entity (e.g. saving a meal entry *and* updating an aggregate, or any multi-row write that must succeed or fail together), wrap the blocking work in a method annotated with `@Transactional` so the whole unit commits or rolls back atomically. Do **not** rely on the current per-call auto-commit behaviour for multi-entity invariants.
+
 ## Configuration
 
 | Property | Environment variable | Description |
