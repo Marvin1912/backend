@@ -4,6 +4,7 @@ import com.marvin.nutrition.entity.ActivityLevel;
 import com.marvin.nutrition.entity.Goal;
 import com.marvin.nutrition.entity.Sex;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import java.math.BigDecimal;
@@ -52,7 +53,9 @@ public record ProfileDTO(
         @Schema(description = "Grams of protein per kg body weight", example = "2.0")
         BigDecimal proteinPerKg,
 
+        @NotNull
         @Positive
+        @DecimalMax("1.0")
         @Schema(description = "Fraction of target calories allocated to fat (0–1)", example = "0.30")
         BigDecimal fatPct,
 
