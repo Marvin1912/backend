@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.marvin.nutrition.dto.MealEstimateDTO;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -85,9 +86,20 @@ public class MealEstimator {
         if (content == null || content.isEmpty()) {
             return Mono.error(new MealEstimateException("Claude returned an empty content list"));
         }
-        final Map<?, ?> firstBlock = (Map<?, ?>) content.get(0);
-        final Object textObj = firstBlock.get("text");
-        final String text = textObj != null ? textObj.toString().trim() : "";
+        final Optional<String> text = findFirstTextBlock(content);
+        if (text.isEmpty()) {
+            return Mono.error(new MealEstimateException("Claude returned no text content block"));
+        }
+        return parseEstimate(text.get());
+    }
+
+    /**
+     * Parses the given text as a {@link MealEstimateDTO} and validates that a usable kcal value is present.
+     *
+     * @param text the trimmed text content extracted from Claude's response
+     * @return a Mono emitting the parsed estimate, or an error if parsing or validation fails
+     */
+    private Mono<MealEstimateDTO> parseEstimate(String text) {
         try {
             final MealEstimateDTO estimate = objectMapper.readValue(text, MealEstimateDTO.class);
             if (estimate.kcal() == null) {
@@ -110,5 +122,26 @@ public class MealEstimator {
         final Map<String, Object> textBlock = Map.of("type", "text", "text", promptText.toString());
         final Map<String, Object> message = Map.of("role", "user", "content", List.of(textBlock));
         return Map.of("model", MODEL, "max_tokens", MAX_TOKENS, "messages", List.of(message));
+    }
+
+    /**
+     * Finds the first content block whose {@code type} is {@code "text"} and returns its trimmed {@code text}.
+     * Blocks that are not maps, or whose type is not {@code "text"}, are skipped.
+     *
+     * @param content the list of content blocks returned by Claude
+     * @return the trimmed text of the first text block, or empty if none was found
+     */
+    private Optional<String> findFirstTextBlock(List<?> content) {
+        for (final Object blockObj : content) {
+            if (!(blockObj instanceof Map<?, ?> block)) {
+                continue;
+            }
+            if ("text".equals(String.valueOf(block.get("type")))) {
+                final Object textObj = block.get("text");
+                final String text = textObj != null ? textObj.toString().trim() : "";
+                return Optional.of(text);
+            }
+        }
+        return Optional.empty();
     }
 }
