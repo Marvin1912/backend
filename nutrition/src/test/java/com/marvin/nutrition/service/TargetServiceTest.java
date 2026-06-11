@@ -92,8 +92,8 @@ class TargetServiceTest {
      * Female, 25 years, 165 cm, 60 kg → BMR = 10*60 + 6.25*165 - 5*25 - 161 = 600+1031.25-125-161 = 1345.25 → 1345.
      * LIGHT activity: 1345 * 1.375 = 1849.375 → 1849.
      * CUT goal: 1849 - 500 = 1349.
-     * protein = 2.0 * 60 = 120 g, fat = 0.30 * 1349 / 9 = 404.7 / 9 = 44.97 → 44 g,
-     * carbs = (1349 - 120*4 - 44*9) / 4 = (1349 - 480 - 396) / 4 = 473 / 4 = 118.25 → 118 g.
+     * protein = 2.0 * 60 = 120 g, fat = round(0.30 * 1349 / 9) = round(44.97) = 45 g,
+     * carbs = round((1349 - 120*4 - 45*9) / 4) = round((1349 - 480 - 405) / 4) = round(464 / 4) = round(116) = 116 g.
      */
     @Test
     @DisplayName("FEMALE LIGHT CUT uses Mifflin–St Jeor and returns correct macros")
@@ -109,8 +109,8 @@ class TargetServiceTest {
         assertEquals(1849, result.maintenanceKcal());
         assertEquals(1349, result.targetKcal());
         assertEquals(120, result.proteinG());
-        assertEquals(44, result.fatG());
-        assertEquals(118, result.carbsG());
+        assertEquals(45, result.fatG());
+        assertEquals(116, result.carbsG());
         assertEquals(TargetBasis.MIFFLIN_ST_JEOR.name(), result.basis());
     }
 
@@ -255,13 +255,38 @@ class TargetServiceTest {
 
         // targetKcal = round(2000 * 1.2) = 2400
         // protein = round(1.8 * 75) = 135 g → 135 * 4 = 540 kcal
-        // fat = floor(0.28 * 2400 / 9) = floor(74.666...) = 74 g → 74 * 9 = 666 kcal
-        // remaining = 2400 - 540 - 666 = 1194 kcal
-        // carbs = floor(1194 / 4) = 298 g
+        // fat = round(0.28 * 2400 / 9) = round(74.666...) = 75 g → 75 * 9 = 675 kcal
+        // remaining = 2400 - 540 - 675 = 1185 kcal
+        // carbs = round(1185 / 4) = round(296.25) = 296 g
         assertEquals(2400, result.targetKcal());
         assertEquals(135, result.proteinG());
-        assertEquals(74, result.fatG());
-        assertEquals(298, result.carbsG());
+        assertEquals(75, result.fatG());
+        assertEquals(296, result.carbsG());
+    }
+
+    /**
+     * Boundary case where the old truncating logic and the new HALF_UP logic disagree.
+     *
+     * <p>basalKcal = 2000, SEDENTARY → maintenance = round(2000 * 1.2) = 2400, MAINTAIN → targetKcal = 2400.
+     * protein = round(2.0 * 70) = 140 g → 140 * 4 = 560 kcal.
+     * fat = round(0.246 * 2400 / 9) = round(65.6) = 66 g (old truncating logic gave 65) → 66 * 9 = 594 kcal.
+     * remaining = 2400 - 560 - 594 = 1246 kcal.
+     * carbs = round(1246 / 4) = round(311.5) = 312 g (old integer division gave 311).</p>
+     */
+    @Test
+    @DisplayName("Fat and carbs are rounded HALF_UP at the .5 boundary instead of truncated")
+    void compute_FatAndCarbsAtHalfUpBoundary_RoundUp() {
+        final LocalDate birthDate = LocalDate.now().minusYears(30);
+        final ProfileEntity p = profile(Sex.MALE, birthDate, 175.0,
+                ActivityLevel.SEDENTARY, Goal.MAINTAIN, 2.0, 0.246, 2000);
+        final WeightEntryEntity w = weight(70.0);
+
+        final TargetsDTO result = targetService.computeTargets(p, w);
+
+        assertEquals(2400, result.targetKcal());
+        assertEquals(140, result.proteinG());
+        assertEquals(66, result.fatG());
+        assertEquals(312, result.carbsG());
     }
 
     // -----------------------------------------------------------------------
