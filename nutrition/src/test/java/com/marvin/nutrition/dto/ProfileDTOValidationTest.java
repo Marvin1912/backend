@@ -40,6 +40,26 @@ public class ProfileDTOValidationTest {
     }
 
     @Test
+    @DisplayName("ProfileDTO with fatPct equal to the inclusive upper bound of 1.0 yields zero violations")
+    void profile_fatPctAtUpperBound_noViolations() {
+        final ProfileDTO profile = new ProfileDTO(
+                null,
+                Sex.MALE,
+                LocalDate.of(1990, 5, 15),
+                new BigDecimal("175"),
+                ActivityLevel.MODERATE,
+                Goal.MAINTAIN,
+                new BigDecimal("2.0"),
+                new BigDecimal("1.0"),
+                1800
+        );
+
+        final Set<ConstraintViolation<ProfileDTO>> violations = validator.validate(profile);
+
+        assertTrue(violations.isEmpty(), "Expected zero violations for fatPct exactly at the inclusive upper bound 1.0");
+    }
+
+    @Test
     @DisplayName("ProfileDTO with null fatPct yields a violation")
     void profile_nullFatPct_yieldsViolation() {
         final ProfileDTO profile = new ProfileDTO(
