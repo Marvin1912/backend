@@ -8,6 +8,8 @@ import com.marvin.nutrition.repository.FoodRepository;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.UUID;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
@@ -33,22 +35,25 @@ public class FoodService {
     }
 
     /**
-     * Returns all food entries, or those matching the given name query.
-     * If {@code q} is null or blank, all foods ordered by name are returned.
-     * Otherwise, a case-insensitive name-contains search is performed.
+     * Returns a page of food entries, or those matching the given name query.
+     * If {@code q} is null or blank, all foods ordered by name are returned, paginated.
+     * Otherwise, a case-insensitive name-contains search is performed, paginated.
      * LIKE special characters ({@code \}, {@code %}, {@code _}) in the query are
      * escaped before being passed to the repository.
      *
-     * @param q optional search string to filter by name
-     * @return a Flux emitting matching food DTOs
+     * @param q    optional search string to filter by name
+     * @param page zero-based page number
+     * @param size page size
+     * @return a Flux emitting matching food DTOs for the requested page
      */
-    public Flux<FoodDTO> findAll(String q) {
+    public Flux<FoodDTO> findAll(String q, int page, int size) {
         return Mono.fromCallable(() -> {
             final List<FoodEntity> entities;
             if (q == null || q.isBlank()) {
-                entities = foodRepository.findAll(Sort.by("name"));
+                final Pageable pageable = PageRequest.of(page, size, Sort.by("name"));
+                entities = foodRepository.findAll(pageable).getContent();
             } else {
-                entities = foodRepository.searchByName(escapeLike(q));
+                entities = foodRepository.searchByName(escapeLike(q), PageRequest.of(page, size));
             }
             return foodMapper.toDTOList(entities);
         }).subscribeOn(Schedulers.boundedElastic())

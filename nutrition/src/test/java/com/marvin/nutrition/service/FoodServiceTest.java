@@ -21,10 +21,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import reactor.test.StepVerifier;
 
 /** Unit tests for {@link FoodService} covering CRUD, source defaulting, wildcard escaping, and error paths. */
@@ -327,80 +329,119 @@ class FoodServiceTest {
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("findAll with null q calls findAll(Sort), not searchByName")
+    @DisplayName("findAll with null q calls findAll(Pageable), not searchByName")
     void findAll_NullQuery_CallsFindAllSort() {
-        when(foodRepository.findAll(any(Sort.class))).thenReturn(List.of(testEntity));
+        when(foodRepository.findAll(any(Pageable.class))).thenReturn(new PageImpl<>(List.of(testEntity)));
         when(foodMapper.toDTOList(List.of(testEntity))).thenReturn(List.of(testDTO));
 
-        StepVerifier.create(foodService.findAll(null))
+        StepVerifier.create(foodService.findAll(null, 0, 50))
                 .expectNext(testDTO)
                 .verifyComplete();
 
-        verify(foodRepository).findAll(any(Sort.class));
-        verify(foodRepository, never()).searchByName(any());
+        verify(foodRepository).findAll(any(Pageable.class));
+        verify(foodRepository, never()).searchByName(any(), any());
     }
 
     @Test
-    @DisplayName("findAll with blank q calls findAll(Sort), not searchByName")
+    @DisplayName("findAll with blank q calls findAll(Pageable), not searchByName")
     void findAll_BlankQuery_CallsFindAllSort() {
-        when(foodRepository.findAll(any(Sort.class))).thenReturn(List.of(testEntity));
+        when(foodRepository.findAll(any(Pageable.class))).thenReturn(new PageImpl<>(List.of(testEntity)));
         when(foodMapper.toDTOList(List.of(testEntity))).thenReturn(List.of(testDTO));
 
-        StepVerifier.create(foodService.findAll("   "))
+        StepVerifier.create(foodService.findAll("   ", 0, 50))
                 .expectNext(testDTO)
                 .verifyComplete();
 
-        verify(foodRepository).findAll(any(Sort.class));
-        verify(foodRepository, never()).searchByName(any());
+        verify(foodRepository).findAll(any(Pageable.class));
+        verify(foodRepository, never()).searchByName(any(), any());
     }
 
     @Test
     @DisplayName("findAll with non-blank q calls searchByName with LIKE-escaped string")
     void findAll_NonBlankQuery_CallsSearchByName() {
-        when(foodRepository.searchByName("chicken")).thenReturn(List.of(testEntity));
+        when(foodRepository.searchByName(eq("chicken"), any(Pageable.class))).thenReturn(List.of(testEntity));
         when(foodMapper.toDTOList(List.of(testEntity))).thenReturn(List.of(testDTO));
 
-        StepVerifier.create(foodService.findAll("chicken"))
+        StepVerifier.create(foodService.findAll("chicken", 0, 50))
                 .expectNext(testDTO)
                 .verifyComplete();
 
-        verify(foodRepository).searchByName("chicken");
-        verify(foodRepository, never()).findAll(any(Sort.class));
+        verify(foodRepository).searchByName(eq("chicken"), any(Pageable.class));
+        verify(foodRepository, never()).findAll(any(Pageable.class));
     }
 
     @Test
     @DisplayName("findAll escapes percent wildcard in query before passing to searchByName")
     void findAll_QueryWithPercent_EscapesPercent() {
-        when(foodRepository.searchByName(eq("50\\%"))).thenReturn(List.of());
+        when(foodRepository.searchByName(eq("50\\%"), any(Pageable.class))).thenReturn(List.of());
         when(foodMapper.toDTOList(List.of())).thenReturn(List.of());
 
-        StepVerifier.create(foodService.findAll("50%"))
+        StepVerifier.create(foodService.findAll("50%", 0, 50))
                 .verifyComplete();
 
-        verify(foodRepository).searchByName("50\\%");
+        verify(foodRepository).searchByName(eq("50\\%"), any(Pageable.class));
     }
 
     @Test
     @DisplayName("findAll escapes underscore wildcard in query before passing to searchByName")
     void findAll_QueryWithUnderscore_EscapesUnderscore() {
-        when(foodRepository.searchByName(eq("fat\\_free"))).thenReturn(List.of());
+        when(foodRepository.searchByName(eq("fat\\_free"), any(Pageable.class))).thenReturn(List.of());
         when(foodMapper.toDTOList(List.of())).thenReturn(List.of());
 
-        StepVerifier.create(foodService.findAll("fat_free"))
+        StepVerifier.create(foodService.findAll("fat_free", 0, 50))
                 .verifyComplete();
 
-        verify(foodRepository).searchByName("fat\\_free");
+        verify(foodRepository).searchByName(eq("fat\\_free"), any(Pageable.class));
     }
 
     @Test
     @DisplayName("findAll escapes backslash in query before passing to searchByName")
     void findAll_QueryWithBackslash_EscapesBackslash() {
-        when(foodRepository.searchByName(eq("a\\\\b"))).thenReturn(List.of());
+        when(foodRepository.searchByName(eq("a\\\\b"), any(Pageable.class))).thenReturn(List.of());
         when(foodMapper.toDTOList(List.of())).thenReturn(List.of());
 
-        StepVerifier.create(foodService.findAll("a\\b"))
+        StepVerifier.create(foodService.findAll("a\\b", 0, 50))
                 .verifyComplete();
 
-        verify(foodRepository).searchByName("a\\\\b");
+        verify(foodRepository).searchByName(eq("a\\\\b"), any(Pageable.class));
+    }
+
+    // -----------------------------------------------------------------------
+    // findAll — pagination forwarding
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("findAll with no query forwards page, size and name sort to repository")
+    void findAll_NoQuery_ForwardsPageable() {
+        when(foodRepository.findAll(any(Pageable.class))).thenReturn(new PageImpl<>(List.of(testEntity)));
+        when(foodMapper.toDTOList(List.of(testEntity))).thenReturn(List.of(testDTO));
+
+        StepVerifier.create(foodService.findAll(null, 2, 25))
+                .expectNext(testDTO)
+                .verifyComplete();
+
+        final ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
+        verify(foodRepository).findAll(captor.capture());
+        final Pageable pageable = captor.getValue();
+        assert pageable.getPageNumber() == 2;
+        assert pageable.getPageSize() == 25;
+        assert pageable.getSort().getOrderFor("name") != null;
+    }
+
+    @Test
+    @DisplayName("findAll with query forwards page and size to searchByName")
+    void findAll_WithQuery_ForwardsPageable() {
+        when(foodRepository.searchByName(eq("chicken"), any(Pageable.class))).thenReturn(List.of(testEntity));
+        when(foodMapper.toDTOList(List.of(testEntity))).thenReturn(List.of(testDTO));
+
+        StepVerifier.create(foodService.findAll("chicken", 1, 10))
+                .expectNext(testDTO)
+                .verifyComplete();
+
+        final ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
+        verify(foodRepository).searchByName(eq("chicken"), captor.capture());
+        final Pageable pageable = captor.getValue();
+        assert pageable.getPageNumber() == 1;
+        assert pageable.getPageSize() == 10;
     }
 }

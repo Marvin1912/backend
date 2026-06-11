@@ -13,6 +13,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import java.net.URI;
 import java.util.NoSuchElementException;
 import java.util.UUID;
@@ -23,6 +25,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.codec.multipart.FilePart;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -43,11 +46,15 @@ import reactor.core.publisher.Mono;
  */
 @RestController
 @RequestMapping("/nutrition/foods")
+@Validated
 @Tag(name = "Nutrition", description = "Nutrition profile, weight tracking and target calculation")
 public class FoodController {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(FoodController.class);
     private static final String FOODS_LOCATION_PREFIX = "/nutrition/foods/";
+    private static final String DEFAULT_PAGE = "0";
+    private static final String DEFAULT_SIZE = "50";
+    private static final long MAX_SIZE = 200;
 
     private final FoodService foodService;
     private final LabelReader labelReader;
@@ -67,27 +74,37 @@ public class FoodController {
     }
 
     /**
-     * Lists all food entries, optionally filtered by a name search query.
+     * Lists food entries, optionally filtered by a name search query, one page at a time.
      *
-     * @param q optional case-insensitive name contains filter
-     * @return a Flux emitting matching food DTOs ordered by name
+     * @param q    optional case-insensitive name contains filter
+     * @param page zero-based page number (default {@value #DEFAULT_PAGE})
+     * @param size page size, between 1 and {@value #MAX_SIZE} (default {@value #DEFAULT_SIZE})
+     * @return a Flux emitting matching food DTOs ordered by name for the requested page
      */
     @GetMapping
     @Operation(
             summary = "List food entries",
-            description = "Returns all food catalog entries, or those whose name contains the given query string (case-insensitive).",
+            description = "Returns a page of food catalog entries, or those whose name contains the given query string "
+                    + "(case-insensitive), ordered by name.",
             responses = {
                 @ApiResponse(
                         responseCode = "200",
                         description = "Food list returned",
                         content = @Content(array = @ArraySchema(schema = @Schema(implementation = FoodDTO.class)))
-                )
+                ),
+                @ApiResponse(responseCode = "400", description = "Invalid pagination parameters")
             }
     )
     public Flux<FoodDTO> listFoods(
             @RequestParam(required = false)
-            @Parameter(description = "Optional name search query (case-insensitive contains)") String q) {
-        return foodService.findAll(q);
+            @Parameter(description = "Optional name search query (case-insensitive contains)") String q,
+            @RequestParam(defaultValue = DEFAULT_PAGE)
+            @Min(0)
+            @Parameter(description = "Zero-based page number") int page,
+            @RequestParam(defaultValue = DEFAULT_SIZE)
+            @Min(1) @Max(MAX_SIZE)
+            @Parameter(description = "Page size (1-200)") int size) {
+        return foodService.findAll(q, page, size);
     }
 
     /**
