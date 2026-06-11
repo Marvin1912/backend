@@ -1,5 +1,6 @@
 package com.marvin.nutrition.dto;
 
+import com.marvin.nutrition.dto.validation.AdHocDescriptionRequired;
 import com.marvin.nutrition.entity.MealType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
@@ -24,6 +25,7 @@ import java.util.UUID;
  * @param fatG        grams of fat (required for ad-hoc entries)
  */
 @Schema(description = "Request to log a meal entry for a given day")
+@AdHocDescriptionRequired
 public record CreateMealEntryRequest(
         @NotNull
         @Schema(description = "Meal category", example = "LUNCH")

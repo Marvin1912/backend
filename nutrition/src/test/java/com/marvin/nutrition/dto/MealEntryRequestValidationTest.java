@@ -149,4 +149,146 @@ public class MealEntryRequestValidationTest {
                 "Expected the violation to be on the 'description' property"
         );
     }
+
+    @Test
+    @DisplayName("CreateMealEntryRequest ad-hoc with null description yields a violation on 'description'")
+    void createRequest_adHoc_nullDescription_yieldsViolation() {
+        final CreateMealEntryRequest req = new CreateMealEntryRequest(
+                MealType.DINNER,
+                null,
+                null,
+                null,
+                new BigDecimal("100.00"),
+                new BigDecimal("10.00"),
+                new BigDecimal("20.00"),
+                new BigDecimal("5.00")
+        );
+
+        final Set<ConstraintViolation<CreateMealEntryRequest>> violations = validator.validate(req);
+
+        assertFalse(violations.isEmpty(), "Expected a violation for null description on an ad-hoc entry");
+        assertTrue(
+                violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("description")),
+                "Expected the violation to be on the 'description' property"
+        );
+    }
+
+    @Test
+    @DisplayName("CreateMealEntryRequest ad-hoc with blank description yields a violation on 'description'")
+    void createRequest_adHoc_blankDescription_yieldsViolation() {
+        final CreateMealEntryRequest req = new CreateMealEntryRequest(
+                MealType.DINNER,
+                null,
+                null,
+                "   ",
+                new BigDecimal("100.00"),
+                new BigDecimal("10.00"),
+                new BigDecimal("20.00"),
+                new BigDecimal("5.00")
+        );
+
+        final Set<ConstraintViolation<CreateMealEntryRequest>> violations = validator.validate(req);
+
+        assertFalse(violations.isEmpty(), "Expected a violation for blank description on an ad-hoc entry");
+        assertTrue(
+                violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("description")),
+                "Expected the violation to be on the 'description' property"
+        );
+    }
+
+    @Test
+    @DisplayName("CreateMealEntryRequest ad-hoc with valid description and macros yields zero violations")
+    void createRequest_adHoc_validDescription_noViolations() {
+        final CreateMealEntryRequest req = new CreateMealEntryRequest(
+                MealType.DINNER,
+                null,
+                null,
+                "Homemade soup",
+                new BigDecimal("100.00"),
+                new BigDecimal("10.00"),
+                new BigDecimal("20.00"),
+                new BigDecimal("5.00")
+        );
+
+        final Set<ConstraintViolation<CreateMealEntryRequest>> violations = validator.validate(req);
+
+        assertTrue(violations.isEmpty(), "Expected zero violations for a valid ad-hoc request");
+    }
+
+    @Test
+    @DisplayName("CreateMealEntryRequest food-backed with null description yields zero violations")
+    void createRequest_foodBacked_nullDescription_noViolations() {
+        final CreateMealEntryRequest req = new CreateMealEntryRequest(
+                MealType.LUNCH,
+                UUID.randomUUID(),
+                new BigDecimal("150.00"),
+                null,
+                null,
+                null,
+                null,
+                null
+        );
+
+        final Set<ConstraintViolation<CreateMealEntryRequest>> violations = validator.validate(req);
+
+        assertTrue(violations.isEmpty(), "Expected zero violations for a food-backed request with null description");
+    }
+
+    @Test
+    @DisplayName("UpdateMealEntryRequest with blank description yields a violation on 'description'")
+    void updateRequest_blankDescription_yieldsViolation() {
+        final UpdateMealEntryRequest req = new UpdateMealEntryRequest(
+                null,
+                null,
+                "  ",
+                null,
+                null,
+                null,
+                null
+        );
+
+        final Set<ConstraintViolation<UpdateMealEntryRequest>> violations = validator.validate(req);
+
+        assertFalse(violations.isEmpty(), "Expected a violation for blank description");
+        assertTrue(
+                violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("description")),
+                "Expected the violation to be on the 'description' property"
+        );
+    }
+
+    @Test
+    @DisplayName("UpdateMealEntryRequest with null description yields zero violations")
+    void updateRequest_nullDescription_noViolations() {
+        final UpdateMealEntryRequest req = new UpdateMealEntryRequest(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+        );
+
+        final Set<ConstraintViolation<UpdateMealEntryRequest>> violations = validator.validate(req);
+
+        assertTrue(violations.isEmpty(), "Expected zero violations for a null description on update");
+    }
+
+    @Test
+    @DisplayName("UpdateMealEntryRequest with valid description yields zero violations")
+    void updateRequest_validDescription_noViolations() {
+        final UpdateMealEntryRequest req = new UpdateMealEntryRequest(
+                null,
+                null,
+                "Updated soup",
+                null,
+                null,
+                null,
+                null
+        );
+
+        final Set<ConstraintViolation<UpdateMealEntryRequest>> violations = validator.validate(req);
+
+        assertTrue(violations.isEmpty(), "Expected zero violations for a valid description on update");
+    }
 }
