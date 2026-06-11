@@ -563,6 +563,81 @@ class MealEntryServiceTest {
     }
 
     @Test
+    @DisplayName("addEntry snapshots foodName onto the saved entity for a food-backed entry")
+    void addEntry_FoodEntry_SnapshotsFoodNameOntoSavedEntity() {
+        final CreateMealEntryRequest req = new CreateMealEntryRequest(
+                MealType.LUNCH, foodId, new BigDecimal("150"), null, null, null, null, null
+        );
+
+        when(foodRepository.findById(foodId)).thenReturn(Optional.of(foodEntity));
+        when(mealEntryRepository.save(any(MealEntryEntity.class))).thenReturn(mealEntryEntity);
+        when(mealEntryMapper.toDTO(mealEntryEntity, "Test Food")).thenReturn(mealEntryDTO);
+
+        StepVerifier.create(mealEntryService.addEntry(today, req))
+                .expectNextCount(1)
+                .verifyComplete();
+
+        verify(mealEntryRepository).save(argThat(e -> "Test Food".equals(e.getFoodName())));
+    }
+
+    @Test
+    @DisplayName("updateEntry re-snapshots foodName onto the saved entity for a food-backed entry")
+    void updateEntry_FoodEntry_ReSnapshotsFoodNameOntoSavedEntity() {
+        mealEntryEntity.setFoodId(foodId);
+        mealEntryEntity.setQuantityG(new BigDecimal("150"));
+
+        final UpdateMealEntryRequest req = new UpdateMealEntryRequest(
+                null, new BigDecimal("200"), null, null, null, null, null
+        );
+
+        when(mealEntryRepository.findById(entryId)).thenReturn(Optional.of(mealEntryEntity));
+        when(foodRepository.findById(foodId)).thenReturn(Optional.of(foodEntity));
+        when(mealEntryRepository.save(any(MealEntryEntity.class))).thenReturn(mealEntryEntity);
+        when(mealEntryMapper.toDTO(mealEntryEntity, "Test Food")).thenReturn(mealEntryDTO);
+
+        StepVerifier.create(mealEntryService.updateEntry(entryId, req))
+                .expectNextCount(1)
+                .verifyComplete();
+
+        verify(mealEntryRepository).save(argThat(e -> "Test Food".equals(e.getFoodName())));
+    }
+
+    @Test
+    @DisplayName("getDay falls back to snapshotted foodName for an orphaned entry whose food was deleted")
+    void getDay_OrphanedEntry_FallsBackToSnapshottedFoodName() {
+        final MealEntryEntity orphanedEntry = new MealEntryEntity();
+        orphanedEntry.setFoodId(null);
+        orphanedEntry.setFoodName("Deleted Food");
+        orphanedEntry.setKcal(new BigDecimal("300.00"));
+        orphanedEntry.setProteinG(new BigDecimal("20.00"));
+        orphanedEntry.setCarbsG(new BigDecimal("30.00"));
+        orphanedEntry.setFatG(new BigDecimal("10.00"));
+
+        final MealEntryDTO orphanedDTO = new MealEntryDTO(
+                UUID.randomUUID(), today, MealType.LUNCH, null, null,
+                new BigDecimal("150.00"),
+                new BigDecimal("300.00"), new BigDecimal("20.00"),
+                new BigDecimal("30.00"), new BigDecimal("10.00"), "Deleted Food"
+        );
+
+        when(mealEntryRepository.findByEntryDateOrderByCreationDateAsc(today))
+                .thenReturn(List.of(orphanedEntry));
+        when(foodRepository.findAllById(List.of())).thenReturn(List.of());
+        when(mealEntryMapper.toDTO(orphanedEntry, "Deleted Food")).thenReturn(orphanedDTO);
+        when(nutritionTargetService.getTargets())
+                .thenReturn(Mono.error(new TargetCalculationException("No profile")));
+
+        StepVerifier.create(mealEntryService.getDay(today))
+                .assertNext(summary -> {
+                    assertEquals(1, summary.entries().size());
+                    assertEquals("Deleted Food", summary.entries().get(0).foodName());
+                })
+                .verifyComplete();
+
+        verify(foodRepository).findAllById(List.of());
+    }
+
+    @Test
     @DisplayName("getDay resolves foodName via batch lookup for food-backed entries")
     void getDay_FoodBackedEntries_ResolvesFoodNameViaBatchLookup() {
         final UUID foodId2 = UUID.randomUUID();

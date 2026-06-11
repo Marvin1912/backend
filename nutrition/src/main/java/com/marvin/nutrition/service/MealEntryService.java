@@ -148,7 +148,11 @@ public class MealEntryService {
             final Map<UUID, String> foodNameById = foodRepository.findAllById(foodIds).stream()
                     .collect(Collectors.toMap(FoodEntity::getId, FoodEntity::getName));
             return entities.stream()
-                    .map(e -> mealEntryMapper.toDTO(e, foodNameById.get(e.getFoodId())))
+                    .map(e -> {
+                        final String live = foodNameById.get(e.getFoodId());
+                        final String display = live != null ? live : e.getFoodName();
+                        return mealEntryMapper.toDTO(e, display);
+                    })
                     .collect(Collectors.toList());
         }).subscribeOn(Schedulers.boundedElastic());
 
@@ -182,6 +186,7 @@ public class MealEntryService {
         entity.setProteinG(snapshot(food.getProteinPer100(), req.quantityG()));
         entity.setCarbsG(snapshot(food.getCarbsPer100(), req.quantityG()));
         entity.setFatG(snapshot(food.getFatPer100(), req.quantityG()));
+        entity.setFoodName(food.getName());
         return food.getName();
     }
 
@@ -223,6 +228,7 @@ public class MealEntryService {
             entity.setCarbsG(snapshot(food.getCarbsPer100(), req.quantityG()));
             entity.setFatG(snapshot(food.getFatPer100(), req.quantityG()));
         }
+        entity.setFoodName(food.getName());
         return food.getName();
     }
 
