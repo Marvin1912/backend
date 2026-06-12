@@ -4,7 +4,10 @@ import com.marvin.nutrition.dto.TargetsDTO;
 import com.marvin.nutrition.entity.DayTargetSnapshotEntity;
 import com.marvin.nutrition.repository.DayTargetSnapshotRepository;
 import java.time.LocalDate;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Owns read/write logic for per-day nutrition target snapshots.
@@ -36,8 +39,14 @@ public class DayTargetSnapshotService {
      * and the daily nutrition targets can currently be computed. Silently does nothing if a
      * snapshot already exists or if targets cannot be computed yet (e.g. no profile/weight data).
      *
+     * <p>Runs in its own {@code REQUIRES_NEW} transaction so that a unique-constraint violation
+     * caused by a concurrent insert for the same date only aborts this nested transaction,
+     * leaving the caller's transaction unaffected. Such a violation is treated as success, since
+     * it means a concurrent request already created the snapshot for this date.</p>
+     *
      * @param date the date to snapshot targets for
      */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void ensureSnapshot(LocalDate date) {
         if (dayTargetSnapshotRepository.findById(date).isPresent()) {
             return;
@@ -48,7 +57,11 @@ public class DayTargetSnapshotService {
         } catch (TargetCalculationException e) {
             return;
         }
-        dayTargetSnapshotRepository.save(toSnapshot(new DayTargetSnapshotEntity(), date, targets));
+        try {
+            dayTargetSnapshotRepository.saveAndFlush(toSnapshot(new DayTargetSnapshotEntity(), date, targets));
+        } catch (DataIntegrityViolationException e) {
+            // A concurrent request already created the snapshot for this date; treat as success.
+        }
     }
 
     /**
