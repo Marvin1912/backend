@@ -37,6 +37,7 @@ public class MealEntryService {
     private final MealEntryMapper mealEntryMapper;
     private final NutritionTargetService nutritionTargetService;
     private final DayTargetSnapshotRepository dayTargetSnapshotRepository;
+    private final DayTargetSnapshotService dayTargetSnapshotService;
 
     /**
      * Creates a new MealEntryService with the required dependencies.
@@ -46,18 +47,21 @@ public class MealEntryService {
      * @param mealEntryMapper             MapStruct mapper for entity/DTO conversion
      * @param nutritionTargetService      service for computing daily nutrition targets
      * @param dayTargetSnapshotRepository JPA repository for per-day nutrition target snapshots
+     * @param dayTargetSnapshotService    service for creating/refreshing per-day nutrition target snapshots
      */
     public MealEntryService(
             MealEntryRepository mealEntryRepository,
             FoodRepository foodRepository,
             MealEntryMapper mealEntryMapper,
             NutritionTargetService nutritionTargetService,
-            DayTargetSnapshotRepository dayTargetSnapshotRepository) {
+            DayTargetSnapshotRepository dayTargetSnapshotRepository,
+            DayTargetSnapshotService dayTargetSnapshotService) {
         this.mealEntryRepository = mealEntryRepository;
         this.foodRepository = foodRepository;
         this.mealEntryMapper = mealEntryMapper;
         this.nutritionTargetService = nutritionTargetService;
         this.dayTargetSnapshotRepository = dayTargetSnapshotRepository;
+        this.dayTargetSnapshotService = dayTargetSnapshotService;
     }
 
     /**
@@ -87,38 +91,9 @@ public class MealEntryService {
                 dto = mealEntryMapper.toDTO(mealEntryRepository.save(entity));
             }
 
-            ensureDayTargetSnapshot(date);
+            dayTargetSnapshotService.ensureSnapshot(date);
             return dto;
         }).subscribeOn(Schedulers.boundedElastic());
-    }
-
-    /**
-     * Persists a {@link DayTargetSnapshotEntity} for the given date if one does not already exist
-     * and the daily nutrition targets can currently be computed. Silently does nothing if a
-     * snapshot already exists or if targets cannot be computed yet (e.g. no profile/weight data).
-     *
-     * @param date the date to snapshot targets for
-     */
-    private void ensureDayTargetSnapshot(LocalDate date) {
-        if (dayTargetSnapshotRepository.findById(date).isPresent()) {
-            return;
-        }
-        final TargetsDTO targets;
-        try {
-            targets = nutritionTargetService.getTargetsSync(date);
-        } catch (TargetCalculationException e) {
-            return;
-        }
-        final DayTargetSnapshotEntity snapshot = new DayTargetSnapshotEntity();
-        snapshot.setEntryDate(date);
-        snapshot.setBmr(targets.bmr());
-        snapshot.setMaintenanceKcal(targets.maintenanceKcal());
-        snapshot.setTargetKcal(targets.targetKcal());
-        snapshot.setProteinG(targets.proteinG());
-        snapshot.setFatG(targets.fatG());
-        snapshot.setCarbsG(targets.carbsG());
-        snapshot.setBasis(targets.basis());
-        dayTargetSnapshotRepository.save(snapshot);
     }
 
     /**
