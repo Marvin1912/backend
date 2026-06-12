@@ -62,13 +62,31 @@ public class NutritionTargetService {
      * @return a Mono emitting the computed targets DTO
      */
     public Mono<TargetsDTO> getTargets(LocalDate date) {
-        return Mono.fromCallable(() -> {
-            final ProfileEntity profile = profileRepository.findById(ProfileEntity.SINGLETON_ID).orElse(null);
-            final WeightEntryEntity applicableWeight = weightEntryRepository
-                    .findTopByEntryDateLessThanEqualOrderByEntryDateDesc(date)
-                    .or(weightEntryRepository::findTopByOrderByEntryDateDesc)
-                    .orElse(null);
-            return targetService.computeTargets(profile, applicableWeight, date);
-        }).subscribeOn(Schedulers.boundedElastic());
+        return Mono.fromCallable(() -> getTargetsSync(date)).subscribeOn(Schedulers.boundedElastic());
+    }
+
+    /**
+     * Loads the current profile and the weight entry applicable as of the given date, then computes
+     * and returns the daily nutrition targets that applied on that date, synchronously.
+     *
+     * <p>The applicable weight is the most recent entry on or before {@code date}; if none exists
+     * (e.g. {@code date} is before the first ever weight entry), the latest known weight entry is
+     * used as a fallback so the calculation can still proceed.</p>
+     *
+     * <p>Throws {@link TargetCalculationException} if profile or weight data is missing entirely.</p>
+     *
+     * <p>This method performs blocking repository access and must only be called from a thread
+     * already running on a blocking-friendly scheduler (e.g. {@link Schedulers#boundedElastic()}).</p>
+     *
+     * @param date the date to compute applicable targets for
+     * @return the computed targets DTO
+     */
+    public TargetsDTO getTargetsSync(LocalDate date) {
+        final ProfileEntity profile = profileRepository.findById(ProfileEntity.SINGLETON_ID).orElse(null);
+        final WeightEntryEntity applicableWeight = weightEntryRepository
+                .findTopByEntryDateLessThanEqualOrderByEntryDateDesc(date)
+                .or(weightEntryRepository::findTopByOrderByEntryDateDesc)
+                .orElse(null);
+        return targetService.computeTargets(profile, applicableWeight, date);
     }
 }

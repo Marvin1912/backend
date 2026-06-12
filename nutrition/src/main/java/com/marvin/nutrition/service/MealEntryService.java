@@ -105,11 +105,8 @@ public class MealEntryService {
         }
         final TargetsDTO targets;
         try {
-            targets = nutritionTargetService.getTargets(date).block();
+            targets = nutritionTargetService.getTargetsSync(date);
         } catch (TargetCalculationException e) {
-            return;
-        }
-        if (targets == null) {
             return;
         }
         final DayTargetSnapshotEntity snapshot = new DayTargetSnapshotEntity();
