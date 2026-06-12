@@ -5,8 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.isNull;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -59,6 +57,9 @@ class MealEntryServiceTest {
     @Mock
     private DayTargetSnapshotRepository dayTargetSnapshotRepository;
 
+    @Mock
+    private DayTargetSnapshotService dayTargetSnapshotService;
+
     @InjectMocks
     private MealEntryService mealEntryService;
 
@@ -97,9 +98,6 @@ class MealEntryServiceTest {
                 new BigDecimal("300.00"), new BigDecimal("30.00"),
                 new BigDecimal("15.00"), new BigDecimal("7.50"), "Test Food"
         );
-
-        lenient().when(nutritionTargetService.getTargetsSync(any(LocalDate.class)))
-                .thenThrow(new TargetCalculationException("No profile"));
     }
 
     // -----------------------------------------------------------------------
@@ -264,53 +262,8 @@ class MealEntryServiceTest {
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("addEntry persists a day target snapshot when none exists yet and targets can be computed")
-    void addEntry_NoExistingSnapshot_PersistsSnapshotFromComputedTargets() {
-        final CreateMealEntryRequest req = new CreateMealEntryRequest(
-                MealType.SNACK, null, null, "Homemade soup",
-                new BigDecimal("250.00"), new BigDecimal("15.00"),
-                new BigDecimal("30.00"), new BigDecimal("8.00")
-        );
-
-        final MealEntryEntity saved = new MealEntryEntity();
-        saved.setDescription("Homemade soup");
-        saved.setKcal(new BigDecimal("250.00"));
-        saved.setProteinG(new BigDecimal("15.00"));
-        saved.setCarbsG(new BigDecimal("30.00"));
-        saved.setFatG(new BigDecimal("8.00"));
-
-        final MealEntryDTO adHocDTO = new MealEntryDTO(
-                UUID.randomUUID(), today, MealType.SNACK, null, "Homemade soup", null,
-                new BigDecimal("250.00"), new BigDecimal("15.00"),
-                new BigDecimal("30.00"), new BigDecimal("8.00"), null
-        );
-
-        final TargetsDTO targets = new TargetsDTO(1750, 2160, 2160, 160, 72, 252, "MIFFLIN_ST_JEOR");
-
-        when(mealEntryRepository.save(any(MealEntryEntity.class))).thenReturn(saved);
-        when(mealEntryMapper.toDTO(saved)).thenReturn(adHocDTO);
-        when(dayTargetSnapshotRepository.findById(today)).thenReturn(Optional.empty());
-        doReturn(targets).when(nutritionTargetService).getTargetsSync(today);
-
-        StepVerifier.create(mealEntryService.addEntry(today, req))
-                .expectNext(adHocDTO)
-                .verifyComplete();
-
-        verify(dayTargetSnapshotRepository).save(argThat(snapshot ->
-                today.equals(snapshot.getEntryDate())
-                        && snapshot.getBmr() == 1750
-                        && snapshot.getMaintenanceKcal() == 2160
-                        && snapshot.getTargetKcal() == 2160
-                        && snapshot.getProteinG() == 160
-                        && snapshot.getFatG() == 72
-                        && snapshot.getCarbsG() == 252
-                        && "MIFFLIN_ST_JEOR".equals(snapshot.getBasis())
-        ));
-    }
-
-    @Test
-    @DisplayName("addEntry does not overwrite an existing day target snapshot")
-    void addEntry_ExistingSnapshot_DoesNotOverwrite() {
+    @DisplayName("addEntry delegates day-target snapshot creation to DayTargetSnapshotService")
+    void addEntry_DelegatesSnapshotCreationToDayTargetSnapshotService() {
         final CreateMealEntryRequest req = new CreateMealEntryRequest(
                 MealType.SNACK, null, null, "Homemade soup",
                 new BigDecimal("250.00"), new BigDecimal("15.00"),
@@ -332,47 +285,12 @@ class MealEntryServiceTest {
 
         when(mealEntryRepository.save(any(MealEntryEntity.class))).thenReturn(saved);
         when(mealEntryMapper.toDTO(saved)).thenReturn(adHocDTO);
-        when(dayTargetSnapshotRepository.findById(today)).thenReturn(Optional.of(new DayTargetSnapshotEntity()));
 
         StepVerifier.create(mealEntryService.addEntry(today, req))
                 .expectNext(adHocDTO)
                 .verifyComplete();
 
-        verify(dayTargetSnapshotRepository, never()).save(any());
-        verify(nutritionTargetService, never()).getTargetsSync(any(LocalDate.class));
-    }
-
-    @Test
-    @DisplayName("addEntry skips snapshotting silently when targets cannot be computed yet")
-    void addEntry_TargetsUnavailable_SkipsSnapshotSilently() {
-        final CreateMealEntryRequest req = new CreateMealEntryRequest(
-                MealType.SNACK, null, null, "Homemade soup",
-                new BigDecimal("250.00"), new BigDecimal("15.00"),
-                new BigDecimal("30.00"), new BigDecimal("8.00")
-        );
-
-        final MealEntryEntity saved = new MealEntryEntity();
-        saved.setDescription("Homemade soup");
-        saved.setKcal(new BigDecimal("250.00"));
-        saved.setProteinG(new BigDecimal("15.00"));
-        saved.setCarbsG(new BigDecimal("30.00"));
-        saved.setFatG(new BigDecimal("8.00"));
-
-        final MealEntryDTO adHocDTO = new MealEntryDTO(
-                UUID.randomUUID(), today, MealType.SNACK, null, "Homemade soup", null,
-                new BigDecimal("250.00"), new BigDecimal("15.00"),
-                new BigDecimal("30.00"), new BigDecimal("8.00"), null
-        );
-
-        when(mealEntryRepository.save(any(MealEntryEntity.class))).thenReturn(saved);
-        when(mealEntryMapper.toDTO(saved)).thenReturn(adHocDTO);
-        when(dayTargetSnapshotRepository.findById(today)).thenReturn(Optional.empty());
-
-        StepVerifier.create(mealEntryService.addEntry(today, req))
-                .expectNext(adHocDTO)
-                .verifyComplete();
-
-        verify(dayTargetSnapshotRepository, never()).save(any());
+        verify(dayTargetSnapshotService).ensureSnapshot(today);
     }
 
     // -----------------------------------------------------------------------
