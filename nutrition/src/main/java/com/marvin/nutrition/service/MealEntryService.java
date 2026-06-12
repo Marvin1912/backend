@@ -6,9 +6,11 @@ import com.marvin.nutrition.dto.MacrosDTO;
 import com.marvin.nutrition.dto.MealEntryDTO;
 import com.marvin.nutrition.dto.TargetsDTO;
 import com.marvin.nutrition.dto.UpdateMealEntryRequest;
+import com.marvin.nutrition.entity.DayTargetSnapshotEntity;
 import com.marvin.nutrition.entity.FoodEntity;
 import com.marvin.nutrition.entity.MealEntryEntity;
 import com.marvin.nutrition.mapper.MealEntryMapper;
+import com.marvin.nutrition.repository.DayTargetSnapshotRepository;
 import com.marvin.nutrition.repository.FoodRepository;
 import com.marvin.nutrition.repository.MealEntryRepository;
 import java.math.BigDecimal;
@@ -34,24 +36,28 @@ public class MealEntryService {
     private final FoodRepository foodRepository;
     private final MealEntryMapper mealEntryMapper;
     private final NutritionTargetService nutritionTargetService;
+    private final DayTargetSnapshotRepository dayTargetSnapshotRepository;
 
     /**
      * Creates a new MealEntryService with the required dependencies.
      *
-     * @param mealEntryRepository    JPA repository for meal entries
-     * @param foodRepository         JPA repository for food catalog entries
-     * @param mealEntryMapper        MapStruct mapper for entity/DTO conversion
-     * @param nutritionTargetService service for computing daily nutrition targets
+     * @param mealEntryRepository         JPA repository for meal entries
+     * @param foodRepository              JPA repository for food catalog entries
+     * @param mealEntryMapper             MapStruct mapper for entity/DTO conversion
+     * @param nutritionTargetService      service for computing daily nutrition targets
+     * @param dayTargetSnapshotRepository JPA repository for per-day nutrition target snapshots
      */
     public MealEntryService(
             MealEntryRepository mealEntryRepository,
             FoodRepository foodRepository,
             MealEntryMapper mealEntryMapper,
-            NutritionTargetService nutritionTargetService) {
+            NutritionTargetService nutritionTargetService,
+            DayTargetSnapshotRepository dayTargetSnapshotRepository) {
         this.mealEntryRepository = mealEntryRepository;
         this.foodRepository = foodRepository;
         this.mealEntryMapper = mealEntryMapper;
         this.nutritionTargetService = nutritionTargetService;
+        this.dayTargetSnapshotRepository = dayTargetSnapshotRepository;
     }
 
     /**
@@ -72,14 +78,54 @@ public class MealEntryService {
             entity.setEntryDate(date);
             entity.setMealType(req.mealType());
 
+            final MealEntryDTO dto;
             if (req.foodId() != null) {
                 final String foodName = buildFoodEntry(entity, req);
-                return mealEntryMapper.toDTO(mealEntryRepository.save(entity), foodName);
+                dto = mealEntryMapper.toDTO(mealEntryRepository.save(entity), foodName);
+            } else {
+                buildAdHocEntry(entity, req);
+                dto = mealEntryMapper.toDTO(mealEntryRepository.save(entity));
             }
 
-            buildAdHocEntry(entity, req);
-            return mealEntryMapper.toDTO(mealEntryRepository.save(entity));
+            ensureDayTargetSnapshot(date);
+            return dto;
         }).subscribeOn(Schedulers.boundedElastic());
+    }
+
+    /**
+     * Persists a {@link DayTargetSnapshotEntity} for the given date if one does not already exist
+     * and the daily nutrition targets can currently be computed. Silently does nothing if a
+     * snapshot already exists or if targets cannot be computed yet (e.g. no profile/weight data).
+     *
+     * @param date the date to snapshot targets for
+     */
+    private void ensureDayTargetSnapshot(LocalDate date) {
+        if (dayTargetSnapshotRepository.findById(date).isPresent()) {
+            return;
+        }
+        final Mono<TargetsDTO> targetsMono = nutritionTargetService.getTargets(date);
+        if (targetsMono == null) {
+            return;
+        }
+        final TargetsDTO targets;
+        try {
+            targets = targetsMono.block();
+        } catch (TargetCalculationException e) {
+            return;
+        }
+        if (targets == null) {
+            return;
+        }
+        final DayTargetSnapshotEntity snapshot = new DayTargetSnapshotEntity();
+        snapshot.setEntryDate(date);
+        snapshot.setBmr(targets.bmr());
+        snapshot.setMaintenanceKcal(targets.maintenanceKcal());
+        snapshot.setTargetKcal(targets.targetKcal());
+        snapshot.setProteinG(targets.proteinG());
+        snapshot.setFatG(targets.fatG());
+        snapshot.setCarbsG(targets.carbsG());
+        snapshot.setBasis(targets.basis());
+        dayTargetSnapshotRepository.save(snapshot);
     }
 
     /**
@@ -156,12 +202,39 @@ public class MealEntryService {
                     .collect(Collectors.toList());
         }).subscribeOn(Schedulers.boundedElastic());
 
-        final Mono<Optional<TargetsDTO>> targetsMono = nutritionTargetService.getTargets()
-                .map(Optional::of)
-                .onErrorReturn(TargetCalculationException.class, Optional.empty());
+        final Mono<Optional<TargetsDTO>> snapshotMono = Mono.fromCallable(() ->
+                dayTargetSnapshotRepository.findById(date).map(this::toTargetsDTO)
+        ).subscribeOn(Schedulers.boundedElastic());
+
+        final Mono<Optional<TargetsDTO>> targetsMono = snapshotMono.flatMap(snapshot -> {
+            if (snapshot.isPresent()) {
+                return Mono.just(snapshot);
+            }
+            return nutritionTargetService.getTargets()
+                    .map(Optional::of)
+                    .onErrorReturn(TargetCalculationException.class, Optional.empty());
+        });
 
         return Mono.zip(entriesMono, targetsMono)
                 .map(tuple -> buildDaySummary(date, tuple.getT1(), tuple.getT2().orElse(null)));
+    }
+
+    /**
+     * Converts a persisted day target snapshot into a {@link TargetsDTO}.
+     *
+     * @param snapshot the persisted snapshot entity
+     * @return the equivalent targets DTO
+     */
+    private TargetsDTO toTargetsDTO(DayTargetSnapshotEntity snapshot) {
+        return new TargetsDTO(
+                snapshot.getBmr(),
+                snapshot.getMaintenanceKcal(),
+                snapshot.getTargetKcal(),
+                snapshot.getProteinG(),
+                snapshot.getFatG(),
+                snapshot.getCarbsG(),
+                snapshot.getBasis()
+        );
     }
 
     /**

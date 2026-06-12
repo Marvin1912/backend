@@ -42,7 +42,8 @@ public class TargetService {
     private static final double MIFFLIN_FEMALE_CONSTANT = -161.0;
 
     /**
-     * Computes daily nutrition targets from the given profile and the latest weight entry.
+     * Computes daily nutrition targets from the given profile and the latest weight entry,
+     * using today's date to determine age.
      *
      * @param profile     the user's nutrition profile; must not be null
      * @param latestWeight the most recent weight entry; must not be null
@@ -50,6 +51,21 @@ public class TargetService {
      * @throws TargetCalculationException if profile or latestWeight is null
      */
     public TargetsDTO computeTargets(ProfileEntity profile, WeightEntryEntity latestWeight) {
+        return computeTargets(profile, latestWeight, LocalDate.now());
+    }
+
+    /**
+     * Computes daily nutrition targets from the given profile and weight entry, computing age
+     * as of the given date rather than today. This allows historical day summaries to reflect
+     * the targets that applied on that day.
+     *
+     * @param profile      the user's nutrition profile; must not be null
+     * @param latestWeight the applicable weight entry; must not be null
+     * @param asOfDate     the date to use when computing age
+     * @return a {@link TargetsDTO} with all computed targets
+     * @throws TargetCalculationException if profile or latestWeight is null
+     */
+    public TargetsDTO computeTargets(ProfileEntity profile, WeightEntryEntity latestWeight, LocalDate asOfDate) {
         if (profile == null) {
             throw new TargetCalculationException("No nutrition profile found. Please create a profile first.");
         }
@@ -58,7 +74,7 @@ public class TargetService {
         }
 
         final double weightKg = latestWeight.getWeightKg().doubleValue();
-        final int bmr = resolveBmr(profile, weightKg);
+        final int bmr = resolveBmr(profile, weightKg, asOfDate);
         final int maintenanceKcal = computeMaintenance(bmr, profile.getActivityLevel());
         final int targetKcal = maintenanceKcal + goalAdjustment(profile.getGoal());
 
@@ -86,13 +102,14 @@ public class TargetService {
      *
      * @param profile  the user profile containing optional {@code basalKcal} override
      * @param weightKg current body weight in kilograms
+     * @param asOfDate the date to use when computing age
      * @return BMR rounded to the nearest whole kcal
      */
-    private int resolveBmr(ProfileEntity profile, double weightKg) {
+    private int resolveBmr(ProfileEntity profile, double weightKg, LocalDate asOfDate) {
         if (profile.getBasalKcal() != null) {
             return profile.getBasalKcal();
         }
-        return computeMifflinBmr(profile, weightKg);
+        return computeMifflinBmr(profile, weightKg, asOfDate);
     }
 
     /**
@@ -100,10 +117,11 @@ public class TargetService {
      *
      * @param profile  the user profile supplying sex, birth date and height
      * @param weightKg current body weight in kilograms
+     * @param asOfDate the date to use when computing age
      * @return BMR rounded to the nearest whole kcal
      */
-    private int computeMifflinBmr(ProfileEntity profile, double weightKg) {
-        final int age = Period.between(profile.getBirthDate(), LocalDate.now()).getYears();
+    private int computeMifflinBmr(ProfileEntity profile, double weightKg, LocalDate asOfDate) {
+        final int age = Period.between(profile.getBirthDate(), asOfDate).getYears();
         final double heightCm = profile.getHeightCm().doubleValue();
         final double sexConstant = profile.getSex() == Sex.MALE
                 ? MIFFLIN_MALE_CONSTANT

@@ -13,10 +13,12 @@ import com.marvin.nutrition.dto.CreateMealEntryRequest;
 import com.marvin.nutrition.dto.MealEntryDTO;
 import com.marvin.nutrition.dto.TargetsDTO;
 import com.marvin.nutrition.dto.UpdateMealEntryRequest;
+import com.marvin.nutrition.entity.DayTargetSnapshotEntity;
 import com.marvin.nutrition.entity.FoodEntity;
 import com.marvin.nutrition.entity.MealEntryEntity;
 import com.marvin.nutrition.entity.MealType;
 import com.marvin.nutrition.mapper.MealEntryMapper;
+import com.marvin.nutrition.repository.DayTargetSnapshotRepository;
 import com.marvin.nutrition.repository.FoodRepository;
 import com.marvin.nutrition.repository.MealEntryRepository;
 import java.math.BigDecimal;
@@ -51,6 +53,9 @@ class MealEntryServiceTest {
 
     @Mock
     private NutritionTargetService nutritionTargetService;
+
+    @Mock
+    private DayTargetSnapshotRepository dayTargetSnapshotRepository;
 
     @InjectMocks
     private MealEntryService mealEntryService;
@@ -247,6 +252,124 @@ class MealEntryServiceTest {
                 .verify();
 
         verify(mealEntryRepository, never()).save(any());
+    }
+
+    // -----------------------------------------------------------------------
+    // addEntry — day target snapshot persistence
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("addEntry persists a day target snapshot when none exists yet and targets can be computed")
+    void addEntry_NoExistingSnapshot_PersistsSnapshotFromComputedTargets() {
+        final CreateMealEntryRequest req = new CreateMealEntryRequest(
+                MealType.SNACK, null, null, "Homemade soup",
+                new BigDecimal("250.00"), new BigDecimal("15.00"),
+                new BigDecimal("30.00"), new BigDecimal("8.00")
+        );
+
+        final MealEntryEntity saved = new MealEntryEntity();
+        saved.setDescription("Homemade soup");
+        saved.setKcal(new BigDecimal("250.00"));
+        saved.setProteinG(new BigDecimal("15.00"));
+        saved.setCarbsG(new BigDecimal("30.00"));
+        saved.setFatG(new BigDecimal("8.00"));
+
+        final MealEntryDTO adHocDTO = new MealEntryDTO(
+                UUID.randomUUID(), today, MealType.SNACK, null, "Homemade soup", null,
+                new BigDecimal("250.00"), new BigDecimal("15.00"),
+                new BigDecimal("30.00"), new BigDecimal("8.00"), null
+        );
+
+        final TargetsDTO targets = new TargetsDTO(1750, 2160, 2160, 160, 72, 252, "MIFFLIN_ST_JEOR");
+
+        when(mealEntryRepository.save(any(MealEntryEntity.class))).thenReturn(saved);
+        when(mealEntryMapper.toDTO(saved)).thenReturn(adHocDTO);
+        when(dayTargetSnapshotRepository.findById(today)).thenReturn(Optional.empty());
+        when(nutritionTargetService.getTargets(today)).thenReturn(Mono.just(targets));
+
+        StepVerifier.create(mealEntryService.addEntry(today, req))
+                .expectNext(adHocDTO)
+                .verifyComplete();
+
+        verify(dayTargetSnapshotRepository).save(argThat(snapshot ->
+                today.equals(snapshot.getEntryDate())
+                        && snapshot.getBmr() == 1750
+                        && snapshot.getMaintenanceKcal() == 2160
+                        && snapshot.getTargetKcal() == 2160
+                        && snapshot.getProteinG() == 160
+                        && snapshot.getFatG() == 72
+                        && snapshot.getCarbsG() == 252
+                        && "MIFFLIN_ST_JEOR".equals(snapshot.getBasis())
+        ));
+    }
+
+    @Test
+    @DisplayName("addEntry does not overwrite an existing day target snapshot")
+    void addEntry_ExistingSnapshot_DoesNotOverwrite() {
+        final CreateMealEntryRequest req = new CreateMealEntryRequest(
+                MealType.SNACK, null, null, "Homemade soup",
+                new BigDecimal("250.00"), new BigDecimal("15.00"),
+                new BigDecimal("30.00"), new BigDecimal("8.00")
+        );
+
+        final MealEntryEntity saved = new MealEntryEntity();
+        saved.setDescription("Homemade soup");
+        saved.setKcal(new BigDecimal("250.00"));
+        saved.setProteinG(new BigDecimal("15.00"));
+        saved.setCarbsG(new BigDecimal("30.00"));
+        saved.setFatG(new BigDecimal("8.00"));
+
+        final MealEntryDTO adHocDTO = new MealEntryDTO(
+                UUID.randomUUID(), today, MealType.SNACK, null, "Homemade soup", null,
+                new BigDecimal("250.00"), new BigDecimal("15.00"),
+                new BigDecimal("30.00"), new BigDecimal("8.00"), null
+        );
+
+        when(mealEntryRepository.save(any(MealEntryEntity.class))).thenReturn(saved);
+        when(mealEntryMapper.toDTO(saved)).thenReturn(adHocDTO);
+        when(dayTargetSnapshotRepository.findById(today)).thenReturn(Optional.of(new DayTargetSnapshotEntity()));
+
+        StepVerifier.create(mealEntryService.addEntry(today, req))
+                .expectNext(adHocDTO)
+                .verifyComplete();
+
+        verify(dayTargetSnapshotRepository, never()).save(any());
+        verify(nutritionTargetService, never()).getTargets(any(LocalDate.class));
+    }
+
+    @Test
+    @DisplayName("addEntry skips snapshotting silently when targets cannot be computed yet")
+    void addEntry_TargetsUnavailable_SkipsSnapshotSilently() {
+        final CreateMealEntryRequest req = new CreateMealEntryRequest(
+                MealType.SNACK, null, null, "Homemade soup",
+                new BigDecimal("250.00"), new BigDecimal("15.00"),
+                new BigDecimal("30.00"), new BigDecimal("8.00")
+        );
+
+        final MealEntryEntity saved = new MealEntryEntity();
+        saved.setDescription("Homemade soup");
+        saved.setKcal(new BigDecimal("250.00"));
+        saved.setProteinG(new BigDecimal("15.00"));
+        saved.setCarbsG(new BigDecimal("30.00"));
+        saved.setFatG(new BigDecimal("8.00"));
+
+        final MealEntryDTO adHocDTO = new MealEntryDTO(
+                UUID.randomUUID(), today, MealType.SNACK, null, "Homemade soup", null,
+                new BigDecimal("250.00"), new BigDecimal("15.00"),
+                new BigDecimal("30.00"), new BigDecimal("8.00"), null
+        );
+
+        when(mealEntryRepository.save(any(MealEntryEntity.class))).thenReturn(saved);
+        when(mealEntryMapper.toDTO(saved)).thenReturn(adHocDTO);
+        when(dayTargetSnapshotRepository.findById(today)).thenReturn(Optional.empty());
+        when(nutritionTargetService.getTargets(today))
+                .thenReturn(Mono.error(new TargetCalculationException("No profile")));
+
+        StepVerifier.create(mealEntryService.addEntry(today, req))
+                .expectNext(adHocDTO)
+                .verifyComplete();
+
+        verify(dayTargetSnapshotRepository, never()).save(any());
     }
 
     // -----------------------------------------------------------------------
@@ -459,6 +582,77 @@ class MealEntryServiceTest {
                     assert BigDecimal.ZERO.compareTo(summary.totals().proteinG()) == 0;
                     assert BigDecimal.ZERO.compareTo(summary.totals().carbsG()) == 0;
                     assert BigDecimal.ZERO.compareTo(summary.totals().fatG()) == 0;
+                })
+                .verifyComplete();
+    }
+
+    // -----------------------------------------------------------------------
+    // getDay — historical day target snapshot
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("getDay uses the persisted snapshot's targets for a historical date, regardless of live targets")
+    void getDay_WithSnapshot_UsesSnapshotTargetsRegardlessOfLiveTargets() {
+        final MealEntryEntity entry = new MealEntryEntity();
+        entry.setKcal(new BigDecimal("400.00"));
+        entry.setProteinG(new BigDecimal("30.00"));
+        entry.setCarbsG(new BigDecimal("50.00"));
+        entry.setFatG(new BigDecimal("10.00"));
+
+        final MealEntryDTO dto = new MealEntryDTO(
+                UUID.randomUUID(), today, MealType.BREAKFAST, null, "Oats", null,
+                new BigDecimal("400.00"), new BigDecimal("30.00"),
+                new BigDecimal("50.00"), new BigDecimal("10.00"), null
+        );
+
+        final DayTargetSnapshotEntity snapshot = new DayTargetSnapshotEntity();
+        snapshot.setEntryDate(today);
+        snapshot.setBmr(1700);
+        snapshot.setMaintenanceKcal(2100);
+        snapshot.setTargetKcal(2000);
+        snapshot.setProteinG(150);
+        snapshot.setFatG(67);
+        snapshot.setCarbsG(248);
+        snapshot.setBasis("MIFFLIN_ST_JEOR");
+
+        when(mealEntryRepository.findByEntryDateOrderByCreationDateAsc(today))
+                .thenReturn(List.of(entry));
+        when(foodRepository.findAllById(any())).thenReturn(List.of());
+        when(mealEntryMapper.toDTO(any(MealEntryEntity.class), isNull())).thenReturn(dto);
+        when(dayTargetSnapshotRepository.findById(today)).thenReturn(Optional.of(snapshot));
+
+        StepVerifier.create(mealEntryService.getDay(today))
+                .assertNext(summary -> {
+                    assertEquals(2000, summary.targets().targetKcal());
+                    assertEquals(150, summary.targets().proteinG());
+                    assertEquals(67, summary.targets().fatG());
+                    assertEquals(248, summary.targets().carbsG());
+                    assertEquals(1700, summary.targets().bmr());
+                    assertEquals(2100, summary.targets().maintenanceKcal());
+                    assertEquals("MIFFLIN_ST_JEOR", summary.targets().basis());
+                    // remaining = snapshot targetKcal - totals.kcal = 2000 - 400 = 1600
+                    assertEquals(0, new BigDecimal("1600").compareTo(summary.remaining().kcal()));
+                })
+                .verifyComplete();
+
+        verify(nutritionTargetService, never()).getTargets();
+    }
+
+    @Test
+    @DisplayName("getDay falls back to live targets when no snapshot exists for the date")
+    void getDay_NoSnapshot_FallsBackToLiveTargets() {
+        final TargetsDTO liveTargets = new TargetsDTO(1750, 2160, 2160, 160, 72, 252, "MIFFLIN_ST_JEOR");
+
+        when(mealEntryRepository.findByEntryDateOrderByCreationDateAsc(today))
+                .thenReturn(List.of());
+        when(foodRepository.findAllById(List.of())).thenReturn(List.of());
+        when(dayTargetSnapshotRepository.findById(today)).thenReturn(Optional.empty());
+        when(nutritionTargetService.getTargets()).thenReturn(Mono.just(liveTargets));
+
+        StepVerifier.create(mealEntryService.getDay(today))
+                .assertNext(summary -> {
+                    assertEquals(2160, summary.targets().targetKcal());
+                    assertEquals(160, summary.targets().proteinG());
                 })
                 .verifyComplete();
     }
