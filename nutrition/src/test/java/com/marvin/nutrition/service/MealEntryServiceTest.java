@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -97,7 +98,8 @@ class MealEntryServiceTest {
                 new BigDecimal("15.00"), new BigDecimal("7.50"), "Test Food"
         );
 
-        lenient().when(nutritionTargetService.getTargets(any(LocalDate.class))).thenReturn(Mono.empty());
+        lenient().when(nutritionTargetService.getTargetsSync(any(LocalDate.class)))
+                .thenThrow(new TargetCalculationException("No profile"));
     }
 
     // -----------------------------------------------------------------------
@@ -288,7 +290,7 @@ class MealEntryServiceTest {
         when(mealEntryRepository.save(any(MealEntryEntity.class))).thenReturn(saved);
         when(mealEntryMapper.toDTO(saved)).thenReturn(adHocDTO);
         when(dayTargetSnapshotRepository.findById(today)).thenReturn(Optional.empty());
-        when(nutritionTargetService.getTargets(today)).thenReturn(Mono.just(targets));
+        doReturn(targets).when(nutritionTargetService).getTargetsSync(today);
 
         StepVerifier.create(mealEntryService.addEntry(today, req))
                 .expectNext(adHocDTO)
@@ -337,7 +339,7 @@ class MealEntryServiceTest {
                 .verifyComplete();
 
         verify(dayTargetSnapshotRepository, never()).save(any());
-        verify(nutritionTargetService, never()).getTargets(any(LocalDate.class));
+        verify(nutritionTargetService, never()).getTargetsSync(any(LocalDate.class));
     }
 
     @Test
@@ -365,8 +367,6 @@ class MealEntryServiceTest {
         when(mealEntryRepository.save(any(MealEntryEntity.class))).thenReturn(saved);
         when(mealEntryMapper.toDTO(saved)).thenReturn(adHocDTO);
         when(dayTargetSnapshotRepository.findById(today)).thenReturn(Optional.empty());
-        when(nutritionTargetService.getTargets(today))
-                .thenReturn(Mono.error(new TargetCalculationException("No profile")));
 
         StepVerifier.create(mealEntryService.addEntry(today, req))
                 .expectNext(adHocDTO)

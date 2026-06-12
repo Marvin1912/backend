@@ -1,5 +1,7 @@
 package com.marvin.nutrition.service;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
@@ -127,5 +129,44 @@ class NutritionTargetServiceTest {
                 .verifyComplete();
 
         verify(weightEntryRepository).findTopByOrderByEntryDateDesc();
+    }
+
+    // -----------------------------------------------------------------------
+    // getTargetsSync(LocalDate date)
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("getTargetsSync computes targets synchronously using the weight applicable as of that date")
+    void getTargetsSyncUsesApplicableWeightAndDate() {
+        final LocalDate date = LocalDate.of(2026, 1, 15);
+        final ProfileEntity profile = new ProfileEntity();
+        profile.setId(ProfileEntity.SINGLETON_ID);
+        final WeightEntryEntity weight = new WeightEntryEntity();
+        weight.setWeightKg(BigDecimal.valueOf(78));
+        final TargetsDTO targets = new TargetsDTO(1700, 2100, 2100, 150, 70, 250, "MIFFLIN_ST_JEOR");
+
+        when(profileRepository.findById(ProfileEntity.SINGLETON_ID)).thenReturn(Optional.of(profile));
+        when(weightEntryRepository.findTopByEntryDateLessThanEqualOrderByEntryDateDesc(date))
+                .thenReturn(Optional.of(weight));
+        when(targetService.computeTargets(profile, weight, date)).thenReturn(targets);
+
+        assertEquals(targets, nutritionTargetService.getTargetsSync(date));
+
+        verify(weightEntryRepository, never()).findTopByOrderByEntryDateDesc();
+    }
+
+    @Test
+    @DisplayName("getTargetsSync throws TargetCalculationException when profile or weight data is missing")
+    void getTargetsSyncThrowsWhenDataMissing() {
+        final LocalDate date = LocalDate.of(2026, 1, 15);
+
+        when(profileRepository.findById(ProfileEntity.SINGLETON_ID)).thenReturn(Optional.empty());
+        when(weightEntryRepository.findTopByEntryDateLessThanEqualOrderByEntryDateDesc(date))
+                .thenReturn(Optional.empty());
+        when(weightEntryRepository.findTopByOrderByEntryDateDesc()).thenReturn(Optional.empty());
+        when(targetService.computeTargets(isNull(), isNull(), eq(date)))
+                .thenThrow(new TargetCalculationException("No nutrition profile found. Please create a profile first."));
+
+        assertThrows(TargetCalculationException.class, () -> nutritionTargetService.getTargetsSync(date));
     }
 }
