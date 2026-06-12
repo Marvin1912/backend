@@ -336,4 +336,46 @@ class TargetServiceTest {
         assertThrows(TargetCalculationException.class,
                 () -> targetService.computeTargets(p, null));
     }
+
+    // -----------------------------------------------------------------------
+    // Date-aware age computation (asOfDate overload)
+    // -----------------------------------------------------------------------
+
+    /**
+     * A person born on 2000-06-15 is 24 as of 2024-06-14 (birthday not yet reached)
+     * but 25 as of 2024-06-15 (birthday reached). With everything else fixed,
+     * the BMR (and therefore maintenance/target/carbs) must reflect the age as of
+     * the given date, not as of "today".
+     */
+    @Test
+    @DisplayName("computeTargets(profile, weight, asOfDate) computes age as of the given date")
+    void compute_WithAsOfDate_UsesAgeAsOfThatDate() {
+        final LocalDate birthDate = LocalDate.of(2000, 6, 15);
+        final ProfileEntity p = profile(Sex.MALE, birthDate, 175.0,
+                ActivityLevel.MODERATE, Goal.MAINTAIN, 2.0, 0.30, null);
+        final WeightEntryEntity w = weight(80.0);
+
+        final TargetsDTO beforeBirthday = targetService.computeTargets(p, w, LocalDate.of(2024, 6, 14));
+        final TargetsDTO onBirthday = targetService.computeTargets(p, w, LocalDate.of(2024, 6, 15));
+
+        // BMR = 10*80 + 6.25*175 - 5*age + 5 = 1898.75 - 5*age
+        // 2024-06-14 (day before 24th birthday): age 23 -> 1898.75 - 115 = 1783.75 -> 1784
+        // 2024-06-15 (24th birthday): age 24 -> 1898.75 - 120 = 1778.75 -> 1779
+        assertEquals(1784, beforeBirthday.bmr());
+        assertEquals(1779, onBirthday.bmr());
+    }
+
+    @Test
+    @DisplayName("computeTargets(profile, weight) (2-arg) delegates to asOfDate overload using today")
+    void compute_TwoArgOverload_DelegatesUsingToday() {
+        final LocalDate birthDate = LocalDate.now().minusYears(30);
+        final ProfileEntity p = profile(Sex.MALE, birthDate, 175.0,
+                ActivityLevel.MODERATE, Goal.MAINTAIN, 2.0, 0.30, null);
+        final WeightEntryEntity w = weight(80.0);
+
+        final TargetsDTO twoArgResult = targetService.computeTargets(p, w);
+        final TargetsDTO threeArgResult = targetService.computeTargets(p, w, LocalDate.now());
+
+        assertEquals(threeArgResult, twoArgResult);
+    }
 }

@@ -12,6 +12,7 @@ import com.marvin.nutrition.entity.WeightEntryEntity;
 import com.marvin.nutrition.repository.ProfileRepository;
 import com.marvin.nutrition.repository.WeightEntryRepository;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -76,5 +77,55 @@ class NutritionTargetServiceTest {
                 .verify();
 
         verify(targetService).computeTargets(eq(null), eq(null));
+    }
+
+    // -----------------------------------------------------------------------
+    // getTargets(LocalDate date)
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("getTargets(date) uses the weight applicable as of that date and computes age as of that date")
+    void getTargetsForDateUsesApplicableWeightAndDate() {
+        final LocalDate date = LocalDate.of(2026, 1, 15);
+        final ProfileEntity profile = new ProfileEntity();
+        profile.setId(ProfileEntity.SINGLETON_ID);
+        final WeightEntryEntity weight = new WeightEntryEntity();
+        weight.setWeightKg(BigDecimal.valueOf(78));
+        final TargetsDTO targets = new TargetsDTO(1700, 2100, 2100, 150, 70, 250, "MIFFLIN_ST_JEOR");
+
+        when(profileRepository.findById(ProfileEntity.SINGLETON_ID)).thenReturn(Optional.of(profile));
+        when(weightEntryRepository.findTopByEntryDateLessThanEqualOrderByEntryDateDesc(date))
+                .thenReturn(Optional.of(weight));
+        when(targetService.computeTargets(profile, weight, date)).thenReturn(targets);
+
+        StepVerifier.create(nutritionTargetService.getTargets(date))
+                .expectNext(targets)
+                .verifyComplete();
+
+        verify(weightEntryRepository).findTopByEntryDateLessThanEqualOrderByEntryDateDesc(date);
+        verify(weightEntryRepository, never()).findTopByOrderByEntryDateDesc();
+    }
+
+    @Test
+    @DisplayName("getTargets(date) falls back to the latest weight entry when none exists on/before that date")
+    void getTargetsForDateFallsBackToLatestWeightWhenNoneBeforeDate() {
+        final LocalDate date = LocalDate.of(2020, 1, 1);
+        final ProfileEntity profile = new ProfileEntity();
+        profile.setId(ProfileEntity.SINGLETON_ID);
+        final WeightEntryEntity latestWeight = new WeightEntryEntity();
+        latestWeight.setWeightKg(BigDecimal.valueOf(80));
+        final TargetsDTO targets = new TargetsDTO(1750, 2160, 2160, 160, 72, 252, "MIFFLIN_ST_JEOR");
+
+        when(profileRepository.findById(ProfileEntity.SINGLETON_ID)).thenReturn(Optional.of(profile));
+        when(weightEntryRepository.findTopByEntryDateLessThanEqualOrderByEntryDateDesc(date))
+                .thenReturn(Optional.empty());
+        when(weightEntryRepository.findTopByOrderByEntryDateDesc()).thenReturn(Optional.of(latestWeight));
+        when(targetService.computeTargets(profile, latestWeight, date)).thenReturn(targets);
+
+        StepVerifier.create(nutritionTargetService.getTargets(date))
+                .expectNext(targets)
+                .verifyComplete();
+
+        verify(weightEntryRepository).findTopByOrderByEntryDateDesc();
     }
 }
