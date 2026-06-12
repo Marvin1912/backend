@@ -103,13 +103,9 @@ public class MealEntryService {
         if (dayTargetSnapshotRepository.findById(date).isPresent()) {
             return;
         }
-        final Mono<TargetsDTO> targetsMono = nutritionTargetService.getTargets(date);
-        if (targetsMono == null) {
-            return;
-        }
         final TargetsDTO targets;
         try {
-            targets = targetsMono.block();
+            targets = nutritionTargetService.getTargets(date).block();
         } catch (TargetCalculationException e) {
             return;
         }
