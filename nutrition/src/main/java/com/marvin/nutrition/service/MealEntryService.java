@@ -206,24 +206,41 @@ public class MealEntryService {
                         .collect(Collectors.toMap(DayTargetSnapshotEntity::getEntryDate, this::toTargetsDTO))
         ).subscribeOn(Schedulers.boundedElastic());
 
-        final Mono<Optional<TargetsDTO>> liveTargetsMono = nutritionTargetService.getTargets()
-                .map(Optional::of)
-                .onErrorReturn(TargetCalculationException.class, Optional.empty());
-
-        return Mono.zip(entriesByDateMono, snapshotsByDateMono, liveTargetsMono)
-                .map(tuple -> {
+        return Mono.zip(entriesByDateMono, snapshotsByDateMono)
+                .flatMap(tuple -> {
                     final Map<LocalDate, List<MealEntryDTO>> entriesByDate = tuple.getT1();
                     final Map<LocalDate, TargetsDTO> snapshotsByDate = tuple.getT2();
-                    final TargetsDTO liveTargets = tuple.getT3().orElse(null);
 
-                    final List<DaySummaryDTO> summaries = new ArrayList<>();
-                    for (LocalDate date = from; !date.isAfter(to); date = date.plusDays(1)) {
-                        final List<MealEntryDTO> entries = entriesByDate.getOrDefault(date, List.of());
-                        final TargetsDTO targets = snapshotsByDate.getOrDefault(date, liveTargets);
-                        summaries.add(buildDaySummary(date, entries, targets));
-                    }
-                    return summaries;
+                    return Mono.fromCallable(() -> {
+                        final List<DaySummaryDTO> summaries = new ArrayList<>();
+                        for (LocalDate date = from; !date.isAfter(to); date = date.plusDays(1)) {
+                            final List<MealEntryDTO> entries = entriesByDate.getOrDefault(date, List.of());
+                            final TargetsDTO targets = resolveTargets(date, snapshotsByDate);
+                            summaries.add(buildDaySummary(date, entries, targets));
+                        }
+                        return summaries;
+                    }).subscribeOn(Schedulers.boundedElastic());
                 });
+    }
+
+    /**
+     * Resolves the nutrition targets applicable to the given date: the persisted snapshot if present,
+     * otherwise the date-aware live targets, or {@code null} if those cannot be computed.
+     *
+     * @param date            the date to resolve targets for
+     * @param snapshotsByDate persisted snapshot targets keyed by date
+     * @return the resolved targets, or null if unavailable
+     */
+    private TargetsDTO resolveTargets(LocalDate date, Map<LocalDate, TargetsDTO> snapshotsByDate) {
+        final TargetsDTO snapshot = snapshotsByDate.get(date);
+        if (snapshot != null) {
+            return snapshot;
+        }
+        try {
+            return nutritionTargetService.getTargetsSync(date);
+        } catch (final TargetCalculationException e) {
+            return null;
+        }
     }
 
     /**
