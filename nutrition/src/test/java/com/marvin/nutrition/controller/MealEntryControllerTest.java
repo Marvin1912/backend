@@ -137,6 +137,33 @@ class MealEntryControllerTest {
     }
 
     // -----------------------------------------------------------------------
+    // GET /nutrition/days
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("getDays returns 200 with one DaySummaryDTO per day in range")
+    void getDays_ReturnsDays_Returns200WithSummaries() {
+        final LocalDate from = today.minusDays(1);
+        final MacrosDTO totals = new MacrosDTO(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
+        final DaySummaryDTO day1 = new DaySummaryDTO(from, List.of(), totals, null, null);
+        final DaySummaryDTO day2 = new DaySummaryDTO(today, List.of(mealEntryDTO), totals, null, null);
+
+        when(mealEntryService.getDays(from, today)).thenReturn(Mono.just(List.of(day1, day2)));
+
+        final Mono<List<DaySummaryDTO>> result = mealEntryController.getDays(from, today);
+
+        StepVerifier.create(result)
+                .assertNext(summaries -> {
+                    assertEquals(2, summaries.size());
+                    assertEquals(from, summaries.get(0).date());
+                    assertEquals(today, summaries.get(1).date());
+                })
+                .verifyComplete();
+
+        verify(mealEntryService).getDays(from, today);
+    }
+
+    // -----------------------------------------------------------------------
     // PUT /nutrition/entries/{id}
     // -----------------------------------------------------------------------
 

@@ -7,6 +7,7 @@ import com.marvin.nutrition.dto.UpdateMealEntryRequest;
 import com.marvin.nutrition.service.MealEntryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -14,6 +15,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.UUID;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -25,6 +27,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
 
@@ -108,6 +111,36 @@ public class MealEntryController {
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
             @Parameter(description = "Date to summarise (ISO-8601)", example = "2026-06-07") LocalDate date) {
         return mealEntryService.getDay(date);
+    }
+
+    /**
+     * Returns the nutritional summaries for every date within the given range, in one response.
+     *
+     * @param from the first date to include (inclusive)
+     * @param to   the last date to include (inclusive)
+     * @return a Mono emitting one day summary per date in the range, ordered ascending by date
+     */
+    @GetMapping("/nutrition/days")
+    @Operation(
+            summary = "Get day summaries for a date range",
+            description = "Returns one day summary per date within [from, to] (inclusive), in a single "
+                    + "response. Mirrors the per-day summary returned by GET /nutrition/days/{date}.",
+            responses = {
+                @ApiResponse(
+                        responseCode = "200",
+                        description = "Day summaries returned",
+                        content = @Content(array = @ArraySchema(schema = @Schema(implementation = DaySummaryDTO.class)))
+                )
+            }
+    )
+    public Mono<List<DaySummaryDTO>> getDays(
+            @RequestParam
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            @Parameter(description = "First date to include (ISO-8601)", example = "2026-05-25") LocalDate from,
+            @RequestParam
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            @Parameter(description = "Last date to include (ISO-8601)", example = "2026-06-07") LocalDate to) {
+        return mealEntryService.getDays(from, to);
     }
 
     /**
