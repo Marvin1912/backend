@@ -44,13 +44,38 @@ public class NutritionExceptionHandler {
     /**
      * Maps {@link DataIntegrityViolationException} to HTTP 409 Conflict.
      *
+     * <p>If the violation originates from the {@code weight_entry} unique date constraint, a
+     * weight-specific message is returned. For any other constraint violation (e.g. day-target
+     * snapshot or profile singleton constraints), a generic conflict message is returned so
+     * callers are not misled.</p>
+     *
      * @param ex the exception
-     * @return 409 response indicating a duplicate weight entry for the same date
+     * @return 409 response with a message describing the conflict
      */
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<String> handleDataIntegrityViolation(DataIntegrityViolationException ex) {
+        if (isWeightEntryDateConflict(ex)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body("A weight entry for this date already exists");
+        }
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body("A weight entry for this date already exists");
+                .body("The request conflicts with existing data.");
+    }
+
+    /**
+     * Determines whether the given exception was caused by a violation of the
+     * {@code weight_entry} table's unique entry-date constraint.
+     *
+     * @param ex the exception to inspect
+     * @return {@code true} if the cause is a Hibernate constraint violation on the weight entry date
+     */
+    private boolean isWeightEntryDateConflict(DataIntegrityViolationException ex) {
+        final Throwable cause = ex.getCause();
+        if (!(cause instanceof org.hibernate.exception.ConstraintViolationException constraintViolation)) {
+            return false;
+        }
+        final String constraintName = constraintViolation.getConstraintName();
+        return constraintName != null && constraintName.startsWith("weight_entry");
     }
 
     /**
