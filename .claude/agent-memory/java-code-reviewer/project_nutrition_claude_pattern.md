@@ -18,4 +18,4 @@ The nutrition module has an established pattern for Claude-API-backed services. 
 - All nutrition controllers share the same `@Tag(name="Nutrition", description="Nutrition profile, weight tracking and target calculation")`.
 - Transient DTOs (FoodDraftDTO, MealEstimateDTO) are never persisted; field names of MealEstimateDTO deliberately match `CreateMealEntryRequest` ad-hoc macro fields (kcal/proteinG/carbsG/fatG) so the estimate is a drop-in meal_entry payload.
 
-`NutritionExceptionHandler` has no unit tests for any of its mappings — the 422 mappings (LabelReadException, MealEstimateException) are untested by convention, so a missing handler test is a pre-existing gap, not a per-PR regression.
+`NutritionExceptionHandler` historically had no unit tests. As of the foods-pagination PR (2026-06, branch feature/nutrition-foods-pagination) a `NutritionExceptionHandlerTest` exists but covers only the new `handleConstraintViolation` 400 mapping. The 422 mappings (LabelReadException, MealEstimateException, BarcodeLookupException) and the 404/409/400 mappings remain untested — so a missing handler test for those is still a pre-existing gap, not a per-PR regression.

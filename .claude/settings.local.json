@@ -16,7 +16,10 @@
       "Bash(kubectl logs *)",
       "Bash(kubectl get *)",
       "Read(//home/marvin/workspace/smart-home-infrastructure/**)",
-      "Read(//home/marvin/workspace/**)"
+      "Read(//home/marvin/workspace/**)",
+      "Bash(echo \"EXIT: $?\")",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:patch-diff.githubusercontent.com)"
     ],
     "deny": [],
     "ask": []
