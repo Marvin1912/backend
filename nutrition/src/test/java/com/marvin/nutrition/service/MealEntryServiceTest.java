@@ -357,7 +357,7 @@ class MealEntryServiceTest {
         when(foodRepository.findAllById(any())).thenReturn(List.of());
         when(mealEntryMapper.toDTO(any(MealEntryEntity.class), isNull())).thenReturn(dto);
         when(dayTargetSnapshotRepository.findByEntryDateBetween(from, to)).thenReturn(List.of());
-        when(nutritionTargetService.getTargets()).thenReturn(Mono.just(liveTargets));
+        when(nutritionTargetService.getTargetsSync(any(LocalDate.class))).thenReturn(liveTargets);
 
         StepVerifier.create(mealEntryService.getDays(from, to))
                 .assertNext(summaries -> {
@@ -365,7 +365,7 @@ class MealEntryServiceTest {
                     assertEquals(from, summaries.get(0).date());
                     assertEquals(to, summaries.get(2).date());
 
-                    // days without entries have zero totals but still get the live targets
+                    // days without entries have zero totals but still get the date-aware live targets
                     assertEquals(0, BigDecimal.ZERO.compareTo(summaries.get(0).totals().kcal()));
                     assertEquals(2160, summaries.get(0).targets().targetKcal());
 
@@ -378,7 +378,9 @@ class MealEntryServiceTest {
 
         verify(mealEntryRepository).findByEntryDateBetweenOrderByEntryDateAscCreationDateAsc(from, to);
         verify(dayTargetSnapshotRepository).findByEntryDateBetween(from, to);
-        verify(nutritionTargetService).getTargets();
+        verify(nutritionTargetService).getTargetsSync(from);
+        verify(nutritionTargetService).getTargetsSync(from.plusDays(1));
+        verify(nutritionTargetService).getTargetsSync(to);
     }
 
     @Test
@@ -403,7 +405,7 @@ class MealEntryServiceTest {
                 .thenReturn(List.of());
         when(foodRepository.findAllById(any())).thenReturn(List.of());
         when(dayTargetSnapshotRepository.findByEntryDateBetween(from, to)).thenReturn(List.of(snapshot));
-        when(nutritionTargetService.getTargets()).thenReturn(Mono.just(liveTargets));
+        when(nutritionTargetService.getTargetsSync(to)).thenReturn(liveTargets);
 
         StepVerifier.create(mealEntryService.getDays(from, to))
                 .assertNext(summaries -> {
@@ -411,6 +413,9 @@ class MealEntryServiceTest {
                     assertEquals(2160, summaries.get(1).targets().targetKcal());
                 })
                 .verifyComplete();
+
+        verify(nutritionTargetService, never()).getTargetsSync(from);
+        verify(nutritionTargetService).getTargetsSync(to);
     }
 
     @Test
@@ -423,14 +428,64 @@ class MealEntryServiceTest {
                 .thenReturn(List.of());
         when(foodRepository.findAllById(any())).thenReturn(List.of());
         when(dayTargetSnapshotRepository.findByEntryDateBetween(from, to)).thenReturn(List.of());
-        when(nutritionTargetService.getTargets())
-                .thenReturn(Mono.error(new TargetCalculationException("No profile")));
+        when(nutritionTargetService.getTargetsSync(today))
+                .thenThrow(new TargetCalculationException("No profile"));
 
         StepVerifier.create(mealEntryService.getDays(from, to))
                 .assertNext(summaries -> {
                     assertEquals(1, summaries.size());
                     assertNull(summaries.get(0).targets());
                     assertNull(summaries.get(0).remaining());
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("getDays applies a different date-aware target per snapshot-less day instead of one uniform value")
+    void getDays_AppliesDifferentDateAwareTargetsPerSnapshotLessDay() {
+        final LocalDate from = today.minusDays(1);
+        final LocalDate to = today;
+
+        final TargetsDTO targetsForFrom = new TargetsDTO(1700, 2100, 2000, 150, 67, 248, "MIFFLIN_ST_JEOR");
+        final TargetsDTO targetsForTo = new TargetsDTO(1750, 2160, 2160, 160, 72, 252, "MIFFLIN_ST_JEOR");
+
+        when(mealEntryRepository.findByEntryDateBetweenOrderByEntryDateAscCreationDateAsc(from, to))
+                .thenReturn(List.of());
+        when(foodRepository.findAllById(any())).thenReturn(List.of());
+        when(dayTargetSnapshotRepository.findByEntryDateBetween(from, to)).thenReturn(List.of());
+        when(nutritionTargetService.getTargetsSync(from)).thenReturn(targetsForFrom);
+        when(nutritionTargetService.getTargetsSync(to)).thenReturn(targetsForTo);
+
+        StepVerifier.create(mealEntryService.getDays(from, to))
+                .assertNext(summaries -> {
+                    assertEquals(2, summaries.size());
+                    assertEquals(2000, summaries.get(0).targets().targetKcal());
+                    assertEquals(2160, summaries.get(1).targets().targetKcal());
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("getDays returns null targets only for the day whose target calculation fails")
+    void getDays_TargetCalculationFailsForOneDay_OthersUnaffected() {
+        final LocalDate from = today.minusDays(1);
+        final LocalDate to = today;
+
+        final TargetsDTO targetsForTo = new TargetsDTO(1750, 2160, 2160, 160, 72, 252, "MIFFLIN_ST_JEOR");
+
+        when(mealEntryRepository.findByEntryDateBetweenOrderByEntryDateAscCreationDateAsc(from, to))
+                .thenReturn(List.of());
+        when(foodRepository.findAllById(any())).thenReturn(List.of());
+        when(dayTargetSnapshotRepository.findByEntryDateBetween(from, to)).thenReturn(List.of());
+        when(nutritionTargetService.getTargetsSync(from)).thenThrow(new TargetCalculationException("No profile"));
+        when(nutritionTargetService.getTargetsSync(to)).thenReturn(targetsForTo);
+
+        StepVerifier.create(mealEntryService.getDays(from, to))
+                .assertNext(summaries -> {
+                    assertEquals(2, summaries.size());
+                    assertNull(summaries.get(0).targets());
+                    assertNull(summaries.get(0).remaining());
+                    assertEquals(2160, summaries.get(1).targets().targetKcal());
                 })
                 .verifyComplete();
     }

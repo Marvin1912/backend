@@ -172,10 +172,11 @@ public class MealEntryService {
 
     /**
      * Returns day summaries for every date within the given range (inclusive), in ascending date order.
-     * Entries, food names and target snapshots for the whole range are loaded in a single query each,
-     * so the cost does not grow with the number of days requested.
-     * If the nutrition target service cannot compute live targets (e.g. missing profile/weight),
-     * days without a persisted snapshot will have null targets and remaining.
+     * Entries, food names and target snapshots for the whole range are loaded in a single query each.
+     * For each date without a persisted snapshot, date-aware targets are resolved individually (as of
+     * that date's applicable weight/age), so the cost of resolving targets grows with the number of
+     * snapshot-less days in the range. If the nutrition target service cannot compute targets for a
+     * given date (e.g. missing profile/weight), that day's targets and remaining will be null.
      *
      * @param from the first date to include (inclusive)
      * @param to   the last date to include (inclusive)
@@ -206,24 +207,41 @@ public class MealEntryService {
                         .collect(Collectors.toMap(DayTargetSnapshotEntity::getEntryDate, this::toTargetsDTO))
         ).subscribeOn(Schedulers.boundedElastic());
 
-        final Mono<Optional<TargetsDTO>> liveTargetsMono = nutritionTargetService.getTargets()
-                .map(Optional::of)
-                .onErrorReturn(TargetCalculationException.class, Optional.empty());
-
-        return Mono.zip(entriesByDateMono, snapshotsByDateMono, liveTargetsMono)
-                .map(tuple -> {
+        return Mono.zip(entriesByDateMono, snapshotsByDateMono)
+                .flatMap(tuple -> {
                     final Map<LocalDate, List<MealEntryDTO>> entriesByDate = tuple.getT1();
                     final Map<LocalDate, TargetsDTO> snapshotsByDate = tuple.getT2();
-                    final TargetsDTO liveTargets = tuple.getT3().orElse(null);
 
-                    final List<DaySummaryDTO> summaries = new ArrayList<>();
-                    for (LocalDate date = from; !date.isAfter(to); date = date.plusDays(1)) {
-                        final List<MealEntryDTO> entries = entriesByDate.getOrDefault(date, List.of());
-                        final TargetsDTO targets = snapshotsByDate.getOrDefault(date, liveTargets);
-                        summaries.add(buildDaySummary(date, entries, targets));
-                    }
-                    return summaries;
+                    return Mono.fromCallable(() -> {
+                        final List<DaySummaryDTO> summaries = new ArrayList<>();
+                        for (LocalDate date = from; !date.isAfter(to); date = date.plusDays(1)) {
+                            final List<MealEntryDTO> entries = entriesByDate.getOrDefault(date, List.of());
+                            final TargetsDTO targets = resolveTargets(date, snapshotsByDate);
+                            summaries.add(buildDaySummary(date, entries, targets));
+                        }
+                        return summaries;
+                    }).subscribeOn(Schedulers.boundedElastic());
                 });
+    }
+
+    /**
+     * Resolves the nutrition targets applicable to the given date: the persisted snapshot if present,
+     * otherwise the date-aware live targets, or {@code null} if those cannot be computed.
+     *
+     * @param date            the date to resolve targets for
+     * @param snapshotsByDate persisted snapshot targets keyed by date
+     * @return the resolved targets, or null if unavailable
+     */
+    private TargetsDTO resolveTargets(LocalDate date, Map<LocalDate, TargetsDTO> snapshotsByDate) {
+        final TargetsDTO snapshot = snapshotsByDate.get(date);
+        if (snapshot != null) {
+            return snapshot;
+        }
+        try {
+            return nutritionTargetService.getTargetsSync(date);
+        } catch (final TargetCalculationException e) {
+            return null;
+        }
     }
 
     /**
