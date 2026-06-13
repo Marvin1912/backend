@@ -3,7 +3,6 @@ package com.marvin.nutrition.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -24,7 +23,6 @@ import com.marvin.nutrition.repository.MealEntryRepository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,7 +35,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
-/** Unit tests for {@link MealEntryService} covering all business logic paths. */
+/** Unit tests for {@link MealEntryService} covering CRUD delegation and day summary computation. */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("MealEntryService Tests")
 class MealEntryServiceTest {
@@ -58,15 +56,13 @@ class MealEntryServiceTest {
     private DayTargetSnapshotRepository dayTargetSnapshotRepository;
 
     @Mock
-    private DayTargetSnapshotService dayTargetSnapshotService;
+    private MealEntryWriteService mealEntryWriteService;
 
     @InjectMocks
     private MealEntryService mealEntryService;
 
     private UUID foodId;
     private UUID entryId;
-    private FoodEntity foodEntity;
-    private MealEntryEntity mealEntryEntity;
     private MealEntryDTO mealEntryDTO;
     private LocalDate today;
 
@@ -77,21 +73,6 @@ class MealEntryServiceTest {
         entryId = UUID.randomUUID();
         today = LocalDate.of(2026, 6, 7);
 
-        foodEntity = new FoodEntity();
-        foodEntity.setName("Test Food");
-        foodEntity.setKcalPer100(new BigDecimal("200.00"));
-        foodEntity.setProteinPer100(new BigDecimal("20.00"));
-        foodEntity.setCarbsPer100(new BigDecimal("10.00"));
-        foodEntity.setFatPer100(new BigDecimal("5.00"));
-
-        mealEntryEntity = new MealEntryEntity();
-        mealEntryEntity.setEntryDate(today);
-        mealEntryEntity.setMealType(MealType.LUNCH);
-        mealEntryEntity.setKcal(new BigDecimal("300.00"));
-        mealEntryEntity.setProteinG(new BigDecimal("30.00"));
-        mealEntryEntity.setCarbsG(new BigDecimal("15.00"));
-        mealEntryEntity.setFatG(new BigDecimal("7.50"));
-
         mealEntryDTO = new MealEntryDTO(
                 entryId, today, MealType.LUNCH, foodId, null,
                 new BigDecimal("150.00"),
@@ -101,312 +82,56 @@ class MealEntryServiceTest {
     }
 
     // -----------------------------------------------------------------------
-    // addEntry — food-backed snapshot correctness
+    // addEntry — delegation
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("addEntry snapshots macros correctly from food × quantityG (kcalPer100=200, qty=150 → kcal=300.00)")
-    void addEntry_FoodEntry_SnapshotsMacrosCorrectly() {
+    @DisplayName("addEntry delegates to MealEntryWriteService and returns its result")
+    void addEntry_DelegatesToMealEntryWriteService() {
         final CreateMealEntryRequest req = new CreateMealEntryRequest(
                 MealType.LUNCH, foodId, new BigDecimal("150"), null, null, null, null, null
         );
 
-        when(foodRepository.findById(foodId)).thenReturn(Optional.of(foodEntity));
-        when(mealEntryRepository.save(any(MealEntryEntity.class))).thenReturn(mealEntryEntity);
-        when(mealEntryMapper.toDTO(mealEntryEntity, "Test Food")).thenReturn(mealEntryDTO);
+        when(mealEntryWriteService.createEntry(today, req)).thenReturn(mealEntryDTO);
 
         StepVerifier.create(mealEntryService.addEntry(today, req))
                 .expectNext(mealEntryDTO)
                 .verifyComplete();
 
-        verify(mealEntryRepository).save(argThat(e ->
-                new BigDecimal("300.00").compareTo(e.getKcal()) == 0
-                        && new BigDecimal("30.00").compareTo(e.getProteinG()) == 0
-                        && new BigDecimal("15.00").compareTo(e.getCarbsG()) == 0
-                        && new BigDecimal("7.50").compareTo(e.getFatG()) == 0
-                        && new BigDecimal("150").compareTo(e.getQuantityG()) == 0
-                        && foodId.equals(e.getFoodId())
-        ));
-    }
-
-    @Test
-    @DisplayName("addEntry food-backed entry propagates food id and quantity to saved entity")
-    void addEntry_FoodEntry_PropagatesFoodIdAndQuantity() {
-        final CreateMealEntryRequest req = new CreateMealEntryRequest(
-                MealType.BREAKFAST, foodId, new BigDecimal("100"), null, null, null, null, null
-        );
-
-        when(foodRepository.findById(foodId)).thenReturn(Optional.of(foodEntity));
-        when(mealEntryRepository.save(any(MealEntryEntity.class))).thenReturn(mealEntryEntity);
-        when(mealEntryMapper.toDTO(mealEntryEntity, "Test Food")).thenReturn(mealEntryDTO);
-
-        StepVerifier.create(mealEntryService.addEntry(today, req))
-                .expectNextCount(1)
-                .verifyComplete();
-
-        verify(mealEntryRepository).save(argThat(e ->
-                foodId.equals(e.getFoodId()) && new BigDecimal("100").compareTo(e.getQuantityG()) == 0
-        ));
+        verify(mealEntryWriteService).createEntry(today, req);
     }
 
     // -----------------------------------------------------------------------
-    // addEntry — ad-hoc entry
+    // updateEntry — delegation
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("addEntry persists supplied macros for ad-hoc entry (no foodId)")
-    void addEntry_AdHocEntry_PersistsSuppliedMacros() {
-        final CreateMealEntryRequest req = new CreateMealEntryRequest(
-                MealType.SNACK, null, null, "Homemade soup",
-                new BigDecimal("250.00"), new BigDecimal("15.00"),
-                new BigDecimal("30.00"), new BigDecimal("8.00")
-        );
-
-        final MealEntryEntity saved = new MealEntryEntity();
-        saved.setDescription("Homemade soup");
-        saved.setKcal(new BigDecimal("250.00"));
-        saved.setProteinG(new BigDecimal("15.00"));
-        saved.setCarbsG(new BigDecimal("30.00"));
-        saved.setFatG(new BigDecimal("8.00"));
-
-        final MealEntryDTO adHocDTO = new MealEntryDTO(
-                UUID.randomUUID(), today, MealType.SNACK, null, "Homemade soup", null,
-                new BigDecimal("250.00"), new BigDecimal("15.00"),
-                new BigDecimal("30.00"), new BigDecimal("8.00"), null
-        );
-
-        when(mealEntryRepository.save(any(MealEntryEntity.class))).thenReturn(saved);
-        when(mealEntryMapper.toDTO(saved)).thenReturn(adHocDTO);
-
-        StepVerifier.create(mealEntryService.addEntry(today, req))
-                .expectNext(adHocDTO)
-                .verifyComplete();
-
-        verify(mealEntryRepository).save(argThat(e ->
-                e.getFoodId() == null
-                        && e.getQuantityG() == null
-                        && "Homemade soup".equals(e.getDescription())
-                        && new BigDecimal("250.00").compareTo(e.getKcal()) == 0
-        ));
-        verify(foodRepository, never()).findById(any());
-    }
-
-    // -----------------------------------------------------------------------
-    // addEntry — error paths
-    // -----------------------------------------------------------------------
-
-    @Test
-    @DisplayName("addEntry emits NoSuchElementException when food is not found")
-    void addEntry_FoodNotFound_EmitsNoSuchElementException() {
-        final CreateMealEntryRequest req = new CreateMealEntryRequest(
-                MealType.LUNCH, foodId, new BigDecimal("150"), null, null, null, null, null
-        );
-
-        when(foodRepository.findById(foodId)).thenReturn(Optional.empty());
-
-        StepVerifier.create(mealEntryService.addEntry(today, req))
-                .expectError(NoSuchElementException.class)
-                .verify();
-
-        verify(mealEntryRepository, never()).save(any());
-    }
-
-    @Test
-    @DisplayName("addEntry emits IllegalArgumentException when food entry has no quantityG")
-    void addEntry_FoodEntryMissingQuantityG_EmitsIllegalArgumentException() {
-        final CreateMealEntryRequest req = new CreateMealEntryRequest(
-                MealType.LUNCH, foodId, null, null, null, null, null, null
-        );
-
-        when(foodRepository.findById(foodId)).thenReturn(Optional.of(foodEntity));
-
-        StepVerifier.create(mealEntryService.addEntry(today, req))
-                .expectError(IllegalArgumentException.class)
-                .verify();
-
-        verify(mealEntryRepository, never()).save(any());
-    }
-
-    @Test
-    @DisplayName("addEntry emits IllegalArgumentException when ad-hoc entry has no description")
-    void addEntry_AdHocMissingDescription_EmitsIllegalArgumentException() {
-        final CreateMealEntryRequest req = new CreateMealEntryRequest(
-                MealType.SNACK, null, null, null,
-                new BigDecimal("250.00"), new BigDecimal("15.00"),
-                new BigDecimal("30.00"), new BigDecimal("8.00")
-        );
-
-        StepVerifier.create(mealEntryService.addEntry(today, req))
-                .expectError(IllegalArgumentException.class)
-                .verify();
-
-        verify(mealEntryRepository, never()).save(any());
-    }
-
-    @Test
-    @DisplayName("addEntry emits IllegalArgumentException when ad-hoc entry has no macros")
-    void addEntry_AdHocMissingMacros_EmitsIllegalArgumentException() {
-        final CreateMealEntryRequest req = new CreateMealEntryRequest(
-                MealType.SNACK, null, null, "Some food", null, null, null, null
-        );
-
-        StepVerifier.create(mealEntryService.addEntry(today, req))
-                .expectError(IllegalArgumentException.class)
-                .verify();
-
-        verify(mealEntryRepository, never()).save(any());
-    }
-
-    // -----------------------------------------------------------------------
-    // addEntry — day target snapshot persistence
-    // -----------------------------------------------------------------------
-
-    @Test
-    @DisplayName("addEntry delegates day-target snapshot creation to DayTargetSnapshotService")
-    void addEntry_DelegatesSnapshotCreationToDayTargetSnapshotService() {
-        final CreateMealEntryRequest req = new CreateMealEntryRequest(
-                MealType.SNACK, null, null, "Homemade soup",
-                new BigDecimal("250.00"), new BigDecimal("15.00"),
-                new BigDecimal("30.00"), new BigDecimal("8.00")
-        );
-
-        final MealEntryEntity saved = new MealEntryEntity();
-        saved.setDescription("Homemade soup");
-        saved.setKcal(new BigDecimal("250.00"));
-        saved.setProteinG(new BigDecimal("15.00"));
-        saved.setCarbsG(new BigDecimal("30.00"));
-        saved.setFatG(new BigDecimal("8.00"));
-
-        final MealEntryDTO adHocDTO = new MealEntryDTO(
-                UUID.randomUUID(), today, MealType.SNACK, null, "Homemade soup", null,
-                new BigDecimal("250.00"), new BigDecimal("15.00"),
-                new BigDecimal("30.00"), new BigDecimal("8.00"), null
-        );
-
-        when(mealEntryRepository.save(any(MealEntryEntity.class))).thenReturn(saved);
-        when(mealEntryMapper.toDTO(saved)).thenReturn(adHocDTO);
-
-        StepVerifier.create(mealEntryService.addEntry(today, req))
-                .expectNext(adHocDTO)
-                .verifyComplete();
-
-        verify(dayTargetSnapshotService).ensureSnapshot(today);
-    }
-
-    // -----------------------------------------------------------------------
-    // updateEntry
-    // -----------------------------------------------------------------------
-
-    @Test
-    @DisplayName("updateEntry re-snapshots macros when food entry quantity changes")
-    void updateEntry_FoodEntryQuantityChanged_ReSnapshotsMacros() {
-        mealEntryEntity.setFoodId(foodId);
-        mealEntryEntity.setQuantityG(new BigDecimal("150"));
-        mealEntryEntity.setKcal(new BigDecimal("300.00"));
-
-        final UpdateMealEntryRequest req = new UpdateMealEntryRequest(
-                null, new BigDecimal("200"), null, null, null, null, null
-        );
-
-        when(mealEntryRepository.findById(entryId)).thenReturn(Optional.of(mealEntryEntity));
-        when(foodRepository.findById(foodId)).thenReturn(Optional.of(foodEntity));
-        when(mealEntryRepository.save(any(MealEntryEntity.class))).thenReturn(mealEntryEntity);
-        when(mealEntryMapper.toDTO(mealEntryEntity, "Test Food")).thenReturn(mealEntryDTO);
-
-        StepVerifier.create(mealEntryService.updateEntry(entryId, req))
-                .expectNextCount(1)
-                .verifyComplete();
-
-        // kcalPer100=200, qty=200 → kcal = 200*200/100 = 400.00
-        verify(mealEntryRepository).save(argThat(e ->
-                new BigDecimal("400.00").compareTo(e.getKcal()) == 0
-                        && new BigDecimal("40.00").compareTo(e.getProteinG()) == 0
-                        && new BigDecimal("20.00").compareTo(e.getCarbsG()) == 0
-                        && new BigDecimal("10.00").compareTo(e.getFatG()) == 0
-                        && new BigDecimal("200").compareTo(e.getQuantityG()) == 0
-        ));
-    }
-
-    @Test
-    @DisplayName("updateEntry applies non-null macro values for ad-hoc entry")
-    void updateEntry_AdHocEntry_AppliesNonNullMacros() {
-        mealEntryEntity.setFoodId(null);
-        mealEntryEntity.setDescription("Old soup");
-        mealEntryEntity.setKcal(new BigDecimal("100.00"));
-
-        final UpdateMealEntryRequest req = new UpdateMealEntryRequest(
-                MealType.DINNER, null, "New soup",
-                new BigDecimal("350.00"), new BigDecimal("20.00"),
-                new BigDecimal("40.00"), new BigDecimal("10.00")
-        );
-
-        final MealEntryEntity updatedEntity = new MealEntryEntity();
-        updatedEntity.setDescription("New soup");
-        updatedEntity.setMealType(MealType.DINNER);
-        updatedEntity.setKcal(new BigDecimal("350.00"));
-
-        final MealEntryDTO updatedDTO = new MealEntryDTO(
-                entryId, today, MealType.DINNER, null, "New soup", null,
-                new BigDecimal("350.00"), new BigDecimal("20.00"),
-                new BigDecimal("40.00"), new BigDecimal("10.00"), null
-        );
-
-        when(mealEntryRepository.findById(entryId)).thenReturn(Optional.of(mealEntryEntity));
-        when(mealEntryRepository.save(any(MealEntryEntity.class))).thenReturn(updatedEntity);
-        when(mealEntryMapper.toDTO(updatedEntity)).thenReturn(updatedDTO);
-
-        StepVerifier.create(mealEntryService.updateEntry(entryId, req))
-                .expectNext(updatedDTO)
-                .verifyComplete();
-
-        verify(mealEntryRepository).save(argThat(e ->
-                MealType.DINNER.equals(e.getMealType())
-                        && "New soup".equals(e.getDescription())
-                        && new BigDecimal("350.00").compareTo(e.getKcal()) == 0
-        ));
-    }
-
-    @Test
-    @DisplayName("updateEntry emits NoSuchElementException when entry not found")
-    void updateEntry_NotFound_EmitsNoSuchElementException() {
+    @DisplayName("updateEntry delegates to MealEntryWriteService and returns its result")
+    void updateEntry_DelegatesToMealEntryWriteService() {
         final UpdateMealEntryRequest req = new UpdateMealEntryRequest(
                 MealType.DINNER, null, null, null, null, null, null
         );
 
-        when(mealEntryRepository.findById(entryId)).thenReturn(Optional.empty());
+        when(mealEntryWriteService.updateEntry(entryId, req)).thenReturn(mealEntryDTO);
 
         StepVerifier.create(mealEntryService.updateEntry(entryId, req))
-                .expectError(NoSuchElementException.class)
-                .verify();
+                .expectNext(mealEntryDTO)
+                .verifyComplete();
 
-        verify(mealEntryRepository, never()).save(any());
+        verify(mealEntryWriteService).updateEntry(entryId, req);
     }
 
     // -----------------------------------------------------------------------
-    // deleteEntry
+    // deleteEntry — delegation
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("deleteEntry emits NoSuchElementException when entry not found")
-    void deleteEntry_NotFound_EmitsNoSuchElementException() {
-        when(mealEntryRepository.findById(entryId)).thenReturn(Optional.empty());
-
-        StepVerifier.create(mealEntryService.deleteEntry(entryId))
-                .expectError(NoSuchElementException.class)
-                .verify();
-
-        verify(mealEntryRepository, never()).deleteById(any());
-    }
-
-    @Test
-    @DisplayName("deleteEntry deletes and completes when entry exists")
-    void deleteEntry_Exists_DeletesAndCompletes() {
-        when(mealEntryRepository.findById(entryId)).thenReturn(Optional.of(mealEntryEntity));
-
+    @DisplayName("deleteEntry delegates to MealEntryWriteService and completes")
+    void deleteEntry_DelegatesToMealEntryWriteService() {
         StepVerifier.create(mealEntryService.deleteEntry(entryId))
                 .verifyComplete();
 
-        verify(mealEntryRepository).delete(mealEntryEntity);
+        verify(mealEntryWriteService).deleteEntry(entryId);
     }
 
     // -----------------------------------------------------------------------
@@ -687,143 +412,8 @@ class MealEntryServiceTest {
     }
 
     // -----------------------------------------------------------------------
-    // foodName population
+    // getDay — foodName population
     // -----------------------------------------------------------------------
-
-    @Test
-    @DisplayName("addEntry populates foodName from food catalog for food-backed entry")
-    void addEntry_FoodEntry_PopulatesFoodName() {
-        final CreateMealEntryRequest req = new CreateMealEntryRequest(
-                MealType.LUNCH, foodId, new BigDecimal("150"), null, null, null, null, null
-        );
-
-        when(foodRepository.findById(foodId)).thenReturn(Optional.of(foodEntity));
-        when(mealEntryRepository.save(any(MealEntryEntity.class))).thenReturn(mealEntryEntity);
-        when(mealEntryMapper.toDTO(mealEntryEntity, "Test Food")).thenReturn(mealEntryDTO);
-
-        StepVerifier.create(mealEntryService.addEntry(today, req))
-                .assertNext(dto -> assertEquals("Test Food", dto.foodName()))
-                .verifyComplete();
-    }
-
-    @Test
-    @DisplayName("addEntry leaves foodName null for ad-hoc entry")
-    void addEntry_AdHocEntry_FoodNameIsNull() {
-        final CreateMealEntryRequest req = new CreateMealEntryRequest(
-                MealType.SNACK, null, null, "Homemade soup",
-                new BigDecimal("250.00"), new BigDecimal("15.00"),
-                new BigDecimal("30.00"), new BigDecimal("8.00")
-        );
-
-        final MealEntryEntity saved = new MealEntryEntity();
-        saved.setDescription("Homemade soup");
-        saved.setKcal(new BigDecimal("250.00"));
-        saved.setProteinG(new BigDecimal("15.00"));
-        saved.setCarbsG(new BigDecimal("30.00"));
-        saved.setFatG(new BigDecimal("8.00"));
-
-        final MealEntryDTO adHocDTO = new MealEntryDTO(
-                UUID.randomUUID(), today, MealType.SNACK, null, "Homemade soup", null,
-                new BigDecimal("250.00"), new BigDecimal("15.00"),
-                new BigDecimal("30.00"), new BigDecimal("8.00"), null
-        );
-
-        when(mealEntryRepository.save(any(MealEntryEntity.class))).thenReturn(saved);
-        when(mealEntryMapper.toDTO(saved)).thenReturn(adHocDTO);
-
-        StepVerifier.create(mealEntryService.addEntry(today, req))
-                .assertNext(dto -> assertNull(dto.foodName()))
-                .verifyComplete();
-    }
-
-    @Test
-    @DisplayName("updateEntry populates foodName for food-backed entry")
-    void updateEntry_FoodEntry_PopulatesFoodName() {
-        mealEntryEntity.setFoodId(foodId);
-        mealEntryEntity.setQuantityG(new BigDecimal("150"));
-
-        final UpdateMealEntryRequest req = new UpdateMealEntryRequest(
-                null, new BigDecimal("150"), null, null, null, null, null
-        );
-
-        when(mealEntryRepository.findById(entryId)).thenReturn(Optional.of(mealEntryEntity));
-        when(foodRepository.findById(foodId)).thenReturn(Optional.of(foodEntity));
-        when(mealEntryRepository.save(any(MealEntryEntity.class))).thenReturn(mealEntryEntity);
-        when(mealEntryMapper.toDTO(mealEntryEntity, "Test Food")).thenReturn(mealEntryDTO);
-
-        StepVerifier.create(mealEntryService.updateEntry(entryId, req))
-                .assertNext(dto -> assertEquals("Test Food", dto.foodName()))
-                .verifyComplete();
-    }
-
-    @Test
-    @DisplayName("updateEntry leaves foodName null for ad-hoc entry")
-    void updateEntry_AdHocEntry_FoodNameIsNull() {
-        mealEntryEntity.setFoodId(null);
-        mealEntryEntity.setDescription("Old soup");
-        mealEntryEntity.setKcal(new BigDecimal("100.00"));
-
-        final UpdateMealEntryRequest req = new UpdateMealEntryRequest(
-                null, null, "Updated soup", null, null, null, null
-        );
-
-        final MealEntryEntity savedEntity = new MealEntryEntity();
-        savedEntity.setDescription("Updated soup");
-
-        final MealEntryDTO adHocDTO = new MealEntryDTO(
-                entryId, today, MealType.LUNCH, null, "Updated soup", null,
-                new BigDecimal("100.00"), new BigDecimal("0.00"),
-                new BigDecimal("0.00"), new BigDecimal("0.00"), null
-        );
-
-        when(mealEntryRepository.findById(entryId)).thenReturn(Optional.of(mealEntryEntity));
-        when(mealEntryRepository.save(any(MealEntryEntity.class))).thenReturn(savedEntity);
-        when(mealEntryMapper.toDTO(savedEntity)).thenReturn(adHocDTO);
-
-        StepVerifier.create(mealEntryService.updateEntry(entryId, req))
-                .assertNext(dto -> assertNull(dto.foodName()))
-                .verifyComplete();
-    }
-
-    @Test
-    @DisplayName("addEntry snapshots foodName onto the saved entity for a food-backed entry")
-    void addEntry_FoodEntry_SnapshotsFoodNameOntoSavedEntity() {
-        final CreateMealEntryRequest req = new CreateMealEntryRequest(
-                MealType.LUNCH, foodId, new BigDecimal("150"), null, null, null, null, null
-        );
-
-        when(foodRepository.findById(foodId)).thenReturn(Optional.of(foodEntity));
-        when(mealEntryRepository.save(any(MealEntryEntity.class))).thenReturn(mealEntryEntity);
-        when(mealEntryMapper.toDTO(mealEntryEntity, "Test Food")).thenReturn(mealEntryDTO);
-
-        StepVerifier.create(mealEntryService.addEntry(today, req))
-                .expectNextCount(1)
-                .verifyComplete();
-
-        verify(mealEntryRepository).save(argThat(e -> "Test Food".equals(e.getFoodName())));
-    }
-
-    @Test
-    @DisplayName("updateEntry re-snapshots foodName onto the saved entity for a food-backed entry")
-    void updateEntry_FoodEntry_ReSnapshotsFoodNameOntoSavedEntity() {
-        mealEntryEntity.setFoodId(foodId);
-        mealEntryEntity.setQuantityG(new BigDecimal("150"));
-
-        final UpdateMealEntryRequest req = new UpdateMealEntryRequest(
-                null, new BigDecimal("200"), null, null, null, null, null
-        );
-
-        when(mealEntryRepository.findById(entryId)).thenReturn(Optional.of(mealEntryEntity));
-        when(foodRepository.findById(foodId)).thenReturn(Optional.of(foodEntity));
-        when(mealEntryRepository.save(any(MealEntryEntity.class))).thenReturn(mealEntryEntity);
-        when(mealEntryMapper.toDTO(mealEntryEntity, "Test Food")).thenReturn(mealEntryDTO);
-
-        StepVerifier.create(mealEntryService.updateEntry(entryId, req))
-                .expectNextCount(1)
-                .verifyComplete();
-
-        verify(mealEntryRepository).save(argThat(e -> "Test Food".equals(e.getFoodName())));
-    }
 
     @Test
     @DisplayName("getDay falls back to snapshotted foodName for an orphaned entry whose food was deleted")
@@ -865,11 +455,13 @@ class MealEntryServiceTest {
     void getDay_FoodBackedEntries_ResolvesFoodNameViaBatchLookup() {
         final UUID foodId2 = UUID.randomUUID();
 
+        final FoodEntity foodEntity1 = new FoodEntity();
+        foodEntity1.setId(foodId);
+        foodEntity1.setName("Test Food");
+
         final FoodEntity food2 = new FoodEntity();
         food2.setId(foodId2);
         food2.setName("Brown Rice");
-
-        foodEntity.setId(foodId);
 
         final MealEntryEntity foodEntry1 = new MealEntryEntity();
         foodEntry1.setFoodId(foodId);
@@ -900,7 +492,7 @@ class MealEntryServiceTest {
 
         when(mealEntryRepository.findByEntryDateOrderByCreationDateAsc(today))
                 .thenReturn(List.of(foodEntry1, foodEntry2));
-        when(foodRepository.findAllById(any())).thenReturn(List.of(foodEntity, food2));
+        when(foodRepository.findAllById(any())).thenReturn(List.of(foodEntity1, food2));
         when(mealEntryMapper.toDTO(foodEntry1, "Test Food")).thenReturn(dtoWithFoodName1);
         when(mealEntryMapper.toDTO(foodEntry2, "Brown Rice")).thenReturn(dtoWithFoodName2);
         when(nutritionTargetService.getTargets())

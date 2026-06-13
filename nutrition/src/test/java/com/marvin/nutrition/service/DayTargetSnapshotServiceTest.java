@@ -1,5 +1,7 @@
 package com.marvin.nutrition.service;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.never;
@@ -18,6 +20,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
 /** Unit tests for {@link DayTargetSnapshotService}. */
 @ExtendWith(MockitoExtension.class)
@@ -55,7 +58,7 @@ class DayTargetSnapshotServiceTest {
 
         dayTargetSnapshotService.ensureSnapshot(today);
 
-        verify(dayTargetSnapshotRepository).save(argThat(snapshot ->
+        verify(dayTargetSnapshotRepository).saveAndFlush(argThat(snapshot ->
                 today.equals(snapshot.getEntryDate())
                         && snapshot.getBmr() == 1750
                         && snapshot.getMaintenanceKcal() == 2160
@@ -74,8 +77,8 @@ class DayTargetSnapshotServiceTest {
 
         dayTargetSnapshotService.ensureSnapshot(today);
 
-        verify(dayTargetSnapshotRepository, never()).save(org.mockito.ArgumentMatchers.any());
-        verify(nutritionTargetService, never()).getTargetsSync(org.mockito.ArgumentMatchers.any());
+        verify(dayTargetSnapshotRepository, never()).saveAndFlush(any());
+        verify(nutritionTargetService, never()).getTargetsSync(any());
     }
 
     @Test
@@ -86,7 +89,19 @@ class DayTargetSnapshotServiceTest {
 
         dayTargetSnapshotService.ensureSnapshot(today);
 
-        verify(dayTargetSnapshotRepository, never()).save(org.mockito.ArgumentMatchers.any());
+        verify(dayTargetSnapshotRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("ensureSnapshot completes normally when saveAndFlush throws DataIntegrityViolationException "
+            + "due to a concurrent insert for the same date")
+    void ensureSnapshot_ConcurrentDuplicateInsert_CompletesNormally() {
+        when(dayTargetSnapshotRepository.findById(today)).thenReturn(Optional.empty());
+        doReturn(targets).when(nutritionTargetService).getTargetsSync(today);
+        when(dayTargetSnapshotRepository.saveAndFlush(any()))
+                .thenThrow(new DataIntegrityViolationException("duplicate key value violates unique constraint"));
+
+        assertDoesNotThrow(() -> dayTargetSnapshotService.ensureSnapshot(today));
     }
 
     // -----------------------------------------------------------------------
@@ -130,8 +145,8 @@ class DayTargetSnapshotServiceTest {
 
         dayTargetSnapshotService.refreshSnapshotIfExists(today);
 
-        verify(dayTargetSnapshotRepository, never()).save(org.mockito.ArgumentMatchers.any());
-        verify(nutritionTargetService, never()).getTargetsSync(org.mockito.ArgumentMatchers.any());
+        verify(dayTargetSnapshotRepository, never()).save(any());
+        verify(nutritionTargetService, never()).getTargetsSync(any());
     }
 
     @Test
@@ -152,6 +167,6 @@ class DayTargetSnapshotServiceTest {
 
         dayTargetSnapshotService.refreshSnapshotIfExists(today);
 
-        verify(dayTargetSnapshotRepository, never()).save(org.mockito.ArgumentMatchers.any());
+        verify(dayTargetSnapshotRepository, never()).save(any());
     }
 }

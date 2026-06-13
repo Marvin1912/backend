@@ -4,7 +4,10 @@ import com.marvin.nutrition.dto.TargetsDTO;
 import com.marvin.nutrition.entity.DayTargetSnapshotEntity;
 import com.marvin.nutrition.repository.DayTargetSnapshotRepository;
 import java.time.LocalDate;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Owns read/write logic for per-day nutrition target snapshots.
@@ -36,8 +39,22 @@ public class DayTargetSnapshotService {
      * and the daily nutrition targets can currently be computed. Silently does nothing if a
      * snapshot already exists or if targets cannot be computed yet (e.g. no profile/weight data).
      *
+     * <p>Runs in its own {@code REQUIRES_NEW} transaction so that a unique-constraint violation
+     * caused by a concurrent insert for the same date only aborts this nested transaction,
+     * leaving the caller's transaction unaffected. Such a violation is treated as success, since
+     * it means a concurrent request already created the snapshot for this date.</p>
+     *
+     * <p><strong>Transaction boundary trade-off:</strong> because this runs in {@code REQUIRES_NEW},
+     * it is a separate transaction from any caller (e.g. {@code MealEntryWriteService.createEntry}).
+     * This is intentional: it prevents a snapshot-insert race from poisoning or rolling back the
+     * caller's transaction on Postgres. The downside is that this snapshot transaction can commit
+     * even if the caller's outer transaction later fails, leaving a snapshot for a date that has
+     * no corresponding meal entry. Such an orphan snapshot is harmless — {@code getDay} tolerates
+     * a snapshot existing for a date with no entries.</p>
+     *
      * @param date the date to snapshot targets for
      */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void ensureSnapshot(LocalDate date) {
         if (dayTargetSnapshotRepository.findById(date).isPresent()) {
             return;
@@ -48,7 +65,17 @@ public class DayTargetSnapshotService {
         } catch (TargetCalculationException e) {
             return;
         }
-        dayTargetSnapshotRepository.save(toSnapshot(new DayTargetSnapshotEntity(), date, targets));
+        // Race window: if two concurrent ensureSnapshot(date) calls reach here for the same new
+        // date, both findById checks above returned empty before either insert happened. Both
+        // saveAndFlush calls then merge() a transient entity with no row found for its id, so both
+        // attempt an INSERT at flush time. Only one INSERT can succeed; the other collides with the
+        // unique constraint on entry_date and raises DataIntegrityViolationException, which we treat
+        // as success below.
+        try {
+            dayTargetSnapshotRepository.saveAndFlush(toSnapshot(new DayTargetSnapshotEntity(), date, targets));
+        } catch (DataIntegrityViolationException e) {
+            // A concurrent request already created the snapshot for this date; treat as success.
+        }
     }
 
     /**
@@ -58,6 +85,7 @@ public class DayTargetSnapshotService {
      *
      * @param date the date whose snapshot should be refreshed
      */
+    @Transactional
     public void refreshSnapshotIfExists(LocalDate date) {
         final DayTargetSnapshotEntity existing = dayTargetSnapshotRepository.findById(date).orElse(null);
         if (existing == null) {
