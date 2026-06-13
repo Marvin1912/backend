@@ -44,6 +44,14 @@ public class DayTargetSnapshotService {
      * leaving the caller's transaction unaffected. Such a violation is treated as success, since
      * it means a concurrent request already created the snapshot for this date.</p>
      *
+     * <p><strong>Transaction boundary trade-off:</strong> because this runs in {@code REQUIRES_NEW},
+     * it is a separate transaction from any caller (e.g. {@code MealEntryWriteService.createEntry}).
+     * This is intentional: it prevents a snapshot-insert race from poisoning or rolling back the
+     * caller's transaction on Postgres. The downside is that this snapshot transaction can commit
+     * even if the caller's outer transaction later fails, leaving a snapshot for a date that has
+     * no corresponding meal entry. Such an orphan snapshot is harmless — {@code getDay} tolerates
+     * a snapshot existing for a date with no entries.</p>
+     *
      * @param date the date to snapshot targets for
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -57,6 +65,12 @@ public class DayTargetSnapshotService {
         } catch (TargetCalculationException e) {
             return;
         }
+        // Race window: if two concurrent ensureSnapshot(date) calls reach here for the same new
+        // date, both findById checks above returned empty before either insert happened. Both
+        // saveAndFlush calls then merge() a transient entity with no row found for its id, so both
+        // attempt an INSERT at flush time. Only one INSERT can succeed; the other collides with the
+        // unique constraint on entry_date and raises DataIntegrityViolationException, which we treat
+        // as success below.
         try {
             dayTargetSnapshotRepository.saveAndFlush(toSnapshot(new DayTargetSnapshotEntity(), date, targets));
         } catch (DataIntegrityViolationException e) {
@@ -71,6 +85,7 @@ public class DayTargetSnapshotService {
      *
      * @param date the date whose snapshot should be refreshed
      */
+    @Transactional
     public void refreshSnapshotIfExists(LocalDate date) {
         final DayTargetSnapshotEntity existing = dayTargetSnapshotRepository.findById(date).orElse(null);
         if (existing == null) {
