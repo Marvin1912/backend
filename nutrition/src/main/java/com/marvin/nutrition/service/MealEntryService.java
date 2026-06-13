@@ -172,10 +172,11 @@ public class MealEntryService {
 
     /**
      * Returns day summaries for every date within the given range (inclusive), in ascending date order.
-     * Entries, food names and target snapshots for the whole range are loaded in a single query each,
-     * so the cost does not grow with the number of days requested.
-     * If the nutrition target service cannot compute live targets (e.g. missing profile/weight),
-     * days without a persisted snapshot will have null targets and remaining.
+     * Entries, food names and target snapshots for the whole range are loaded in a single query each.
+     * For each date without a persisted snapshot, date-aware targets are resolved individually (as of
+     * that date's applicable weight/age), so the cost of resolving targets grows with the number of
+     * snapshot-less days in the range. If the nutrition target service cannot compute targets for a
+     * given date (e.g. missing profile/weight), that day's targets and remaining will be null.
      *
      * @param from the first date to include (inclusive)
      * @param to   the last date to include (inclusive)
