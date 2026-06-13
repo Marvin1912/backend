@@ -171,7 +171,7 @@ class MealEntryServiceTest {
         when(foodRepository.findAllById(any())).thenReturn(List.of());
         when(mealEntryMapper.toDTO(any(MealEntryEntity.class), isNull()))
                 .thenReturn(dto1, dto2);
-        when(nutritionTargetService.getTargets()).thenReturn(Mono.just(targets));
+        when(nutritionTargetService.getTargets(today)).thenReturn(Mono.just(targets));
 
         StepVerifier.create(mealEntryService.getDay(today))
                 .assertNext(summary -> {
@@ -201,7 +201,7 @@ class MealEntryServiceTest {
         when(mealEntryRepository.findByEntryDateOrderByCreationDateAsc(today))
                 .thenReturn(List.of());
         when(foodRepository.findAllById(List.of())).thenReturn(List.of());
-        when(nutritionTargetService.getTargets())
+        when(nutritionTargetService.getTargets(today))
                 .thenReturn(Mono.error(new TargetCalculationException("No profile")));
 
         StepVerifier.create(mealEntryService.getDay(today))
@@ -219,7 +219,7 @@ class MealEntryServiceTest {
         when(mealEntryRepository.findByEntryDateOrderByCreationDateAsc(today))
                 .thenReturn(List.of());
         when(foodRepository.findAllById(List.of())).thenReturn(List.of());
-        when(nutritionTargetService.getTargets())
+        when(nutritionTargetService.getTargets(today))
                 .thenReturn(Mono.error(new TargetCalculationException("No data")));
 
         StepVerifier.create(mealEntryService.getDay(today))
@@ -293,7 +293,7 @@ class MealEntryServiceTest {
                 .thenReturn(List.of());
         when(foodRepository.findAllById(List.of())).thenReturn(List.of());
         when(dayTargetSnapshotRepository.findById(today)).thenReturn(Optional.empty());
-        when(nutritionTargetService.getTargets()).thenReturn(Mono.just(liveTargets));
+        when(nutritionTargetService.getTargets(today)).thenReturn(Mono.just(liveTargets));
 
         StepVerifier.create(mealEntryService.getDay(today))
                 .assertNext(summary -> {
@@ -301,6 +301,30 @@ class MealEntryServiceTest {
                     assertEquals(160, summary.targets().proteinG());
                 })
                 .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("getDay with no snapshot for a historical date computes targets as of that date, not today")
+    void getDay_NoSnapshot_HistoricalDate_UsesDateAwareTargets() {
+        final LocalDate historicalDate = today.minusDays(30);
+        final TargetsDTO historicalTargets = new TargetsDTO(1700, 2100, 2100, 150, 67, 248, "MIFFLIN_ST_JEOR");
+
+        when(mealEntryRepository.findByEntryDateOrderByCreationDateAsc(historicalDate))
+                .thenReturn(List.of());
+        when(foodRepository.findAllById(List.of())).thenReturn(List.of());
+        when(dayTargetSnapshotRepository.findById(historicalDate)).thenReturn(Optional.empty());
+        when(nutritionTargetService.getTargets(historicalDate)).thenReturn(Mono.just(historicalTargets));
+
+        StepVerifier.create(mealEntryService.getDay(historicalDate))
+                .assertNext(summary -> {
+                    assertEquals(2100, summary.targets().targetKcal());
+                    assertEquals(150, summary.targets().proteinG());
+                    assertEquals(67, summary.targets().fatG());
+                    assertEquals(248, summary.targets().carbsG());
+                })
+                .verifyComplete();
+
+        verify(nutritionTargetService, never()).getTargets();
     }
 
     // -----------------------------------------------------------------------
@@ -437,7 +461,7 @@ class MealEntryServiceTest {
                 .thenReturn(List.of(orphanedEntry));
         when(foodRepository.findAllById(List.of())).thenReturn(List.of());
         when(mealEntryMapper.toDTO(orphanedEntry, "Deleted Food")).thenReturn(orphanedDTO);
-        when(nutritionTargetService.getTargets())
+        when(nutritionTargetService.getTargets(today))
                 .thenReturn(Mono.error(new TargetCalculationException("No profile")));
 
         StepVerifier.create(mealEntryService.getDay(today))
@@ -495,7 +519,7 @@ class MealEntryServiceTest {
         when(foodRepository.findAllById(any())).thenReturn(List.of(foodEntity1, food2));
         when(mealEntryMapper.toDTO(foodEntry1, "Test Food")).thenReturn(dtoWithFoodName1);
         when(mealEntryMapper.toDTO(foodEntry2, "Brown Rice")).thenReturn(dtoWithFoodName2);
-        when(nutritionTargetService.getTargets())
+        when(nutritionTargetService.getTargets(today))
                 .thenReturn(Mono.error(new TargetCalculationException("No profile")));
 
         StepVerifier.create(mealEntryService.getDay(today))

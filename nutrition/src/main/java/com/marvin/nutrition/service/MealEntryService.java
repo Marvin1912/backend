@@ -145,7 +145,7 @@ public class MealEntryService {
             if (snapshot.isPresent()) {
                 return Mono.just(snapshot);
             }
-            return nutritionTargetService.getTargets()
+            return nutritionTargetService.getTargets(date)
                     .map(Optional::of)
                     .onErrorReturn(TargetCalculationException.class, Optional.empty());
         });
