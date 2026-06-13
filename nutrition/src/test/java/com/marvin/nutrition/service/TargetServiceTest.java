@@ -1,7 +1,9 @@
 package com.marvin.nutrition.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.marvin.nutrition.dto.TargetsDTO;
 import com.marvin.nutrition.entity.ActivityLevel;
@@ -327,7 +329,7 @@ class TargetServiceTest {
 
         final TargetsDTO result = targetService.computeTargets(p, w);
 
-        assertEquals(false, result.macrosFeasible());
+        assertFalse(result.macrosFeasible());
     }
 
     @Test
@@ -340,7 +342,8 @@ class TargetServiceTest {
 
         final TargetsDTO result = targetService.computeTargets(p, w);
 
-        assertEquals(true, result.macrosFeasible());
+        assertTrue(result.macrosFeasible());
+        assertTrue(result.carbsG() > 0);
     }
 
     // -----------------------------------------------------------------------
