@@ -16,4 +16,12 @@ public interface DayTargetSnapshotRepository extends JpaRepository<DayTargetSnap
      * @return list of snapshots within the range
      */
     List<DayTargetSnapshotEntity> findByEntryDateBetween(LocalDate from, LocalDate to);
+
+    /**
+     * Returns all target snapshots whose date is on or after the given date.
+     *
+     * @param from the first date to include
+     * @return list of snapshots on or after the given date
+     */
+    List<DayTargetSnapshotEntity> findByEntryDateGreaterThanEqual(LocalDate from);
 }

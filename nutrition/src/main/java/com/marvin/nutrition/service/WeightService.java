@@ -52,8 +52,9 @@ public class WeightService {
 
     /**
      * Creates a new weight entry.
-     * Refreshes the day-target snapshot for the entry date if one already exists, so that the
-     * newly recorded weight is reflected in that day's targets.
+     * Refreshes existing day-target snapshots for the date range affected by this entry (from its
+     * entry date up to, but not including, the next later weight entry's date, or to the end if
+     * none exists), so that the newly recorded weight is reflected in those days' targets.
      *
      * @param request the entry date and weight in kg
      * @return a Mono emitting the created weight entry DTO
@@ -64,16 +65,16 @@ public class WeightService {
             entity.setEntryDate(request.entryDate());
             entity.setWeightKg(request.weightKg());
             final WeightEntryDTO dto = weightEntryMapper.toDTO(weightEntryRepository.save(entity));
-            dayTargetSnapshotService.refreshSnapshotIfExists(request.entryDate());
+            dayTargetSnapshotService.refreshSnapshotsFrom(request.entryDate());
             return dto;
         }).subscribeOn(Schedulers.boundedElastic());
     }
 
     /**
      * Updates an existing weight entry.
-     * Refreshes the day-target snapshot for the new entry date if one already exists. If the entry
-     * date changed, also refreshes the snapshot for the previous date, since the applicable weight
-     * for that day may now differ.
+     * Refreshes existing day-target snapshots for the date range affected by the new entry date. If
+     * the entry date changed, also refreshes the range affected by the previous date, since the
+     * applicable weight for those days may now differ.
      * Emits {@link NoSuchElementException} if no entry with the given id exists.
      *
      * @param id      the id of the entry to update
@@ -88,9 +89,9 @@ public class WeightService {
             entity.setEntryDate(request.entryDate());
             entity.setWeightKg(request.weightKg());
             final WeightEntryDTO dto = weightEntryMapper.toDTO(weightEntryRepository.save(entity));
-            dayTargetSnapshotService.refreshSnapshotIfExists(request.entryDate());
+            dayTargetSnapshotService.refreshSnapshotsFrom(request.entryDate());
             if (!oldEntryDate.equals(request.entryDate())) {
-                dayTargetSnapshotService.refreshSnapshotIfExists(oldEntryDate);
+                dayTargetSnapshotService.refreshSnapshotsFrom(oldEntryDate);
             }
             return dto;
         }).subscribeOn(Schedulers.boundedElastic());
@@ -98,6 +99,8 @@ public class WeightService {
 
     /**
      * Deletes the weight entry with the given id.
+     * Refreshes existing day-target snapshots for the date range that was affected by the deleted
+     * entry, since the applicable weight for those days may now differ.
      * Emits {@link NoSuchElementException} if no entry with the given id exists.
      *
      * @param id the id of the entry to delete
@@ -105,10 +108,11 @@ public class WeightService {
      */
     public Mono<Void> delete(Long id) {
         return Mono.fromCallable(() -> {
-            if (!weightEntryRepository.existsById(id)) {
-                throw new NoSuchElementException("Weight entry not found: " + id);
-            }
+            final WeightEntryEntity entity = weightEntryRepository.findById(id)
+                    .orElseThrow(() -> new NoSuchElementException("Weight entry not found: " + id));
+            final LocalDate entryDate = entity.getEntryDate();
             weightEntryRepository.deleteById(id);
+            dayTargetSnapshotService.refreshSnapshotsFrom(entryDate);
             return null;
         }).subscribeOn(Schedulers.boundedElastic()).then();
     }

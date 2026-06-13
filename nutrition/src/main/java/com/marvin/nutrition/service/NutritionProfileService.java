@@ -15,16 +15,22 @@ public class NutritionProfileService {
 
     private final ProfileRepository profileRepository;
     private final ProfileMapper profileMapper;
+    private final DayTargetSnapshotService dayTargetSnapshotService;
 
     /**
      * Creates a new NutritionProfileService.
      *
-     * @param profileRepository JPA repository for the profile row
-     * @param profileMapper     MapStruct mapper for entity/DTO conversion
+     * @param profileRepository        JPA repository for the profile row
+     * @param profileMapper            MapStruct mapper for entity/DTO conversion
+     * @param dayTargetSnapshotService service for refreshing per-day nutrition target snapshots
      */
-    public NutritionProfileService(ProfileRepository profileRepository, ProfileMapper profileMapper) {
+    public NutritionProfileService(
+            ProfileRepository profileRepository,
+            ProfileMapper profileMapper,
+            DayTargetSnapshotService dayTargetSnapshotService) {
         this.profileRepository = profileRepository;
         this.profileMapper = profileMapper;
+        this.dayTargetSnapshotService = dayTargetSnapshotService;
     }
 
     /**
@@ -41,6 +47,8 @@ public class NutritionProfileService {
 
     /**
      * Creates or replaces the single nutrition profile row.
+     * Refreshes all existing day-target snapshots afterwards, since any profile change can affect
+     * the daily targets computed for previously snapshotted days.
      *
      * @param dto the profile data to persist
      * @return a Mono emitting the saved profile DTO
@@ -58,7 +66,9 @@ public class NutritionProfileService {
             entity.setProteinPerKg(dto.proteinPerKg() != null ? dto.proteinPerKg() : java.math.BigDecimal.valueOf(2.0));
             entity.setFatPct(dto.fatPct() != null ? dto.fatPct() : java.math.BigDecimal.valueOf(0.30));
             entity.setBasalKcal(dto.basalKcal());
-            return profileMapper.toDTO(profileRepository.save(entity));
+            final ProfileDTO saved = profileMapper.toDTO(profileRepository.save(entity));
+            dayTargetSnapshotService.refreshAllSnapshots();
+            return saved;
         }).subscribeOn(Schedulers.boundedElastic());
     }
 }
