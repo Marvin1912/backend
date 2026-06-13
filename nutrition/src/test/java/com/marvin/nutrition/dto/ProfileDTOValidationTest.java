@@ -10,6 +10,7 @@ import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.Period;
 import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -128,6 +129,102 @@ public class ProfileDTOValidationTest {
         assertTrue(
                 violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("fatPct")),
                 "Expected the violation to be on the 'fatPct' property"
+        );
+    }
+
+    @Test
+    @DisplayName("ProfileDTO with a future birthDate yields a violation")
+    void profile_futureBirthDate_yieldsViolation() {
+        final ProfileDTO profile = new ProfileDTO(
+                null,
+                Sex.MALE,
+                LocalDate.now().plus(Period.ofDays(1)),
+                new BigDecimal("175"),
+                ActivityLevel.MODERATE,
+                Goal.MAINTAIN,
+                new BigDecimal("2.0"),
+                new BigDecimal("0.30"),
+                1800
+        );
+
+        final Set<ConstraintViolation<ProfileDTO>> violations = validator.validate(profile);
+
+        assertFalse(violations.isEmpty(), "Expected a violation for a future birthDate");
+        assertTrue(
+                violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("birthDate")),
+                "Expected the violation to be on the 'birthDate' property"
+        );
+    }
+
+    @Test
+    @DisplayName("ProfileDTO with heightCm above the sane upper bound yields a violation")
+    void profile_heightCmAboveUpperBound_yieldsViolation() {
+        final ProfileDTO profile = new ProfileDTO(
+                null,
+                Sex.MALE,
+                LocalDate.of(1990, 5, 15),
+                new BigDecimal("301"),
+                ActivityLevel.MODERATE,
+                Goal.MAINTAIN,
+                new BigDecimal("2.0"),
+                new BigDecimal("0.30"),
+                1800
+        );
+
+        final Set<ConstraintViolation<ProfileDTO>> violations = validator.validate(profile);
+
+        assertFalse(violations.isEmpty(), "Expected a violation for heightCm above the sane upper bound");
+        assertTrue(
+                violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("heightCm")),
+                "Expected the violation to be on the 'heightCm' property"
+        );
+    }
+
+    @Test
+    @DisplayName("ProfileDTO with proteinPerKg above the sane upper bound yields a violation")
+    void profile_proteinPerKgAboveUpperBound_yieldsViolation() {
+        final ProfileDTO profile = new ProfileDTO(
+                null,
+                Sex.MALE,
+                LocalDate.of(1990, 5, 15),
+                new BigDecimal("175"),
+                ActivityLevel.MODERATE,
+                Goal.MAINTAIN,
+                new BigDecimal("10.5"),
+                new BigDecimal("0.30"),
+                1800
+        );
+
+        final Set<ConstraintViolation<ProfileDTO>> violations = validator.validate(profile);
+
+        assertFalse(violations.isEmpty(), "Expected a violation for proteinPerKg above the sane upper bound");
+        assertTrue(
+                violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("proteinPerKg")),
+                "Expected the violation to be on the 'proteinPerKg' property"
+        );
+    }
+
+    @Test
+    @DisplayName("ProfileDTO with basalKcal above the sane upper bound yields a violation")
+    void profile_basalKcalAboveUpperBound_yieldsViolation() {
+        final ProfileDTO profile = new ProfileDTO(
+                null,
+                Sex.MALE,
+                LocalDate.of(1990, 5, 15),
+                new BigDecimal("175"),
+                ActivityLevel.MODERATE,
+                Goal.MAINTAIN,
+                new BigDecimal("2.0"),
+                new BigDecimal("0.30"),
+                10001
+        );
+
+        final Set<ConstraintViolation<ProfileDTO>> violations = validator.validate(profile);
+
+        assertFalse(violations.isEmpty(), "Expected a violation for basalKcal above the sane upper bound");
+        assertTrue(
+                violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("basalKcal")),
+                "Expected the violation to be on the 'basalKcal' property"
         );
     }
 }

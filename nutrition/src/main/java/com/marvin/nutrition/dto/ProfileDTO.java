@@ -5,7 +5,9 @@ import com.marvin.nutrition.entity.Goal;
 import com.marvin.nutrition.entity.Sex;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Past;
 import jakarta.validation.constraints.Positive;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -33,11 +35,13 @@ public record ProfileDTO(
         Sex sex,
 
         @NotNull
+        @Past
         @Schema(description = "Date of birth", example = "1990-05-15")
         LocalDate birthDate,
 
         @NotNull
         @Positive
+        @DecimalMax("300")
         @Schema(description = "Height in centimetres", example = "175")
         BigDecimal heightCm,
 
@@ -50,6 +54,7 @@ public record ProfileDTO(
         Goal goal,
 
         @Positive
+        @DecimalMax("10")
         @Schema(description = "Grams of protein per kg body weight", example = "2.0")
         BigDecimal proteinPerKg,
 
@@ -60,6 +65,7 @@ public record ProfileDTO(
         BigDecimal fatPct,
 
         @Positive
+        @Max(10000)
         @Schema(description = "Manual BMR override in kcal; null uses Mifflin–St Jeor formula", example = "1800")
         Integer basalKcal
 ) {
