@@ -1,7 +1,9 @@
 package com.marvin.nutrition.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.marvin.nutrition.dto.TargetsDTO;
 import com.marvin.nutrition.entity.ActivityLevel;
@@ -311,6 +313,37 @@ class TargetServiceTest {
         final TargetsDTO result = targetService.computeTargets(p, w);
 
         assertEquals(0, result.carbsG());
+    }
+
+    /**
+     * Same scenario as {@link #compute_HighProteinFatExceedsTarget_CarbsClampedToZero()}: protein+fat
+     * kcal (1280) exceeds targetKcal (1180), so the macro split is infeasible and must be signalled.
+     */
+    @Test
+    @DisplayName("macrosFeasible is false when protein+fat kcal exceeds targetKcal")
+    void compute_HighProteinFatExceedsTarget_MacrosFeasibleIsFalse() {
+        final LocalDate birthDate = LocalDate.now().minusYears(30);
+        final ProfileEntity p = profile(Sex.FEMALE, birthDate, 160.0,
+                ActivityLevel.SEDENTARY, Goal.CUT, 3.5, 0.55, 1400);
+        final WeightEntryEntity w = weight(45.0);
+
+        final TargetsDTO result = targetService.computeTargets(p, w);
+
+        assertFalse(result.macrosFeasible());
+    }
+
+    @Test
+    @DisplayName("macrosFeasible is true when protein+fat kcal does not exceed targetKcal")
+    void compute_NormalMacros_MacrosFeasibleIsTrue() {
+        final LocalDate birthDate = LocalDate.now().minusYears(30);
+        final ProfileEntity p = profile(Sex.MALE, birthDate, 175.0,
+                ActivityLevel.MODERATE, Goal.MAINTAIN, 2.0, 0.30, null);
+        final WeightEntryEntity w = weight(80.0);
+
+        final TargetsDTO result = targetService.computeTargets(p, w);
+
+        assertTrue(result.macrosFeasible());
+        assertTrue(result.carbsG() > 0);
     }
 
     // -----------------------------------------------------------------------
