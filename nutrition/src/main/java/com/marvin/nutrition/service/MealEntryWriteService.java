@@ -11,6 +11,8 @@ import com.marvin.nutrition.repository.MealEntryRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -81,6 +83,42 @@ public class MealEntryWriteService {
 
         dayTargetSnapshotService.ensureSnapshot(date);
         return dto;
+    }
+
+    /**
+     * Logs multiple new meal entries for the given date in a single transaction and ensures a
+     * day-target snapshot exists for it. Each request is processed the same way as
+     * {@link #createEntry(LocalDate, CreateMealEntryRequest)}: food-backed entries (non-null
+     * {@code foodId}) have their macros snapshotted from the food catalog, ad-hoc entries persist
+     * the supplied macro values directly. The day-target snapshot is ensured exactly once after
+     * all entries have been saved.
+     * Throws {@link NoSuchElementException} if any referenced food is not found, rolling back the
+     * whole batch.
+     * Throws {@link IllegalArgumentException} if required fields are missing for any entry's mode.
+     *
+     * @param date     the date to log the entries for
+     * @param requests the create requests, one per entry to be logged
+     * @return the created meal entry DTOs, in the same order as {@code requests}
+     */
+    @Transactional
+    public List<MealEntryDTO> createEntries(LocalDate date, List<CreateMealEntryRequest> requests) {
+        final List<MealEntryDTO> created = new ArrayList<>();
+        for (final CreateMealEntryRequest req : requests) {
+            final MealEntryEntity entity = new MealEntryEntity();
+            entity.setEntryDate(date);
+            entity.setMealType(req.mealType());
+
+            if (req.foodId() != null) {
+                final String foodName = buildFoodEntry(entity, req);
+                created.add(mealEntryMapper.toDTO(mealEntryRepository.save(entity), foodName));
+            } else {
+                buildAdHocEntry(entity, req);
+                created.add(mealEntryMapper.toDTO(mealEntryRepository.save(entity)));
+            }
+        }
+
+        dayTargetSnapshotService.ensureSnapshot(date);
+        return created;
     }
 
     /**

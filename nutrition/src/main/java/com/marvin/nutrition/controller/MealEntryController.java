@@ -1,5 +1,6 @@
 package com.marvin.nutrition.controller;
 
+import com.marvin.nutrition.dto.CreateMealEntriesRequest;
 import com.marvin.nutrition.dto.CreateMealEntryRequest;
 import com.marvin.nutrition.dto.DaySummaryDTO;
 import com.marvin.nutrition.dto.MealEntryDTO;
@@ -85,6 +86,44 @@ public class MealEntryController {
                     final URI location = URI.create(ENTRIES_LOCATION_PREFIX + created.id());
                     return ResponseEntity.status(HttpStatus.CREATED).location(location).body(created);
                 });
+    }
+
+    /**
+     * Logs multiple new meal entries for the given date in a single database transaction and
+     * returns 201 Created with the created entries as a JSON array (no Location header).
+     *
+     * @param date the date to log the entries for
+     * @param req  the batch create request body, containing a non-empty list of entries
+     * @return a Mono with 201 Created and the created meal entry DTOs, or 404 if any referenced food is not found
+     */
+    @PostMapping("/nutrition/days/{date}/entries/batch")
+    @Operation(
+            summary = "Log multiple meal entries in one transaction",
+            description = "Adds multiple meal entries for the given day in a single database transaction. "
+                    + "Each entry follows the same rules as POST /nutrition/days/{date}/entries: "
+                    + "supply foodId for food-backed entries (macros are snapshotted); "
+                    + "omit foodId and supply description + macros for ad-hoc entries. "
+                    + "Unlike the single-entry endpoint, the response body is a JSON array and no "
+                    + "Location header is set. If any entry references an unknown food, the whole "
+                    + "batch is rolled back.",
+            responses = {
+                @ApiResponse(
+                        responseCode = "201",
+                        description = "Meal entries created",
+                        content = @Content(array = @ArraySchema(schema = @Schema(implementation = MealEntryDTO.class)))
+                ),
+                @ApiResponse(responseCode = "400", description = "Validation failed: empty list or invalid entry"),
+                @ApiResponse(responseCode = "404", description = "Referenced food not found; nothing was persisted")
+            }
+    )
+    public Mono<ResponseEntity<List<MealEntryDTO>>> addEntries(
+            @PathVariable
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            @Parameter(description = "Date of the meal entries (ISO-8601)", example = "2026-06-07") LocalDate date,
+            @Valid @RequestBody CreateMealEntriesRequest req) {
+        return mealEntryService.addEntries(date, req.entries())
+                .map(created -> ResponseEntity.status(HttpStatus.CREATED).body(created))
+                .onErrorReturn(NoSuchElementException.class, ResponseEntity.notFound().build());
     }
 
     /**

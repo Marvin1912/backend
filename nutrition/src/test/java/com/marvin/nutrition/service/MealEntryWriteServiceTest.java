@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -20,6 +21,7 @@ import com.marvin.nutrition.repository.FoodRepository;
 import com.marvin.nutrition.repository.MealEntryRepository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.UUID;
@@ -508,5 +510,99 @@ class MealEntryWriteServiceTest {
         mealEntryWriteService.updateEntry(entryId, req);
 
         verify(mealEntryRepository).save(argThat(e -> "Test Food".equals(e.getFoodName())));
+    }
+
+    // -----------------------------------------------------------------------
+    // createEntries — batch creation
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("createEntries saves macros for multiple food-backed entries and ensures snapshot once")
+    void createEntries_MultipleFoodEntries_SnapshotsMacrosAndEnsuresSnapshotOnce() {
+        final CreateMealEntryRequest req1 = new CreateMealEntryRequest(
+                MealType.LUNCH, foodId, new BigDecimal("150"), null, null, null, null, null
+        );
+        final CreateMealEntryRequest req2 = new CreateMealEntryRequest(
+                MealType.DINNER, foodId, new BigDecimal("100"), null, null, null, null, null
+        );
+
+        when(foodRepository.findById(foodId)).thenReturn(Optional.of(foodEntity));
+        when(mealEntryRepository.save(any(MealEntryEntity.class))).thenReturn(mealEntryEntity);
+        when(mealEntryMapper.toDTO(mealEntryEntity, "Test Food")).thenReturn(mealEntryDTO);
+
+        final List<MealEntryDTO> result =
+                mealEntryWriteService.createEntries(today, List.of(req1, req2));
+
+        assertEquals(2, result.size());
+        assertEquals(mealEntryDTO, result.get(0));
+        assertEquals(mealEntryDTO, result.get(1));
+        verify(mealEntryRepository, times(2)).save(argThat(e ->
+                foodId.equals(e.getFoodId())
+        ));
+        verify(dayTargetSnapshotService, times(1)).ensureSnapshot(today);
+    }
+
+    @Test
+    @DisplayName("createEntries saves a mix of food-backed and ad-hoc entries correctly")
+    void createEntries_MixOfFoodAndAdHocEntries_SavesBothCorrectly() {
+        final CreateMealEntryRequest foodReq = new CreateMealEntryRequest(
+                MealType.LUNCH, foodId, new BigDecimal("150"), null, null, null, null, null
+        );
+        final CreateMealEntryRequest adHocReq = new CreateMealEntryRequest(
+                MealType.SNACK, null, null, "Homemade soup",
+                new BigDecimal("250.00"), new BigDecimal("15.00"),
+                new BigDecimal("30.00"), new BigDecimal("8.00")
+        );
+
+        final MealEntryEntity adHocSaved = new MealEntryEntity();
+        adHocSaved.setDescription("Homemade soup");
+        adHocSaved.setKcal(new BigDecimal("250.00"));
+        adHocSaved.setProteinG(new BigDecimal("15.00"));
+        adHocSaved.setCarbsG(new BigDecimal("30.00"));
+        adHocSaved.setFatG(new BigDecimal("8.00"));
+
+        final MealEntryDTO adHocDTO = new MealEntryDTO(
+                UUID.randomUUID(), today, MealType.SNACK, null, "Homemade soup", null,
+                new BigDecimal("250.00"), new BigDecimal("15.00"),
+                new BigDecimal("30.00"), new BigDecimal("8.00"), null
+        );
+
+        when(foodRepository.findById(foodId)).thenReturn(Optional.of(foodEntity));
+        when(mealEntryRepository.save(any(MealEntryEntity.class))).thenAnswer(invocation -> {
+            final MealEntryEntity entity = invocation.getArgument(0);
+            return entity.getFoodId() != null ? mealEntryEntity : adHocSaved;
+        });
+        when(mealEntryMapper.toDTO(mealEntryEntity, "Test Food")).thenReturn(mealEntryDTO);
+        when(mealEntryMapper.toDTO(adHocSaved)).thenReturn(adHocDTO);
+
+        final List<MealEntryDTO> result =
+                mealEntryWriteService.createEntries(today, List.of(foodReq, adHocReq));
+
+        assertEquals(2, result.size());
+        assertEquals(mealEntryDTO, result.get(0));
+        assertEquals(adHocDTO, result.get(1));
+        verify(dayTargetSnapshotService, times(1)).ensureSnapshot(today);
+    }
+
+    @Test
+    @DisplayName("createEntries throws NoSuchElementException for unknown foodId and never calls ensureSnapshot")
+    void createEntries_UnknownFoodId_ThrowsAndNeverEnsuresSnapshot() {
+        final UUID unknownFoodId = UUID.randomUUID();
+        final CreateMealEntryRequest validReq = new CreateMealEntryRequest(
+                MealType.LUNCH, foodId, new BigDecimal("150"), null, null, null, null, null
+        );
+        final CreateMealEntryRequest invalidReq = new CreateMealEntryRequest(
+                MealType.DINNER, unknownFoodId, new BigDecimal("100"), null, null, null, null, null
+        );
+
+        when(foodRepository.findById(foodId)).thenReturn(Optional.of(foodEntity));
+        when(foodRepository.findById(unknownFoodId)).thenReturn(Optional.empty());
+        when(mealEntryRepository.save(any(MealEntryEntity.class))).thenReturn(mealEntryEntity);
+        when(mealEntryMapper.toDTO(mealEntryEntity, "Test Food")).thenReturn(mealEntryDTO);
+
+        assertThrows(NoSuchElementException.class, () ->
+                mealEntryWriteService.createEntries(today, List.of(validReq, invalidReq)));
+
+        verify(dayTargetSnapshotService, never()).ensureSnapshot(any());
     }
 }
