@@ -31,4 +31,14 @@ public interface WeightEntryRepository extends JpaRepository<WeightEntryEntity, 
      * @return list of all weight entries, newest first
      */
     List<WeightEntryEntity> findAllByOrderByEntryDateDesc();
+
+    /**
+     * Returns the earliest weight entry with an entry date strictly after the given date, ordered
+     * by entry date ascending. Used to determine the upper bound (exclusive) of the date range for
+     * which a given weight entry is applicable.
+     *
+     * @param date the date to find the next weight entry after
+     * @return an Optional containing the next entry, or empty if no entry exists after that date
+     */
+    Optional<WeightEntryEntity> findTopByEntryDateGreaterThanOrderByEntryDateAsc(LocalDate date);
 }

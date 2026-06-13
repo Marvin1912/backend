@@ -2,8 +2,11 @@ package com.marvin.nutrition.service;
 
 import com.marvin.nutrition.dto.TargetsDTO;
 import com.marvin.nutrition.entity.DayTargetSnapshotEntity;
+import com.marvin.nutrition.entity.WeightEntryEntity;
 import com.marvin.nutrition.repository.DayTargetSnapshotRepository;
+import com.marvin.nutrition.repository.WeightEntryRepository;
 import java.time.LocalDate;
+import java.util.List;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -20,18 +23,22 @@ public class DayTargetSnapshotService {
 
     private final DayTargetSnapshotRepository dayTargetSnapshotRepository;
     private final NutritionTargetService nutritionTargetService;
+    private final WeightEntryRepository weightEntryRepository;
 
     /**
      * Creates a new DayTargetSnapshotService.
      *
      * @param dayTargetSnapshotRepository JPA repository for per-day nutrition target snapshots
      * @param nutritionTargetService      service for computing daily nutrition targets
+     * @param weightEntryRepository       JPA repository for weight entries
      */
     public DayTargetSnapshotService(
             DayTargetSnapshotRepository dayTargetSnapshotRepository,
-            NutritionTargetService nutritionTargetService) {
+            NutritionTargetService nutritionTargetService,
+            WeightEntryRepository weightEntryRepository) {
         this.dayTargetSnapshotRepository = dayTargetSnapshotRepository;
         this.nutritionTargetService = nutritionTargetService;
+        this.weightEntryRepository = weightEntryRepository;
     }
 
     /**
@@ -98,6 +105,57 @@ public class DayTargetSnapshotService {
             return;
         }
         dayTargetSnapshotRepository.save(toSnapshot(existing, date, targets));
+    }
+
+    /**
+     * Recomputes and overwrites all existing day-target snapshots whose date falls within the range
+     * affected by a weight entry change starting at {@code fromDate}.
+     *
+     * <p>The affected range is {@code [fromDate, nextWeightEntryDate)} if a later weight entry
+     * exists, or {@code [fromDate, +inf)} otherwise. For each existing snapshot in that range, the
+     * targets are recomputed via {@link NutritionTargetService#getTargetsSync(LocalDate)} and saved.
+     * Snapshots for dates where targets cannot currently be computed (e.g. no profile data) are left
+     * untouched. Dates without an existing snapshot are not created.</p>
+     *
+     * @param fromDate the first date (inclusive) of the affected range
+     */
+    @Transactional
+    public void refreshSnapshotsFrom(LocalDate fromDate) {
+        final List<DayTargetSnapshotEntity> snapshots = weightEntryRepository
+                .findTopByEntryDateGreaterThanOrderByEntryDateAsc(fromDate)
+                .map(WeightEntryEntity::getEntryDate)
+                .map(nextWeightDate -> dayTargetSnapshotRepository.findByEntryDateBetween(fromDate, nextWeightDate.minusDays(1)))
+                .orElseGet(() -> dayTargetSnapshotRepository.findByEntryDateGreaterThanEqual(fromDate));
+
+        snapshots.forEach(this::refreshSnapshot);
+    }
+
+    /**
+     * Recomputes and overwrites every existing day-target snapshot.
+     *
+     * <p>Snapshots for dates where targets cannot currently be computed (e.g. no profile data) are
+     * left untouched.</p>
+     */
+    @Transactional
+    public void refreshAllSnapshots() {
+        dayTargetSnapshotRepository.findAll().forEach(this::refreshSnapshot);
+    }
+
+    /**
+     * Recomputes the given existing snapshot's targets and saves it, unless targets cannot
+     * currently be computed for its date, in which case it is left untouched.
+     *
+     * @param snapshot the existing snapshot entity to refresh
+     */
+    private void refreshSnapshot(DayTargetSnapshotEntity snapshot) {
+        final LocalDate date = snapshot.getEntryDate();
+        final TargetsDTO targets;
+        try {
+            targets = nutritionTargetService.getTargetsSync(date);
+        } catch (TargetCalculationException e) {
+            return;
+        }
+        dayTargetSnapshotRepository.save(toSnapshot(snapshot, date, targets));
     }
 
     /**

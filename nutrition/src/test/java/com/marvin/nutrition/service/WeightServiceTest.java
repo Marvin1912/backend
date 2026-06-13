@@ -56,8 +56,8 @@ class WeightServiceTest {
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("create persists the entry and refreshes the day-target snapshot for the entry date")
-    void create_PersistsEntryAndRefreshesSnapshotForEntryDate() {
+    @DisplayName("create persists the entry and refreshes the day-target snapshot range starting at the entry date")
+    void create_PersistsEntryAndRefreshesSnapshotRangeForEntryDate() {
         final CreateWeightEntryRequest request = new CreateWeightEntryRequest(today, new BigDecimal("80.50"));
         final WeightEntryEntity saved = new WeightEntryEntity();
         saved.setEntryDate(today);
@@ -70,7 +70,7 @@ class WeightServiceTest {
                 .expectNext(weightEntryDTO)
                 .verifyComplete();
 
-        verify(dayTargetSnapshotService).refreshSnapshotIfExists(today);
+        verify(dayTargetSnapshotService).refreshSnapshotsFrom(today);
     }
 
     // -----------------------------------------------------------------------
@@ -89,12 +89,12 @@ class WeightServiceTest {
                 .verify();
 
         verify(weightEntryRepository, never()).save(any());
-        verify(dayTargetSnapshotService, never()).refreshSnapshotIfExists(any());
+        verify(dayTargetSnapshotService, never()).refreshSnapshotsFrom(any());
     }
 
     @Test
-    @DisplayName("update refreshes the snapshot only for the new date when the entry date is unchanged")
-    void update_DateUnchanged_RefreshesSnapshotOnceForNewDate() {
+    @DisplayName("update refreshes the snapshot range only starting at the new date when the entry date is unchanged")
+    void update_DateUnchanged_RefreshesSnapshotRangeOnceForNewDate() {
         final WeightEntryEntity existing = new WeightEntryEntity();
         existing.setId(1L);
         existing.setEntryDate(today);
@@ -110,13 +110,13 @@ class WeightServiceTest {
                 .expectNext(weightEntryDTO)
                 .verifyComplete();
 
-        verify(dayTargetSnapshotService).refreshSnapshotIfExists(today);
-        verify(dayTargetSnapshotService, org.mockito.Mockito.times(1)).refreshSnapshotIfExists(any());
+        verify(dayTargetSnapshotService).refreshSnapshotsFrom(today);
+        verify(dayTargetSnapshotService, org.mockito.Mockito.times(1)).refreshSnapshotsFrom(any());
     }
 
     @Test
-    @DisplayName("update refreshes the snapshot for both the old and new date when the entry date changes")
-    void update_DateChanged_RefreshesSnapshotForOldAndNewDate() {
+    @DisplayName("update refreshes the snapshot ranges for both the old and new date when the entry date changes")
+    void update_DateChanged_RefreshesSnapshotRangesForOldAndNewDate() {
         final LocalDate oldDate = today.minusDays(1);
         final WeightEntryEntity existing = new WeightEntryEntity();
         existing.setId(1L);
@@ -133,8 +133,42 @@ class WeightServiceTest {
                 .expectNext(weightEntryDTO)
                 .verifyComplete();
 
-        verify(dayTargetSnapshotService).refreshSnapshotIfExists(today);
-        verify(dayTargetSnapshotService).refreshSnapshotIfExists(oldDate);
+        verify(dayTargetSnapshotService).refreshSnapshotsFrom(today);
+        verify(dayTargetSnapshotService).refreshSnapshotsFrom(oldDate);
+    }
+
+    // -----------------------------------------------------------------------
+    // delete
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("delete emits NoSuchElementException when entry not found")
+    void delete_NotFound_EmitsNoSuchElementException() {
+        when(weightEntryRepository.findById(1L)).thenReturn(Optional.empty());
+
+        StepVerifier.create(weightService.delete(1L))
+                .expectError(NoSuchElementException.class)
+                .verify();
+
+        verify(weightEntryRepository, never()).deleteById(any());
+        verify(dayTargetSnapshotService, never()).refreshSnapshotsFrom(any());
+    }
+
+    @Test
+    @DisplayName("delete removes the entry and refreshes the day-target snapshot range starting at its entry date")
+    void delete_RemovesEntryAndRefreshesSnapshotRangeForEntryDate() {
+        final WeightEntryEntity existing = new WeightEntryEntity();
+        existing.setId(1L);
+        existing.setEntryDate(today);
+        existing.setWeightKg(new BigDecimal("79.00"));
+
+        when(weightEntryRepository.findById(1L)).thenReturn(Optional.of(existing));
+
+        StepVerifier.create(weightService.delete(1L))
+                .verifyComplete();
+
+        verify(weightEntryRepository).deleteById(1L);
+        verify(dayTargetSnapshotService).refreshSnapshotsFrom(today);
     }
 
     // -----------------------------------------------------------------------

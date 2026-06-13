@@ -37,11 +37,14 @@ class NutritionProfileServiceTest {
     @Mock
     private ProfileMapper profileMapper;
 
+    @Mock
+    private DayTargetSnapshotService dayTargetSnapshotService;
+
     private NutritionProfileService nutritionProfileService;
 
     @BeforeEach
     void setUp() {
-        nutritionProfileService = new NutritionProfileService(profileRepository, profileMapper);
+        nutritionProfileService = new NutritionProfileService(profileRepository, profileMapper, dayTargetSnapshotService);
     }
 
     private ProfileDTO dto() {
@@ -102,6 +105,7 @@ class NutritionProfileServiceTest {
         final ArgumentCaptor<ProfileEntity> captor = ArgumentCaptor.forClass(ProfileEntity.class);
         verify(profileRepository).save(captor.capture());
         assertEquals(ProfileEntity.SINGLETON_ID, captor.getValue().getId());
+        verify(dayTargetSnapshotService).refreshAllSnapshots();
     }
 
     @Test
@@ -123,6 +127,7 @@ class NutritionProfileServiceTest {
         verify(profileRepository).save(captor.capture());
         assertEquals(ProfileEntity.SINGLETON_ID, captor.getValue().getId());
         verify(profileRepository, never()).findAll();
+        verify(dayTargetSnapshotService).refreshAllSnapshots();
     }
 
     @Test

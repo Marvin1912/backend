@@ -10,8 +10,11 @@ import static org.mockito.Mockito.when;
 
 import com.marvin.nutrition.dto.TargetsDTO;
 import com.marvin.nutrition.entity.DayTargetSnapshotEntity;
+import com.marvin.nutrition.entity.WeightEntryEntity;
 import com.marvin.nutrition.repository.DayTargetSnapshotRepository;
+import com.marvin.nutrition.repository.WeightEntryRepository;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -32,6 +35,9 @@ class DayTargetSnapshotServiceTest {
 
     @Mock
     private NutritionTargetService nutritionTargetService;
+
+    @Mock
+    private WeightEntryRepository weightEntryRepository;
 
     @InjectMocks
     private DayTargetSnapshotService dayTargetSnapshotService;
@@ -168,5 +174,147 @@ class DayTargetSnapshotServiceTest {
         dayTargetSnapshotService.refreshSnapshotIfExists(today);
 
         verify(dayTargetSnapshotRepository, never()).save(any());
+    }
+
+    // -----------------------------------------------------------------------
+    // refreshSnapshotsFrom
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("refreshSnapshotsFrom refreshes all existing snapshots from the given date up to "
+            + "(but not including) the next weight entry's date")
+    void refreshSnapshotsFrom_NextWeightEntryExists_RefreshesSnapshotsUpToNextWeightDate() {
+        final LocalDate from = today;
+        final LocalDate nextWeightDate = today.plusDays(5);
+        final WeightEntryEntity nextWeightEntry = new WeightEntryEntity();
+        nextWeightEntry.setEntryDate(nextWeightDate);
+
+        final DayTargetSnapshotEntity snapshotDay1 = new DayTargetSnapshotEntity();
+        snapshotDay1.setEntryDate(today.plusDays(1));
+        final DayTargetSnapshotEntity snapshotDay3 = new DayTargetSnapshotEntity();
+        snapshotDay3.setEntryDate(today.plusDays(3));
+
+        when(weightEntryRepository.findTopByEntryDateGreaterThanOrderByEntryDateAsc(from))
+                .thenReturn(Optional.of(nextWeightEntry));
+        when(dayTargetSnapshotRepository.findByEntryDateBetween(from, nextWeightDate.minusDays(1)))
+                .thenReturn(List.of(snapshotDay1, snapshotDay3));
+        doReturn(targets).when(nutritionTargetService).getTargetsSync(any(LocalDate.class));
+
+        dayTargetSnapshotService.refreshSnapshotsFrom(from);
+
+        verify(dayTargetSnapshotRepository).save(argThat(snapshot ->
+                today.plusDays(1).equals(snapshot.getEntryDate()) && snapshot.getBmr() == 1750));
+        verify(dayTargetSnapshotRepository).save(argThat(snapshot ->
+                today.plusDays(3).equals(snapshot.getEntryDate()) && snapshot.getBmr() == 1750));
+        verify(dayTargetSnapshotRepository, never()).findByEntryDateGreaterThanEqual(any());
+    }
+
+    @Test
+    @DisplayName("refreshSnapshotsFrom refreshes all existing snapshots from the given date onward "
+            + "when there is no later weight entry")
+    void refreshSnapshotsFrom_NoNextWeightEntry_RefreshesSnapshotsToEndOfRange() {
+        final LocalDate from = today;
+        final DayTargetSnapshotEntity snapshotFar = new DayTargetSnapshotEntity();
+        snapshotFar.setEntryDate(today.plusDays(30));
+
+        when(weightEntryRepository.findTopByEntryDateGreaterThanOrderByEntryDateAsc(from))
+                .thenReturn(Optional.empty());
+        when(dayTargetSnapshotRepository.findByEntryDateGreaterThanEqual(from))
+                .thenReturn(List.of(snapshotFar));
+        doReturn(targets).when(nutritionTargetService).getTargetsSync(any(LocalDate.class));
+
+        dayTargetSnapshotService.refreshSnapshotsFrom(from);
+
+        verify(dayTargetSnapshotRepository).save(argThat(snapshot ->
+                today.plusDays(30).equals(snapshot.getEntryDate()) && snapshot.getBmr() == 1750));
+        verify(dayTargetSnapshotRepository, never()).findByEntryDateBetween(any(), any());
+    }
+
+    @Test
+    @DisplayName("refreshSnapshotsFrom does nothing when there are no existing snapshots in range")
+    void refreshSnapshotsFrom_NoSnapshotsInRange_DoesNothing() {
+        final LocalDate from = today;
+
+        when(weightEntryRepository.findTopByEntryDateGreaterThanOrderByEntryDateAsc(from))
+                .thenReturn(Optional.empty());
+        when(dayTargetSnapshotRepository.findByEntryDateGreaterThanEqual(from)).thenReturn(List.of());
+
+        dayTargetSnapshotService.refreshSnapshotsFrom(from);
+
+        verify(dayTargetSnapshotRepository, never()).save(any());
+        verify(nutritionTargetService, never()).getTargetsSync(any());
+    }
+
+    @Test
+    @DisplayName("refreshSnapshotsFrom leaves a snapshot untouched when targets cannot be computed for its date")
+    void refreshSnapshotsFrom_TargetsUnavailableForDate_LeavesThatSnapshotUntouched() {
+        final LocalDate from = today;
+        final DayTargetSnapshotEntity snapshotDay1 = new DayTargetSnapshotEntity();
+        snapshotDay1.setEntryDate(today.plusDays(1));
+        final DayTargetSnapshotEntity snapshotDay2 = new DayTargetSnapshotEntity();
+        snapshotDay2.setEntryDate(today.plusDays(2));
+
+        when(weightEntryRepository.findTopByEntryDateGreaterThanOrderByEntryDateAsc(from))
+                .thenReturn(Optional.empty());
+        when(dayTargetSnapshotRepository.findByEntryDateGreaterThanEqual(from))
+                .thenReturn(List.of(snapshotDay1, snapshotDay2));
+        when(nutritionTargetService.getTargetsSync(today.plusDays(1)))
+                .thenThrow(new TargetCalculationException("No profile"));
+        doReturn(targets).when(nutritionTargetService).getTargetsSync(today.plusDays(2));
+
+        dayTargetSnapshotService.refreshSnapshotsFrom(from);
+
+        verify(dayTargetSnapshotRepository, never()).save(argThat(snapshot ->
+                today.plusDays(1).equals(snapshot.getEntryDate())));
+        verify(dayTargetSnapshotRepository).save(argThat(snapshot ->
+                today.plusDays(2).equals(snapshot.getEntryDate())));
+    }
+
+    // -----------------------------------------------------------------------
+    // refreshAllSnapshots
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("refreshAllSnapshots refreshes every existing snapshot")
+    void refreshAllSnapshots_RefreshesEveryExistingSnapshot() {
+        final DayTargetSnapshotEntity snapshot1 = new DayTargetSnapshotEntity();
+        snapshot1.setEntryDate(today);
+        final DayTargetSnapshotEntity snapshot2 = new DayTargetSnapshotEntity();
+        snapshot2.setEntryDate(today.plusDays(10));
+
+        when(dayTargetSnapshotRepository.findAll()).thenReturn(List.of(snapshot1, snapshot2));
+        doReturn(targets).when(nutritionTargetService).getTargetsSync(any(LocalDate.class));
+
+        dayTargetSnapshotService.refreshAllSnapshots();
+
+        verify(dayTargetSnapshotRepository).save(argThat(snapshot ->
+                today.equals(snapshot.getEntryDate()) && snapshot.getBmr() == 1750));
+        verify(dayTargetSnapshotRepository).save(argThat(snapshot ->
+                today.plusDays(10).equals(snapshot.getEntryDate()) && snapshot.getBmr() == 1750));
+    }
+
+    @Test
+    @DisplayName("refreshAllSnapshots leaves a snapshot untouched when targets cannot be computed for its date")
+    void refreshAllSnapshots_TargetsUnavailableForDate_LeavesThatSnapshotUntouched() {
+        final DayTargetSnapshotEntity snapshot1 = new DayTargetSnapshotEntity();
+        snapshot1.setEntryDate(today);
+
+        when(dayTargetSnapshotRepository.findAll()).thenReturn(List.of(snapshot1));
+        when(nutritionTargetService.getTargetsSync(today)).thenThrow(new TargetCalculationException("No profile"));
+
+        dayTargetSnapshotService.refreshAllSnapshots();
+
+        verify(dayTargetSnapshotRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("refreshAllSnapshots does nothing when no snapshots exist")
+    void refreshAllSnapshots_NoSnapshots_DoesNothing() {
+        when(dayTargetSnapshotRepository.findAll()).thenReturn(List.of());
+
+        dayTargetSnapshotService.refreshAllSnapshots();
+
+        verify(dayTargetSnapshotRepository, never()).save(any());
+        verify(nutritionTargetService, never()).getTargetsSync(any());
     }
 }
