@@ -232,6 +232,7 @@ public class FoodController {
                         description = "Label successfully read; draft food returned",
                         content = @Content(schema = @Schema(implementation = FoodDraftDTO.class))
                 ),
+                @ApiResponse(responseCode = "413", description = "Uploaded file exceeds the maximum allowed size"),
                 @ApiResponse(responseCode = "422", description = "Label could not be read or parsed")
             }
     )
