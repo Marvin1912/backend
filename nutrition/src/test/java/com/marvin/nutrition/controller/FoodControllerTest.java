@@ -27,6 +27,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.core.io.buffer.DataBufferLimitException;
 import org.springframework.core.io.buffer.DefaultDataBufferFactory;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -293,6 +294,22 @@ class FoodControllerTest {
 
         StepVerifier.create(result)
                 .expectError(LabelReadException.class)
+                .verify();
+    }
+
+    @Test
+    @DisplayName("scanLabel propagates DataBufferLimitException when upload exceeds the maximum allowed size")
+    void scanLabel_UploadExceedsMaxSize_PropagatesError() {
+        // 10 MB cap configured in FoodController.MAX_LABEL_IMAGE_SIZE_BYTES; one byte over the cap.
+        final byte[] oversizedImageBytes = new byte[10 * 1024 * 1024 + 1];
+        final DataBuffer dataBuffer = new DefaultDataBufferFactory().wrap(oversizedImageBytes);
+
+        when(filePart.content()).thenReturn(Flux.just(dataBuffer));
+
+        final Mono<ResponseEntity<FoodDraftDTO>> result = foodController.scanLabel(filePart);
+
+        StepVerifier.create(result)
+                .expectError(DataBufferLimitException.class)
                 .verify();
     }
 
