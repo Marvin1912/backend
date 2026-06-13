@@ -15,6 +15,7 @@ import com.marvin.nutrition.repository.FoodRepository;
 import com.marvin.nutrition.repository.MealEntryRepository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -151,6 +152,62 @@ public class MealEntryService {
 
         return Mono.zip(entriesMono, targetsMono)
                 .map(tuple -> buildDaySummary(date, tuple.getT1(), tuple.getT2().orElse(null)));
+    }
+
+    /**
+     * Returns day summaries for every date within the given range (inclusive), in ascending date order.
+     * Entries, food names and target snapshots for the whole range are loaded in a single query each,
+     * so the cost does not grow with the number of days requested.
+     * If the nutrition target service cannot compute live targets (e.g. missing profile/weight),
+     * days without a persisted snapshot will have null targets and remaining.
+     *
+     * @param from the first date to include (inclusive)
+     * @param to   the last date to include (inclusive)
+     * @return a Mono emitting one day summary per date in the range, ordered ascending by date
+     */
+    public Mono<List<DaySummaryDTO>> getDays(LocalDate from, LocalDate to) {
+        final Mono<Map<LocalDate, List<MealEntryDTO>>> entriesByDateMono = Mono.fromCallable(() -> {
+            final List<MealEntryEntity> entities =
+                    mealEntryRepository.findByEntryDateBetweenOrderByEntryDateAscCreationDateAsc(from, to);
+            final List<UUID> foodIds = entities.stream()
+                    .map(MealEntryEntity::getFoodId)
+                    .filter(fid -> fid != null)
+                    .distinct()
+                    .collect(Collectors.toList());
+            final Map<UUID, String> foodNameById = foodRepository.findAllById(foodIds).stream()
+                    .collect(Collectors.toMap(FoodEntity::getId, FoodEntity::getName));
+            return entities.stream()
+                    .map(e -> {
+                        final String live = foodNameById.get(e.getFoodId());
+                        final String display = live != null ? live : e.getFoodName();
+                        return mealEntryMapper.toDTO(e, display);
+                    })
+                    .collect(Collectors.groupingBy(MealEntryDTO::entryDate));
+        }).subscribeOn(Schedulers.boundedElastic());
+
+        final Mono<Map<LocalDate, TargetsDTO>> snapshotsByDateMono = Mono.fromCallable(() ->
+                dayTargetSnapshotRepository.findByEntryDateBetween(from, to).stream()
+                        .collect(Collectors.toMap(DayTargetSnapshotEntity::getEntryDate, this::toTargetsDTO))
+        ).subscribeOn(Schedulers.boundedElastic());
+
+        final Mono<Optional<TargetsDTO>> liveTargetsMono = nutritionTargetService.getTargets()
+                .map(Optional::of)
+                .onErrorReturn(TargetCalculationException.class, Optional.empty());
+
+        return Mono.zip(entriesByDateMono, snapshotsByDateMono, liveTargetsMono)
+                .map(tuple -> {
+                    final Map<LocalDate, List<MealEntryDTO>> entriesByDate = tuple.getT1();
+                    final Map<LocalDate, TargetsDTO> snapshotsByDate = tuple.getT2();
+                    final TargetsDTO liveTargets = tuple.getT3().orElse(null);
+
+                    final List<DaySummaryDTO> summaries = new ArrayList<>();
+                    for (LocalDate date = from; !date.isAfter(to); date = date.plusDays(1)) {
+                        final List<MealEntryDTO> entries = entriesByDate.getOrDefault(date, List.of());
+                        final TargetsDTO targets = snapshotsByDate.getOrDefault(date, liveTargets);
+                        summaries.add(buildDaySummary(date, entries, targets));
+                    }
+                    return summaries;
+                });
     }
 
     /**

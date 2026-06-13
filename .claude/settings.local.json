@@ -19,7 +19,8 @@
       "Read(//home/marvin/workspace/**)",
       "Bash(echo \"EXIT: $?\")",
       "WebFetch(domain:github.com)",
-      "WebFetch(domain:patch-diff.githubusercontent.com)"
+      "WebFetch(domain:patch-diff.githubusercontent.com)",
+      "Bash(echo \"EXIT:$?\")"
     ],
     "deny": [],
     "ask": []

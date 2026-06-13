@@ -1,6 +1,7 @@
 package com.marvin.nutrition.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
@@ -298,6 +299,114 @@ class MealEntryServiceTest {
                 .assertNext(summary -> {
                     assertEquals(2160, summary.targets().targetKcal());
                     assertEquals(160, summary.targets().proteinG());
+                })
+                .verifyComplete();
+    }
+
+    // -----------------------------------------------------------------------
+    // getDays
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("getDays returns one summary per day in range with a single query per data source")
+    void getDays_ReturnsOneSummaryPerDayInRange() {
+        final LocalDate from = today.minusDays(2);
+        final LocalDate to = today;
+
+        final MealEntryEntity entry = new MealEntryEntity();
+        entry.setEntryDate(today);
+        entry.setKcal(new BigDecimal("400.00"));
+        entry.setProteinG(new BigDecimal("30.00"));
+        entry.setCarbsG(new BigDecimal("50.00"));
+        entry.setFatG(new BigDecimal("10.00"));
+
+        final MealEntryDTO dto = new MealEntryDTO(
+                UUID.randomUUID(), today, MealType.BREAKFAST, null, "Oats", null,
+                new BigDecimal("400.00"), new BigDecimal("30.00"),
+                new BigDecimal("50.00"), new BigDecimal("10.00"), null
+        );
+
+        final TargetsDTO liveTargets = new TargetsDTO(1750, 2160, 2160, 160, 72, 252, "MIFFLIN_ST_JEOR");
+
+        when(mealEntryRepository.findByEntryDateBetweenOrderByEntryDateAscCreationDateAsc(from, to))
+                .thenReturn(List.of(entry));
+        when(foodRepository.findAllById(any())).thenReturn(List.of());
+        when(mealEntryMapper.toDTO(any(MealEntryEntity.class), isNull())).thenReturn(dto);
+        when(dayTargetSnapshotRepository.findByEntryDateBetween(from, to)).thenReturn(List.of());
+        when(nutritionTargetService.getTargets()).thenReturn(Mono.just(liveTargets));
+
+        StepVerifier.create(mealEntryService.getDays(from, to))
+                .assertNext(summaries -> {
+                    assertEquals(3, summaries.size());
+                    assertEquals(from, summaries.get(0).date());
+                    assertEquals(to, summaries.get(2).date());
+
+                    // days without entries have zero totals but still get the live targets
+                    assertEquals(0, BigDecimal.ZERO.compareTo(summaries.get(0).totals().kcal()));
+                    assertEquals(2160, summaries.get(0).targets().targetKcal());
+
+                    // the day with an entry has the entry reflected in its totals
+                    assertEquals(1, summaries.get(2).entries().size());
+                    assertEquals(0, new BigDecimal("400.00").compareTo(summaries.get(2).totals().kcal()));
+                    assertEquals(2160, summaries.get(2).targets().targetKcal());
+                })
+                .verifyComplete();
+
+        verify(mealEntryRepository).findByEntryDateBetweenOrderByEntryDateAscCreationDateAsc(from, to);
+        verify(dayTargetSnapshotRepository).findByEntryDateBetween(from, to);
+        verify(nutritionTargetService).getTargets();
+    }
+
+    @Test
+    @DisplayName("getDays uses a day's persisted snapshot targets instead of live targets")
+    void getDays_WithSnapshot_UsesSnapshotTargetsForThatDay() {
+        final LocalDate from = today.minusDays(1);
+        final LocalDate to = today;
+
+        final DayTargetSnapshotEntity snapshot = new DayTargetSnapshotEntity();
+        snapshot.setEntryDate(from);
+        snapshot.setBmr(1700);
+        snapshot.setMaintenanceKcal(2100);
+        snapshot.setTargetKcal(2000);
+        snapshot.setProteinG(150);
+        snapshot.setFatG(67);
+        snapshot.setCarbsG(248);
+        snapshot.setBasis("MIFFLIN_ST_JEOR");
+
+        final TargetsDTO liveTargets = new TargetsDTO(1750, 2160, 2160, 160, 72, 252, "MIFFLIN_ST_JEOR");
+
+        when(mealEntryRepository.findByEntryDateBetweenOrderByEntryDateAscCreationDateAsc(from, to))
+                .thenReturn(List.of());
+        when(foodRepository.findAllById(any())).thenReturn(List.of());
+        when(dayTargetSnapshotRepository.findByEntryDateBetween(from, to)).thenReturn(List.of(snapshot));
+        when(nutritionTargetService.getTargets()).thenReturn(Mono.just(liveTargets));
+
+        StepVerifier.create(mealEntryService.getDays(from, to))
+                .assertNext(summaries -> {
+                    assertEquals(2000, summaries.get(0).targets().targetKcal());
+                    assertEquals(2160, summaries.get(1).targets().targetKcal());
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("getDays returns null targets and remaining when no targets can be computed")
+    void getDays_NoTargetsAvailable_ReturnsNullTargetsAndRemaining() {
+        final LocalDate from = today;
+        final LocalDate to = today;
+
+        when(mealEntryRepository.findByEntryDateBetweenOrderByEntryDateAscCreationDateAsc(from, to))
+                .thenReturn(List.of());
+        when(foodRepository.findAllById(any())).thenReturn(List.of());
+        when(dayTargetSnapshotRepository.findByEntryDateBetween(from, to)).thenReturn(List.of());
+        when(nutritionTargetService.getTargets())
+                .thenReturn(Mono.error(new TargetCalculationException("No profile")));
+
+        StepVerifier.create(mealEntryService.getDays(from, to))
+                .assertNext(summaries -> {
+                    assertEquals(1, summaries.size());
+                    assertNull(summaries.get(0).targets());
+                    assertNull(summaries.get(0).remaining());
                 })
                 .verifyComplete();
     }
