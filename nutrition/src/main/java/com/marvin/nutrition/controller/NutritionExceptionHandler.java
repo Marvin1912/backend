@@ -8,6 +8,7 @@ import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.ConstraintViolationException;
 import java.util.NoSuchElementException;
 import java.util.stream.Collectors;
+import org.springframework.core.io.buffer.DataBufferLimitException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -120,6 +121,18 @@ public class NutritionExceptionHandler {
     @ExceptionHandler(BarcodeLookupException.class)
     public ResponseEntity<String> handleBarcodeLookup(BarcodeLookupException ex) {
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(ex.getMessage());
+    }
+
+    /**
+     * Maps {@link DataBufferLimitException} to HTTP 413 Payload Too Large.
+     *
+     * @param ex the exception indicating the uploaded file exceeded the configured byte limit
+     * @return 413 response with a message describing the maximum allowed size
+     */
+    @ExceptionHandler(DataBufferLimitException.class)
+    public ResponseEntity<String> handleDataBufferLimit(DataBufferLimitException ex) {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                .body("Uploaded file exceeds the maximum allowed size of 10 MB");
     }
 
     /**

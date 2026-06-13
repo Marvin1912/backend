@@ -7,6 +7,7 @@ import jakarta.validation.ConstraintViolationException;
 import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.io.buffer.DataBufferLimitException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -16,6 +17,18 @@ import org.springframework.http.ResponseEntity;
 class NutritionExceptionHandlerTest {
 
     private final NutritionExceptionHandler handler = new NutritionExceptionHandler();
+
+    @Test
+    @DisplayName("handleDataBufferLimit returns 413 with a message about the maximum allowed size")
+    void handleDataBufferLimit_ReturnsPayloadTooLarge() {
+        final DataBufferLimitException ex = new DataBufferLimitException("Exceeded limit on max bytes to buffer");
+
+        final ResponseEntity<String> response = handler.handleDataBufferLimit(ex);
+
+        assertEquals(HttpStatus.PAYLOAD_TOO_LARGE, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals("Uploaded file exceeds the maximum allowed size of 10 MB", response.getBody());
+    }
 
     @Test
     @DisplayName("handleConstraintViolation returns 400")

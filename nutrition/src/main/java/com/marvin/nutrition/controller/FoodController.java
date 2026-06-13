@@ -55,6 +55,7 @@ public class FoodController {
     private static final String DEFAULT_PAGE = "0";
     private static final String DEFAULT_SIZE = "50";
     private static final long MAX_SIZE = 200;
+    private static final int MAX_LABEL_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
 
     private final FoodService foodService;
     private final LabelReader labelReader;
@@ -231,6 +232,7 @@ public class FoodController {
                         description = "Label successfully read; draft food returned",
                         content = @Content(schema = @Schema(implementation = FoodDraftDTO.class))
                 ),
+                @ApiResponse(responseCode = "413", description = "Uploaded file exceeds the maximum allowed size"),
                 @ApiResponse(responseCode = "422", description = "Label could not be read or parsed")
             }
     )
@@ -284,7 +286,7 @@ public class FoodController {
      * @return a Mono emitting the complete file bytes
      */
     private Mono<byte[]> extractBytes(FilePart filePart) {
-        return DataBufferUtils.join(filePart.content())
+        return DataBufferUtils.join(filePart.content(), MAX_LABEL_IMAGE_SIZE_BYTES)
                 .map(dataBuffer -> {
                     final byte[] bytes = new byte[dataBuffer.readableByteCount()];
                     dataBuffer.read(bytes);
