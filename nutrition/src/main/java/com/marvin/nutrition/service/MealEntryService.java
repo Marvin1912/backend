@@ -80,6 +80,22 @@ public class MealEntryService {
     }
 
     /**
+     * Logs multiple new meal entries for the given date in a single transaction.
+     * Each request is processed the same way as {@link #addEntry(LocalDate, CreateMealEntryRequest)}.
+     * Emits {@link NoSuchElementException} if any referenced food is not found, in which case
+     * nothing is persisted.
+     * Emits {@link IllegalArgumentException} if required fields are missing for any entry's mode.
+     *
+     * @param date     the date to log the entries for
+     * @param requests the create requests, one per entry to be logged
+     * @return a Mono emitting the created meal entry DTOs, in the same order as {@code requests}
+     */
+    public Mono<List<MealEntryDTO>> addEntries(LocalDate date, List<CreateMealEntryRequest> requests) {
+        return Mono.fromCallable(() -> mealEntryWriteService.createEntries(date, requests))
+                .subscribeOn(Schedulers.boundedElastic());
+    }
+
+    /**
      * Updates an existing meal entry.
      * For food-backed entries, a new {@code quantityG} triggers macro re-snapshotting from the food catalog.
      * For ad-hoc entries, any non-null macro values and description from the request are applied directly;

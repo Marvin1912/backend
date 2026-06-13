@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.marvin.nutrition.dto.CreateMealEntriesRequest;
 import com.marvin.nutrition.dto.CreateMealEntryRequest;
 import com.marvin.nutrition.dto.DaySummaryDTO;
 import com.marvin.nutrition.dto.MacrosDTO;
@@ -97,6 +98,57 @@ class MealEntryControllerTest {
                 .verifyComplete();
 
         verify(mealEntryService).addEntry(eq(today), any(CreateMealEntryRequest.class));
+    }
+
+    // -----------------------------------------------------------------------
+    // POST /nutrition/days/{date}/entries/batch
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("addEntries returns 201 Created with list body")
+    void addEntries_Valid_Returns201WithListBody() {
+        final MealEntryDTO second = new MealEntryDTO(
+                UUID.randomUUID(), today, MealType.DINNER, null, "Soup", null,
+                new BigDecimal("250.00"), new BigDecimal("15.00"),
+                new BigDecimal("30.00"), new BigDecimal("8.00"), null
+        );
+        final List<CreateMealEntryRequest> requests = List.of(createRequest, createRequest);
+        final CreateMealEntriesRequest batchRequest = new CreateMealEntriesRequest(requests);
+
+        when(mealEntryService.addEntries(eq(today), eq(requests)))
+                .thenReturn(Mono.just(List.of(mealEntryDTO, second)));
+
+        final Mono<ResponseEntity<List<MealEntryDTO>>> result =
+                mealEntryController.addEntries(today, batchRequest);
+
+        StepVerifier.create(result)
+                .assertNext(response -> {
+                    assertEquals(201, response.getStatusCode().value());
+                    assertNotNull(response.getBody());
+                    assertEquals(2, response.getBody().size());
+                })
+                .verifyComplete();
+
+        verify(mealEntryService).addEntries(eq(today), eq(requests));
+    }
+
+    @Test
+    @DisplayName("addEntries returns 404 when service emits NoSuchElementException")
+    void addEntries_UnknownFoodId_Returns404() {
+        final List<CreateMealEntryRequest> requests = List.of(createRequest);
+        final CreateMealEntriesRequest batchRequest = new CreateMealEntriesRequest(requests);
+
+        when(mealEntryService.addEntries(eq(today), eq(requests)))
+                .thenReturn(Mono.error(new NoSuchElementException("Food not found")));
+
+        final Mono<ResponseEntity<List<MealEntryDTO>>> result =
+                mealEntryController.addEntries(today, batchRequest);
+
+        StepVerifier.create(result)
+                .assertNext(response -> assertEquals(404, response.getStatusCode().value()))
+                .verifyComplete();
+
+        verify(mealEntryService).addEntries(eq(today), eq(requests));
     }
 
     // -----------------------------------------------------------------------
