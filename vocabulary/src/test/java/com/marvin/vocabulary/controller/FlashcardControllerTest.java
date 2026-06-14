@@ -4,9 +4,14 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
+import com.generated.deepl.ApiClient;
+import com.generated.deepl.api.TranslateTextApi;
+import com.generated.deepl.model.TranslateText200Response;
+import com.generated.deepl.model.TranslateText200ResponseTranslationsInner;
 import com.marvin.vocabulary.dictionaryapi.DictionaryClient;
 import com.marvin.vocabulary.dto.DictionaryEntry;
 import com.marvin.vocabulary.dto.Flashcard;
+import com.marvin.vocabulary.dto.Translation;
 import com.marvin.vocabulary.model.DeckEntity;
 import com.marvin.vocabulary.model.FlashcardEntity;
 import com.marvin.vocabulary.service.FlashcardService;
@@ -19,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DefaultDataBufferFactory;
@@ -58,6 +64,8 @@ class FlashcardControllerTest {
     private DictionaryClient dictionaryClient;
     @Mock
     private FlashcardService flashcardService;
+    @Mock
+    private TranslateTextApi translateTextApi;
     @InjectMocks
     private FlashcardController flashcardController;
     private WebTestClient webTestClient;
@@ -86,6 +94,26 @@ class FlashcardControllerTest {
                 .expectStatus().isOk()
                 .expectBodyList(DictionaryEntry.class)
                 .isEqualTo(expectedEntries);
+    }
+
+    @Test
+    void getTranslationShouldReturnTranslationsWithoutMutatingSharedApiClient() {
+        final TranslateText200ResponseTranslationsInner translationItem = new TranslateText200ResponseTranslationsInner();
+        translationItem.setText("Hallo");
+        final TranslateText200Response response = new TranslateText200Response();
+        response.setTranslations(List.of(translationItem));
+
+        when(translateTextApi.translateText(any())).thenReturn(Mono.just(response));
+
+        webTestClient.get()
+                .uri("/vocabulary/flashcards/translations?word=hello&context=greeting&sourceLanguage=EN&targetLanguage=DE")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBodyList(Translation.class)
+                .isEqualTo(List.of(new Translation("Hallo")));
+
+        Mockito.verify(translateTextApi, Mockito.never()).getApiClient();
+        Mockito.verify(translateTextApi, Mockito.never()).setApiClient(Mockito.any(ApiClient.class));
     }
 
     @Test
