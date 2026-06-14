@@ -1,6 +1,5 @@
 package com.marvin.vocabulary.controller;
 
-import com.generated.deepl.ApiClient;
 import com.generated.deepl.api.TranslateTextApi;
 import com.generated.deepl.model.SourceLanguageText;
 import com.generated.deepl.model.TargetLanguageText;
@@ -22,7 +21,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -52,13 +50,9 @@ import reactor.core.scheduler.Schedulers;
 @RequestMapping("/vocabulary")
 public class FlashcardController {
 
-    private static final String DEFAULT_DEEPL_URL = "https://api-free.deepl.com";
     private static final String CSV_FILENAME = "Standard.csv";
     private static final String CSV_MEDIA_TYPE = "text/csv";
-    private static final String DEEPL_AUTH_HEADER_FORMAT = "DeepL-Auth-Key %s";
 
-    private final String deepLApiUrl;
-    private final String deepLApiKey;
     private final DictionaryClient dictionaryClient;
     private final FlashcardService flashcardService;
     private final TranslateTextApi translateTextApi;
@@ -66,21 +60,15 @@ public class FlashcardController {
     /**
      * Constructs a new FlashcardController with required dependencies.
      *
-     * @param deepLApiUrl      the DeepL API URL
-     * @param deepLApiKey      the DeepL API key
      * @param dictionaryClient the dictionary service client
      * @param flashcardService the flashcard service
      * @param translateTextApi the translation API client
      */
     public FlashcardController(
-            @Value("${vocabulary.deepl.url:" + DEFAULT_DEEPL_URL + "}") String deepLApiUrl,
-            @Value("${vocabulary.deepl.api-key:}") String deepLApiKey,
             DictionaryClient dictionaryClient,
             FlashcardService flashcardService,
             TranslateTextApi translateTextApi
     ) {
-        this.deepLApiUrl = deepLApiUrl;
-        this.deepLApiKey = deepLApiKey;
         this.dictionaryClient = dictionaryClient;
         this.flashcardService = flashcardService;
         this.translateTextApi = translateTextApi;
@@ -148,17 +136,6 @@ public class FlashcardController {
                     DataBufferUtils.release(dataBuffer);
                     return Mono.just(bytes);
                 });
-    }
-
-    /**
-     * Configures DeepL API client with authentication and base URL.
-     *
-     * @param apiClient the API client to configure
-     */
-    private void configureDeepLApiClient(ApiClient apiClient) {
-        apiClient.addDefaultHeader(HttpHeaders.AUTHORIZATION,
-                String.format(DEEPL_AUTH_HEADER_FORMAT, deepLApiKey));
-        apiClient.setBasePath(deepLApiUrl);
     }
 
     /**
@@ -410,9 +387,6 @@ public class FlashcardController {
         TranslateTextRequest translationRequest = createTranslationRequest(
                 word, context, sourceLanguage, targetLanguage
         );
-
-        ApiClient apiClient = translateTextApi.getApiClient();
-        configureDeepLApiClient(apiClient);
 
         return translateTextApi.translateText(translationRequest)
                 .flatMapMany(translationResponse -> {
