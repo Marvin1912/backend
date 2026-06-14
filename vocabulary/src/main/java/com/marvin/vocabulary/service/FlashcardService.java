@@ -89,8 +89,6 @@ public class FlashcardService {
 
         savedOriginal.setReverseFlashcard(savedReverse);
         savedReverse.setReverseFlashcard(savedOriginal);
-        flashcardRepository.save(savedOriginal);
-        flashcardRepository.save(savedReverse);
 
         return savedOriginal;
     }
