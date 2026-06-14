@@ -9,6 +9,10 @@ import org.springframework.stereotype.Component;
 /**
  * Configures the shared DeepL {@link ApiClient} bean once at startup with the base path and authentication
  * header, so that request-handling code does not need to mutate the shared singleton on every call.
+ *
+ * <p>This relies on {@code ApiClient} being injected as a singleton bean (the {@code generateClientAsBean}
+ * OpenAPI generator option) and shared with {@code TranslateTextApi}, so the configuration applied here is
+ * visible to every request handled by that API client.</p>
  */
 @Component
 public class DeepLApiClientConfiguration {
