@@ -18,6 +18,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 @Slf4j
@@ -237,12 +238,7 @@ public class FlashcardService {
     }
 
     private DeckEntity getOrCreateDeck(String name) {
-        return deckRepository.findByName(name)
-                .orElseGet(() -> {
-                    DeckEntity entity = new DeckEntity();
-                    entity.setName(name);
-                    return deckRepository.save(entity);
-                });
+        return findOrCreateDeckByName(name);
     }
 
     private DeckEntity getOrCreateReverseDeck(DeckEntity deck) {
@@ -251,17 +247,25 @@ public class FlashcardService {
         }
 
         String reverseName = deck.getName() + "_reversed";
-        DeckEntity reverseDeck = deckRepository.findByName(reverseName)
-                .orElseGet(() -> {
-                    DeckEntity entity = new DeckEntity();
-                    entity.setName(reverseName);
-                    return deckRepository.save(entity);
-                });
+        DeckEntity reverseDeck = findOrCreateDeckByName(reverseName);
         deck.setReverseDeck(reverseDeck);
         reverseDeck.setReverseDeck(deck);
         deckRepository.save(deck);
         deckRepository.save(reverseDeck);
         return reverseDeck;
+    }
+
+    private DeckEntity findOrCreateDeckByName(String name) {
+        return deckRepository.findByName(name)
+                .orElseGet(() -> {
+                    DeckEntity entity = new DeckEntity();
+                    entity.setName(name);
+                    try {
+                        return deckRepository.save(entity);
+                    } catch (DataIntegrityViolationException e) {
+                        return deckRepository.findByName(name).orElseThrow(() -> e);
+                    }
+                });
     }
 
 }

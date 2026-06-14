@@ -18,6 +18,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
 @ExtendWith(MockitoExtension.class)
 class FlashcardServiceTest {
@@ -68,6 +69,52 @@ class FlashcardServiceTest {
         final FlashcardEntity result = flashcardService.save(flashcard);
 
         verify(flashcardRepository, times(2)).save(any(FlashcardEntity.class));
+        assertThat(result).isEqualTo(savedOriginal);
+        assertThat(result.getReverseFlashcard()).isEqualTo(savedReverse);
+        assertThat(savedReverse.getReverseFlashcard()).isEqualTo(savedOriginal);
+    }
+
+    @Test
+    void saveShouldRecoverWhenConcurrentInsertCreatesReverseDeckFirst() {
+        final DeckEntity deckWithoutReverse = new DeckEntity(1, "deck", null);
+        final String reverseName = "deck_reversed";
+        final DeckEntity winningReverseDeck = new DeckEntity(2, reverseName, deckWithoutReverse);
+
+        final Flashcard flashcard = new Flashcard(
+                null,
+                deckWithoutReverse.getId(),
+                deckWithoutReverse.getName(),
+                "anki-1",
+                "front",
+                "back",
+                "description",
+                false
+        );
+
+        when(deckRepository.findById(deckWithoutReverse.getId())).thenReturn(Optional.of(deckWithoutReverse));
+        when(deckRepository.findByName(reverseName))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(winningReverseDeck));
+        when(deckRepository.save(any(DeckEntity.class)))
+                .thenAnswer(invocation -> {
+                    final DeckEntity entity = invocation.getArgument(0);
+                    if (entity.getId() == null) {
+                        throw new DataIntegrityViolationException("duplicate key value violates unique constraint");
+                    }
+                    return entity;
+                });
+
+        final FlashcardEntity savedOriginal = new FlashcardEntity(
+                10, deckWithoutReverse, null, "anki-1", "front", "back", "description", false);
+        final FlashcardEntity savedReverse = new FlashcardEntity(
+                11, winningReverseDeck, null, null, "back", "front", "description", false);
+
+        when(flashcardRepository.save(any(FlashcardEntity.class)))
+                .thenReturn(savedOriginal)
+                .thenReturn(savedReverse);
+
+        final FlashcardEntity result = flashcardService.save(flashcard);
+
         assertThat(result).isEqualTo(savedOriginal);
         assertThat(result.getReverseFlashcard()).isEqualTo(savedReverse);
         assertThat(savedReverse.getReverseFlashcard()).isEqualTo(savedOriginal);
