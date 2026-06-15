@@ -1,18 +1,22 @@
 package com.marvin.nutrition.service;
 
+import com.marvin.nutrition.dto.CreateMealEntryRequest;
 import com.marvin.nutrition.dto.CreateMealTemplateRequest;
+import com.marvin.nutrition.dto.MealEntryDTO;
 import com.marvin.nutrition.dto.MealTemplateDTO;
 import com.marvin.nutrition.dto.MealTemplateItemDTO;
 import com.marvin.nutrition.dto.UpdateMealTemplateRequest;
 import com.marvin.nutrition.entity.FoodEntity;
 import com.marvin.nutrition.entity.MealTemplateEntity;
 import com.marvin.nutrition.entity.MealTemplateItemEntity;
+import com.marvin.nutrition.entity.MealType;
 import com.marvin.nutrition.mapper.MealTemplateMapper;
 import com.marvin.nutrition.repository.FoodRepository;
 import com.marvin.nutrition.repository.MealTemplateItemRepository;
 import com.marvin.nutrition.repository.MealTemplateRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -33,6 +37,7 @@ public class MealTemplateService {
     private final FoodRepository foodRepository;
     private final MealTemplateMapper mealTemplateMapper;
     private final MealTemplateWriteService mealTemplateWriteService;
+    private final MealEntryWriteService mealEntryWriteService;
 
     /**
      * Creates a new MealTemplateService with the required dependencies.
@@ -42,18 +47,21 @@ public class MealTemplateService {
      * @param foodRepository             JPA repository for food catalog entries
      * @param mealTemplateMapper         MapStruct mapper for entity/DTO conversion
      * @param mealTemplateWriteService   service owning transactional meal template write operations
+     * @param mealEntryWriteService      service owning transactional meal entry write operations
      */
     public MealTemplateService(
             MealTemplateRepository mealTemplateRepository,
             MealTemplateItemRepository mealTemplateItemRepository,
             FoodRepository foodRepository,
             MealTemplateMapper mealTemplateMapper,
-            MealTemplateWriteService mealTemplateWriteService) {
+            MealTemplateWriteService mealTemplateWriteService,
+            MealEntryWriteService mealEntryWriteService) {
         this.mealTemplateRepository = mealTemplateRepository;
         this.mealTemplateItemRepository = mealTemplateItemRepository;
         this.foodRepository = foodRepository;
         this.mealTemplateMapper = mealTemplateMapper;
         this.mealTemplateWriteService = mealTemplateWriteService;
+        this.mealEntryWriteService = mealEntryWriteService;
     }
 
     /**
@@ -137,6 +145,36 @@ public class MealTemplateService {
             mealTemplateWriteService.delete(id);
             return null;
         }).subscribeOn(Schedulers.boundedElastic()).then();
+    }
+
+    /**
+     * Logs all items of the meal template with the given id as meal entries for the given date and
+     * meal type, reusing the existing entry-creation and day-target snapshot logic.
+     * Emits {@link NoSuchElementException} if no template with that id exists.
+     *
+     * @param date       the date to log the entries for
+     * @param templateId the UUID of the meal template to log
+     * @param mealType   the meal category to assign to each created entry
+     * @return a Mono emitting the created meal entry DTOs, or an empty list if the template has no items
+     */
+    public Mono<List<MealEntryDTO>> logToDay(LocalDate date, UUID templateId, MealType mealType) {
+        return Mono.fromCallable(() -> {
+            if (mealTemplateRepository.findById(templateId).isEmpty()) {
+                throw new NoSuchElementException("Meal template not found: " + templateId);
+            }
+
+            final List<MealTemplateItemEntity> items = mealTemplateItemRepository.findByMealTemplateId(templateId);
+            if (items.isEmpty()) {
+                return List.<MealEntryDTO>of();
+            }
+
+            final List<CreateMealEntryRequest> requests = items.stream()
+                    .map(item -> new CreateMealEntryRequest(
+                            mealType, item.getFoodId(), item.getQuantityG(), null, null, null, null, null))
+                    .collect(Collectors.toList());
+
+            return mealEntryWriteService.createEntries(date, requests);
+        }).subscribeOn(Schedulers.boundedElastic());
     }
 
     /**
