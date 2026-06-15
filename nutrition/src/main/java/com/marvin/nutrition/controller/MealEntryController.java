@@ -5,7 +5,9 @@ import com.marvin.nutrition.dto.CreateMealEntryRequest;
 import com.marvin.nutrition.dto.DaySummaryDTO;
 import com.marvin.nutrition.dto.MealEntryDTO;
 import com.marvin.nutrition.dto.UpdateMealEntryRequest;
+import com.marvin.nutrition.entity.MealType;
 import com.marvin.nutrition.service.MealEntryService;
+import com.marvin.nutrition.service.MealTemplateService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -43,14 +45,17 @@ public class MealEntryController {
     private static final String ENTRIES_LOCATION_PREFIX = "/nutrition/entries/";
 
     private final MealEntryService mealEntryService;
+    private final MealTemplateService mealTemplateService;
 
     /**
-     * Creates a new MealEntryController with the required service.
+     * Creates a new MealEntryController with the required services.
      *
-     * @param mealEntryService the service handling meal entry operations
+     * @param mealEntryService    the service handling meal entry operations
+     * @param mealTemplateService the service handling meal template operations
      */
-    public MealEntryController(MealEntryService mealEntryService) {
+    public MealEntryController(MealEntryService mealEntryService, MealTemplateService mealTemplateService) {
         this.mealEntryService = mealEntryService;
+        this.mealTemplateService = mealTemplateService;
     }
 
     /**
@@ -122,6 +127,41 @@ public class MealEntryController {
             @Parameter(description = "Date of the meal entries (ISO-8601)", example = "2026-06-07") LocalDate date,
             @Valid @RequestBody CreateMealEntriesRequest req) {
         return mealEntryService.addEntries(date, req.entries())
+                .map(created -> ResponseEntity.status(HttpStatus.CREATED).body(created))
+                .onErrorReturn(NoSuchElementException.class, ResponseEntity.notFound().build());
+    }
+
+    /**
+     * Logs all items of a meal template as meal entries for the given date and meal type.
+     *
+     * @param date       the date to log the entries for
+     * @param templateId the UUID of the meal template to log
+     * @param mealType   the meal category to assign to each created entry
+     * @return a Mono with 201 Created and the created meal entry DTOs, or 404 if the template is not found
+     */
+    @PostMapping("/nutrition/days/{date}/entries/from-template/{templateId}")
+    @Operation(
+            summary = "Log a meal template into a day",
+            description = "Creates a meal entry for each item of the given meal template, for the given "
+                    + "date and meal type. Reuses the same snapshot logic as the batch entry endpoint: "
+                    + "macros are snapshotted from the food catalog and the day-target snapshot is "
+                    + "ensured exactly once.",
+            responses = {
+                @ApiResponse(
+                        responseCode = "201",
+                        description = "Meal entries created",
+                        content = @Content(array = @ArraySchema(schema = @Schema(implementation = MealEntryDTO.class)))
+                ),
+                @ApiResponse(responseCode = "404", description = "Meal template not found")
+            }
+    )
+    public Mono<ResponseEntity<List<MealEntryDTO>>> addEntriesFromTemplate(
+            @PathVariable
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            @Parameter(description = "Date of the meal entries (ISO-8601)", example = "2026-06-07") LocalDate date,
+            @PathVariable @Parameter(description = "UUID of the meal template to log") UUID templateId,
+            @RequestParam @Parameter(description = "Meal category", example = "LUNCH") MealType mealType) {
+        return mealTemplateService.logToDay(date, templateId, mealType)
                 .map(created -> ResponseEntity.status(HttpStatus.CREATED).body(created))
                 .onErrorReturn(NoSuchElementException.class, ResponseEntity.notFound().build());
     }

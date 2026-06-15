@@ -1,11 +1,15 @@
 package com.marvin.nutrition.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.marvin.nutrition.dto.CreateMealEntryRequest;
 import com.marvin.nutrition.dto.CreateMealTemplateRequest;
+import com.marvin.nutrition.dto.MealEntryDTO;
 import com.marvin.nutrition.dto.MealTemplateDTO;
 import com.marvin.nutrition.dto.MealTemplateItemDTO;
 import com.marvin.nutrition.dto.MealTemplateItemRequest;
@@ -13,11 +17,13 @@ import com.marvin.nutrition.dto.UpdateMealTemplateRequest;
 import com.marvin.nutrition.entity.FoodEntity;
 import com.marvin.nutrition.entity.MealTemplateEntity;
 import com.marvin.nutrition.entity.MealTemplateItemEntity;
+import com.marvin.nutrition.entity.MealType;
 import com.marvin.nutrition.mapper.MealTemplateMapper;
 import com.marvin.nutrition.repository.FoodRepository;
 import com.marvin.nutrition.repository.MealTemplateItemRepository;
 import com.marvin.nutrition.repository.MealTemplateRepository;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
@@ -50,6 +56,9 @@ class MealTemplateServiceTest {
 
     @Mock
     private MealTemplateWriteService mealTemplateWriteService;
+
+    @Mock
+    private MealEntryWriteService mealEntryWriteService;
 
     @InjectMocks
     private MealTemplateService mealTemplateService;
@@ -277,5 +286,61 @@ class MealTemplateServiceTest {
         StepVerifier.create(mealTemplateService.findAll())
                 .assertNext(list -> assertEquals(0, list.size()))
                 .verifyComplete();
+    }
+
+    // -----------------------------------------------------------------------
+    // logToDay
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("logToDay maps template items to create requests and delegates to MealEntryWriteService")
+    void logToDay_TemplateWithItems_DelegatesToMealEntryWriteService() {
+        final LocalDate date = LocalDate.of(2026, 6, 7);
+        final CreateMealEntryRequest expectedRequest = new CreateMealEntryRequest(
+                MealType.LUNCH, foodId, itemEntity.getQuantityG(), null, null, null, null, null
+        );
+        final MealEntryDTO createdEntry = new MealEntryDTO(
+                UUID.randomUUID(), date, MealType.LUNCH, foodId, null, itemEntity.getQuantityG(),
+                new BigDecimal("185.00"), new BigDecimal("6.50"),
+                new BigDecimal("30.00"), new BigDecimal("3.50"), "Oatmeal"
+        );
+
+        when(mealTemplateRepository.findById(templateId)).thenReturn(Optional.of(templateEntity));
+        when(mealTemplateItemRepository.findByMealTemplateId(templateId)).thenReturn(List.of(itemEntity));
+        when(mealEntryWriteService.createEntries(date, List.of(expectedRequest)))
+                .thenReturn(List.of(createdEntry));
+
+        StepVerifier.create(mealTemplateService.logToDay(date, templateId, MealType.LUNCH))
+                .assertNext(created -> assertEquals(List.of(createdEntry), created))
+                .verifyComplete();
+
+        verify(mealEntryWriteService).createEntries(date, List.of(expectedRequest));
+    }
+
+    @Test
+    @DisplayName("logToDay returns an empty list without calling MealEntryWriteService when template has no items")
+    void logToDay_TemplateWithoutItems_ReturnsEmptyList() {
+        final LocalDate date = LocalDate.of(2026, 6, 7);
+
+        when(mealTemplateRepository.findById(templateId)).thenReturn(Optional.of(templateEntity));
+        when(mealTemplateItemRepository.findByMealTemplateId(templateId)).thenReturn(List.of());
+
+        StepVerifier.create(mealTemplateService.logToDay(date, templateId, MealType.LUNCH))
+                .assertNext(created -> assertEquals(List.of(), created))
+                .verifyComplete();
+
+        verify(mealEntryWriteService, never()).createEntries(any(), any());
+    }
+
+    @Test
+    @DisplayName("logToDay emits NoSuchElementException when template not found")
+    void logToDay_TemplateNotFound_EmitsNoSuchElementException() {
+        final LocalDate date = LocalDate.of(2026, 6, 7);
+
+        when(mealTemplateRepository.findById(templateId)).thenReturn(Optional.empty());
+
+        StepVerifier.create(mealTemplateService.logToDay(date, templateId, MealType.LUNCH))
+                .expectError(NoSuchElementException.class)
+                .verify();
     }
 }

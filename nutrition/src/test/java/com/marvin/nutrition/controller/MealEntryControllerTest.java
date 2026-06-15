@@ -17,6 +17,7 @@ import com.marvin.nutrition.dto.TargetsDTO;
 import com.marvin.nutrition.dto.UpdateMealEntryRequest;
 import com.marvin.nutrition.entity.MealType;
 import com.marvin.nutrition.service.MealEntryService;
+import com.marvin.nutrition.service.MealTemplateService;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -40,6 +41,9 @@ class MealEntryControllerTest {
 
     @Mock
     private MealEntryService mealEntryService;
+
+    @Mock
+    private MealTemplateService mealTemplateService;
 
     @InjectMocks
     private MealEntryController mealEntryController;
@@ -292,5 +296,49 @@ class MealEntryControllerTest {
                 .verifyComplete();
 
         verify(mealEntryService).deleteEntry(entryId);
+    }
+
+    // -----------------------------------------------------------------------
+    // POST /nutrition/days/{date}/entries/from-template/{templateId}
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("addEntriesFromTemplate returns 201 Created with list body")
+    void addEntriesFromTemplate_Valid_Returns201WithListBody() {
+        final UUID templateId = UUID.randomUUID();
+
+        when(mealTemplateService.logToDay(today, templateId, MealType.LUNCH))
+                .thenReturn(Mono.just(List.of(mealEntryDTO)));
+
+        final Mono<ResponseEntity<List<MealEntryDTO>>> result =
+                mealEntryController.addEntriesFromTemplate(today, templateId, MealType.LUNCH);
+
+        StepVerifier.create(result)
+                .assertNext(response -> {
+                    assertEquals(201, response.getStatusCode().value());
+                    assertNotNull(response.getBody());
+                    assertEquals(1, response.getBody().size());
+                })
+                .verifyComplete();
+
+        verify(mealTemplateService).logToDay(today, templateId, MealType.LUNCH);
+    }
+
+    @Test
+    @DisplayName("addEntriesFromTemplate returns 404 when template not found")
+    void addEntriesFromTemplate_UnknownTemplate_Returns404() {
+        final UUID templateId = UUID.randomUUID();
+
+        when(mealTemplateService.logToDay(today, templateId, MealType.LUNCH))
+                .thenReturn(Mono.error(new NoSuchElementException("Meal template not found: " + templateId)));
+
+        final Mono<ResponseEntity<List<MealEntryDTO>>> result =
+                mealEntryController.addEntriesFromTemplate(today, templateId, MealType.LUNCH);
+
+        StepVerifier.create(result)
+                .assertNext(response -> assertEquals(404, response.getStatusCode().value()))
+                .verifyComplete();
+
+        verify(mealTemplateService).logToDay(today, templateId, MealType.LUNCH);
     }
 }
