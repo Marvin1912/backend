@@ -272,6 +272,28 @@ class MealTemplateWriteServiceTest {
         verify(mealTemplateItemRepository, never()).save(any());
     }
 
+    @Test
+    @DisplayName("createFromEstimate does not save item when template save fails")
+    void createFromEstimate_TemplateSaveFails_DoesNotSaveItem() {
+        final SaveEstimateAsTemplateRequest req = new SaveEstimateAsTemplateRequest(
+                "Canteen Lunch",
+                new BigDecimal("650"),
+                new BigDecimal("35"),
+                new BigDecimal("70"),
+                new BigDecimal("20")
+        );
+        final FoodEntity savedFood = new FoodEntity();
+        savedFood.setId(UUID.randomUUID());
+
+        when(foodRepository.save(any(FoodEntity.class))).thenReturn(savedFood);
+        when(mealTemplateRepository.save(any(MealTemplateEntity.class)))
+                .thenThrow(new RuntimeException("DB error"));
+
+        assertThrows(RuntimeException.class, () -> mealTemplateWriteService.createFromEstimate(req));
+
+        verify(mealTemplateItemRepository, never()).save(any());
+    }
+
     // -----------------------------------------------------------------------
     // delete
     // -----------------------------------------------------------------------

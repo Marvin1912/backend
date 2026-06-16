@@ -113,7 +113,7 @@ public class MealTemplateWriteService {
      * {@link MealTemplateEntity} with that food as its sole item at 100 g.
      *
      * <p>The food entry is created with {@link FoodSource#ESTIMATE}, all per-100-g macro fields set
-     * to the estimate values, a fixed {@code defaultServingG} of 100, and no brand.
+     * to the estimate values, a fixed {@code defaultServingG} of 100, and no brand.</p>
      *
      * @param req the estimate request containing the template name and macro values
      * @return the saved template together with its single saved item
