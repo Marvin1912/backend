@@ -2,6 +2,7 @@ package com.marvin.nutrition.controller;
 
 import com.marvin.nutrition.dto.CreateMealTemplateRequest;
 import com.marvin.nutrition.dto.MealTemplateDTO;
+import com.marvin.nutrition.dto.SaveEstimateAsTemplateRequest;
 import com.marvin.nutrition.dto.UpdateMealTemplateRequest;
 import com.marvin.nutrition.service.MealTemplateService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -123,6 +124,35 @@ public class MealTemplateController {
     )
     public Mono<ResponseEntity<MealTemplateDTO>> createTemplate(@Valid @RequestBody CreateMealTemplateRequest req) {
         return mealTemplateService.create(req)
+                .map(created -> {
+                    final URI location = URI.create(TEMPLATES_LOCATION_PREFIX + created.id());
+                    return ResponseEntity.status(HttpStatus.CREATED).location(location).body(created);
+                });
+    }
+
+    /**
+     * Atomically creates a synthetic food entry and a meal template from a canteen AI estimate,
+     * returning 201 Created with a Location header.
+     *
+     * @param req the estimate request body
+     * @return a Mono with 201 Created, Location header, and the created meal template DTO
+     */
+    @PostMapping("/from-estimate")
+    @Operation(
+            summary = "Create a meal template from a canteen AI estimate",
+            description = "Atomically creates a synthetic food entry (source=ESTIMATE) and a meal template "
+                    + "containing that food at 100 g. The macro values are stored as-is on the food entry.",
+            responses = {
+                @ApiResponse(
+                        responseCode = "201",
+                        description = "Meal template created; Location header contains the URI",
+                        content = @Content(schema = @Schema(implementation = MealTemplateDTO.class))
+                ),
+                @ApiResponse(responseCode = "400", description = "Validation failed")
+            }
+    )
+    public Mono<ResponseEntity<MealTemplateDTO>> createFromEstimate(@Valid @RequestBody SaveEstimateAsTemplateRequest req) {
+        return mealTemplateService.createFromEstimate(req)
                 .map(created -> {
                     final URI location = URI.create(TEMPLATES_LOCATION_PREFIX + created.id());
                     return ResponseEntity.status(HttpStatus.CREATED).location(location).body(created);

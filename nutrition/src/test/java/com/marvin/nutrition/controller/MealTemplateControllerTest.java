@@ -12,6 +12,7 @@ import com.marvin.nutrition.dto.CreateMealTemplateRequest;
 import com.marvin.nutrition.dto.MealTemplateDTO;
 import com.marvin.nutrition.dto.MealTemplateItemDTO;
 import com.marvin.nutrition.dto.MealTemplateItemRequest;
+import com.marvin.nutrition.dto.SaveEstimateAsTemplateRequest;
 import com.marvin.nutrition.dto.UpdateMealTemplateRequest;
 import com.marvin.nutrition.service.MealTemplateService;
 import java.math.BigDecimal;
@@ -224,5 +225,37 @@ class MealTemplateControllerTest {
                 .verifyComplete();
 
         verify(mealTemplateService).delete(templateId);
+    }
+
+    // -----------------------------------------------------------------------
+    // POST /nutrition/meal-templates/from-estimate
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("createFromEstimate returns 201 Created with Location header pointing to new template")
+    void createFromEstimate_Valid_Returns201WithLocation() {
+        final SaveEstimateAsTemplateRequest req = new SaveEstimateAsTemplateRequest(
+                "Canteen Lunch",
+                new BigDecimal("650"),
+                new BigDecimal("35"),
+                new BigDecimal("70"),
+                new BigDecimal("20")
+        );
+        when(mealTemplateService.createFromEstimate(any(SaveEstimateAsTemplateRequest.class)))
+                .thenReturn(Mono.just(templateDTO));
+
+        final Mono<ResponseEntity<MealTemplateDTO>> result = mealTemplateController.createFromEstimate(req);
+
+        StepVerifier.create(result)
+                .assertNext(response -> {
+                    assertEquals(201, response.getStatusCode().value());
+                    assertNotNull(response.getBody());
+                    assertEquals("Breakfast Bowl", response.getBody().name());
+                    assertNotNull(response.getHeaders().getLocation());
+                    assertTrue(response.getHeaders().getLocation().toString().contains(templateId.toString()));
+                })
+                .verifyComplete();
+
+        verify(mealTemplateService).createFromEstimate(eq(req));
     }
 }
