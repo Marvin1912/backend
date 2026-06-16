@@ -11,8 +11,10 @@ import static org.mockito.Mockito.when;
 
 import com.marvin.nutrition.dto.CreateMealTemplateRequest;
 import com.marvin.nutrition.dto.MealTemplateItemRequest;
+import com.marvin.nutrition.dto.SaveEstimateAsTemplateRequest;
 import com.marvin.nutrition.dto.UpdateMealTemplateRequest;
 import com.marvin.nutrition.entity.FoodEntity;
+import com.marvin.nutrition.entity.FoodSource;
 import com.marvin.nutrition.entity.MealTemplateEntity;
 import com.marvin.nutrition.entity.MealTemplateItemEntity;
 import com.marvin.nutrition.repository.FoodRepository;
@@ -202,6 +204,71 @@ class MealTemplateWriteServiceTest {
 
         assertEquals(0, result.items().size());
         verify(mealTemplateItemRepository).deleteByMealTemplateId(templateId);
+        verify(mealTemplateItemRepository, never()).save(any());
+    }
+
+    // -----------------------------------------------------------------------
+    // createFromEstimate
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("createFromEstimate saves food, template and item with correct field values")
+    void createFromEstimate_SavesFoodTemplateAndItem() {
+        final SaveEstimateAsTemplateRequest req = new SaveEstimateAsTemplateRequest(
+                "Canteen Lunch",
+                new BigDecimal("650"),
+                new BigDecimal("35"),
+                new BigDecimal("70"),
+                new BigDecimal("20")
+        );
+        final UUID savedFoodId = UUID.randomUUID();
+        final FoodEntity savedFood = new FoodEntity();
+        savedFood.setId(savedFoodId);
+
+        when(foodRepository.save(any(FoodEntity.class))).thenReturn(savedFood);
+        when(mealTemplateRepository.save(any(MealTemplateEntity.class))).thenReturn(templateEntity);
+        when(mealTemplateItemRepository.save(any(MealTemplateItemEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        final MealTemplateWriteService.MealTemplateWithItems result = mealTemplateWriteService.createFromEstimate(req);
+
+        assertEquals(templateEntity, result.template());
+        assertEquals(1, result.items().size());
+
+        verify(foodRepository).save(argThat(food ->
+                "Canteen Lunch".equals(food.getName())
+                        && food.getBrand() == null
+                        && FoodSource.ESTIMATE.equals(food.getSource())
+                        && new BigDecimal("650").compareTo(food.getKcalPer100()) == 0
+                        && new BigDecimal("35").compareTo(food.getProteinPer100()) == 0
+                        && new BigDecimal("70").compareTo(food.getCarbsPer100()) == 0
+                        && new BigDecimal("20").compareTo(food.getFatPer100()) == 0
+                        && BigDecimal.valueOf(100).compareTo(food.getDefaultServingG()) == 0
+        ));
+        verify(mealTemplateRepository).save(argThat(t -> "Canteen Lunch".equals(t.getName())));
+        verify(mealTemplateItemRepository).save(argThat(item ->
+                templateId.equals(item.getMealTemplateId())
+                        && savedFoodId.equals(item.getFoodId())
+                        && BigDecimal.valueOf(100).compareTo(item.getQuantityG()) == 0
+        ));
+    }
+
+    @Test
+    @DisplayName("createFromEstimate does not save template or item when food save fails")
+    void createFromEstimate_FoodSaveFails_DoesNotSaveTemplateOrItem() {
+        final SaveEstimateAsTemplateRequest req = new SaveEstimateAsTemplateRequest(
+                "Canteen Lunch",
+                new BigDecimal("650"),
+                new BigDecimal("35"),
+                new BigDecimal("70"),
+                new BigDecimal("20")
+        );
+
+        when(foodRepository.save(any(FoodEntity.class))).thenThrow(new RuntimeException("DB error"));
+
+        assertThrows(RuntimeException.class, () -> mealTemplateWriteService.createFromEstimate(req));
+
+        verify(mealTemplateRepository, never()).save(any());
         verify(mealTemplateItemRepository, never()).save(any());
     }
 
