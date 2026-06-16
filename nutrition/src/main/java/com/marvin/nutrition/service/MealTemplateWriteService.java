@@ -2,13 +2,16 @@ package com.marvin.nutrition.service;
 
 import com.marvin.nutrition.dto.CreateMealTemplateRequest;
 import com.marvin.nutrition.dto.MealTemplateItemRequest;
+import com.marvin.nutrition.dto.SaveEstimateAsTemplateRequest;
 import com.marvin.nutrition.dto.UpdateMealTemplateRequest;
 import com.marvin.nutrition.entity.FoodEntity;
+import com.marvin.nutrition.entity.FoodSource;
 import com.marvin.nutrition.entity.MealTemplateEntity;
 import com.marvin.nutrition.entity.MealTemplateItemEntity;
 import com.marvin.nutrition.repository.FoodRepository;
 import com.marvin.nutrition.repository.MealTemplateItemRepository;
 import com.marvin.nutrition.repository.MealTemplateRepository;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -103,6 +106,42 @@ public class MealTemplateWriteService {
         final MealTemplateEntity template = mealTemplateRepository.findById(id)
                 .orElseThrow(() -> new NoSuchElementException("Meal template not found: " + id));
         mealTemplateRepository.delete(template);
+    }
+
+    /**
+     * Atomically creates a synthetic {@link FoodEntity} from the given estimate, then creates a
+     * {@link MealTemplateEntity} with that food as its sole item at 100 g.
+     *
+     * <p>The food entry is created with {@link FoodSource#ESTIMATE}, all per-100-g macro fields set
+     * to the estimate values, a fixed {@code defaultServingG} of 100, and no brand.</p>
+     *
+     * @param req the estimate request containing the template name and macro values
+     * @return the saved template together with its single saved item
+     */
+    @Transactional
+    public MealTemplateWithItems createFromEstimate(SaveEstimateAsTemplateRequest req) {
+        final FoodEntity food = new FoodEntity();
+        food.setName(req.name());
+        food.setBrand(null);
+        food.setSource(FoodSource.ESTIMATE);
+        food.setKcalPer100(req.kcal());
+        food.setProteinPer100(req.proteinG());
+        food.setCarbsPer100(req.carbsG());
+        food.setFatPer100(req.fatG());
+        food.setDefaultServingG(BigDecimal.valueOf(100));
+        final FoodEntity savedFood = foodRepository.save(food);
+
+        final MealTemplateEntity template = new MealTemplateEntity();
+        template.setName(req.name());
+        final MealTemplateEntity savedTemplate = mealTemplateRepository.save(template);
+
+        final MealTemplateItemEntity item = new MealTemplateItemEntity();
+        item.setMealTemplateId(savedTemplate.getId());
+        item.setFoodId(savedFood.getId());
+        item.setQuantityG(BigDecimal.valueOf(100));
+        final MealTemplateItemEntity savedItem = mealTemplateItemRepository.save(item);
+
+        return new MealTemplateWithItems(savedTemplate, List.of(savedItem));
     }
 
     /**

@@ -5,6 +5,7 @@ import com.marvin.nutrition.dto.CreateMealTemplateRequest;
 import com.marvin.nutrition.dto.MealEntryDTO;
 import com.marvin.nutrition.dto.MealTemplateDTO;
 import com.marvin.nutrition.dto.MealTemplateItemDTO;
+import com.marvin.nutrition.dto.SaveEstimateAsTemplateRequest;
 import com.marvin.nutrition.dto.UpdateMealTemplateRequest;
 import com.marvin.nutrition.entity.FoodEntity;
 import com.marvin.nutrition.entity.MealTemplateEntity;
@@ -114,6 +115,18 @@ public class MealTemplateService {
      */
     public Mono<MealTemplateDTO> create(CreateMealTemplateRequest req) {
         return Mono.fromCallable(() -> mealTemplateWriteService.create(req))
+                .subscribeOn(Schedulers.boundedElastic())
+                .map(this::toDTO);
+    }
+
+    /**
+     * Atomically creates a synthetic food entry and a meal template from a canteen AI estimate.
+     *
+     * @param req the estimate request containing the template name and macro values
+     * @return a Mono emitting the created meal template DTO
+     */
+    public Mono<MealTemplateDTO> createFromEstimate(SaveEstimateAsTemplateRequest req) {
+        return Mono.fromCallable(() -> mealTemplateWriteService.createFromEstimate(req))
                 .subscribeOn(Schedulers.boundedElastic())
                 .map(this::toDTO);
     }

@@ -13,6 +13,7 @@ import com.marvin.nutrition.dto.MealEntryDTO;
 import com.marvin.nutrition.dto.MealTemplateDTO;
 import com.marvin.nutrition.dto.MealTemplateItemDTO;
 import com.marvin.nutrition.dto.MealTemplateItemRequest;
+import com.marvin.nutrition.dto.SaveEstimateAsTemplateRequest;
 import com.marvin.nutrition.dto.UpdateMealTemplateRequest;
 import com.marvin.nutrition.entity.FoodEntity;
 import com.marvin.nutrition.entity.MealTemplateEntity;
@@ -197,6 +198,42 @@ class MealTemplateServiceTest {
                 .verifyComplete();
 
         verify(mealTemplateWriteService).create(req);
+    }
+
+    // -----------------------------------------------------------------------
+    // createFromEstimate
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("createFromEstimate delegates to write service and assembles response DTO")
+    void createFromEstimate_DelegatesAndAssemblesDTO() {
+        final SaveEstimateAsTemplateRequest req = new SaveEstimateAsTemplateRequest(
+                "Canteen Lunch",
+                new BigDecimal("650"),
+                new BigDecimal("35"),
+                new BigDecimal("70"),
+                new BigDecimal("20")
+        );
+        final MealTemplateWriteService.MealTemplateWithItems writeResult =
+                new MealTemplateWriteService.MealTemplateWithItems(templateEntity, List.of(itemEntity));
+
+        when(mealTemplateWriteService.createFromEstimate(req)).thenReturn(writeResult);
+        when(foodRepository.findAllById(List.of(foodId))).thenReturn(List.of(foodEntity));
+        when(mealTemplateMapper.toItemDTO(
+                itemEntity, "Oatmeal",
+                new BigDecimal("185.00"), new BigDecimal("6.50"),
+                new BigDecimal("30.00"), new BigDecimal("3.50")
+        )).thenReturn(itemDTO);
+
+        StepVerifier.create(mealTemplateService.createFromEstimate(req))
+                .assertNext(dto -> {
+                    assertEquals(templateId, dto.id());
+                    assertEquals("Breakfast Bowl", dto.name());
+                    assertEquals(List.of(itemDTO), dto.items());
+                })
+                .verifyComplete();
+
+        verify(mealTemplateWriteService).createFromEstimate(req);
     }
 
     // -----------------------------------------------------------------------
