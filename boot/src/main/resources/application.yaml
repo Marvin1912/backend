@@ -49,8 +49,15 @@ influxdb:
   token: ${INFLUX_TOKEN:rmz5aaaKYSpgvXSO3C1UFZmXjvtpwI81b7hcMaMJJqOTjvgI82iNAbSsF7fpGIy2fduNDKACQ759cyaiECrulg==}
   org: ${INFLUX_ORG:wildfly_domain}
 
-consul:
-  url: ${CONSUL_URL:http://192.168.178.29:8500}
+salary:
+  import:
+    ibans: ${SALARY_IMPORT_IBANS}
+special:
+  cost:
+    blocked-ibans: ${SPECIAL_COST_BLOCKED_IBANS}
+monthly:
+  cost:
+    blocked-ibans: ${MONTHLY_COST_BLOCKED_IBANS}
 
 logging:
   level:
