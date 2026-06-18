@@ -4,10 +4,21 @@ version = '0.0.1-SNAPSHOT'
 dependencies {
     api 'org.springframework.boot:spring-boot-starter-data-jpa'
     api project(':influxdb')
-    api project(':consul')
     api project(':camt')
     api 'org.flywaydb:flyway-database-postgresql'
     api 'org.hibernate.orm:hibernate-envers'
     implementation 'org.postgresql:postgresql:42.7.2'
     implementation 'io.projectreactor:reactor-core'
+
+    // Test dependencies
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testImplementation 'org.junit.platform:junit-platform-launcher'
+    testImplementation 'org.mockito:mockito-core'
+    testImplementation 'org.mockito:mockito-junit-jupiter'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'io.projectreactor:reactor-test'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
 }

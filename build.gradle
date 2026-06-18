@@ -90,7 +90,7 @@ subprojects {
 		}
 
 		// Common dependencies for modules that need Jackson/Spring annotations
-		if (name in ['common', 'api', 'costs', 'backup', 'camt', 'consul', 'plants', 'image-server', 'vocabulary', 'influxdb', 'uploader', 'mental-arithmetic', 'it-news', 'climate', 'grocery']) {
+		if (name in ['common', 'api', 'costs', 'backup', 'camt', 'plants', 'image-server', 'vocabulary', 'influxdb', 'uploader', 'mental-arithmetic', 'it-news', 'climate', 'grocery']) {
 			implementation 'org.springframework.boot:spring-boot-starter'
 			implementation 'com.fasterxml.jackson.core:jackson-databind'
 			implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'

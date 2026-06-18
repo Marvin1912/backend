@@ -1,0 +1,46 @@
+package com.marvin.costs.infrastructure;
+
+import java.util.Arrays;
+import java.util.Set;
+import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
+
+/** Environment-variable-backed implementation of {@link Ibans} that provides blocked IBANs for special costs. */
+@Component("specialCostBlockedIbans")
+public class SpecialCostBlockedIbansEnv implements Ibans {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(SpecialCostBlockedIbansEnv.class);
+
+    private final Set<String> blockedIbans;
+
+    /**
+     * Constructs a new {@code SpecialCostBlockedIbansEnv} and initialises the blocked IBANs.
+     *
+     * @param ibansProperty the comma-separated IBANs sourced from the {@code special.cost.blocked-ibans} property
+     */
+    public SpecialCostBlockedIbansEnv(@Value("${special.cost.blocked-ibans}") final String ibansProperty) {
+        this.blockedIbans = initIbans(ibansProperty);
+    }
+
+    private Set<String> initIbans(final String property) {
+        if (!StringUtils.hasText(property)) {
+            LOGGER.info("Initialized special cost blocked IBANs with: {}!", Set.of());
+            return Set.of();
+        }
+        final Set<String> ibans = Arrays.stream(property.split(","))
+                .map(String::trim)
+                .filter(StringUtils::hasText)
+                .collect(Collectors.toUnmodifiableSet());
+        LOGGER.info("Initialized special cost blocked IBANs with: {}!", ibans);
+        return ibans;
+    }
+
+    @Override
+    public Set<String> getIbans() {
+        return blockedIbans;
+    }
+}
