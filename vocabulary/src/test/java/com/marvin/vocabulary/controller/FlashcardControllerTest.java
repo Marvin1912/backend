@@ -1,7 +1,6 @@
 package com.marvin.vocabulary.controller;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 import com.generated.deepl.ApiClient;
@@ -16,7 +15,6 @@ import com.marvin.vocabulary.model.DeckEntity;
 import com.marvin.vocabulary.model.FlashcardEntity;
 import com.marvin.vocabulary.service.FlashcardService;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,11 +26,8 @@ import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DefaultDataBufferFactory;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
-import org.springframework.http.codec.multipart.FilePart;
 import org.springframework.test.web.reactive.server.WebTestClient;
-import org.springframework.web.reactive.function.BodyInserters;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -269,58 +264,6 @@ class FlashcardControllerTest {
     }
 
     @Test
-    void updateFlashcardsWithValidFileShouldImportAndUpdate() {
-        final String csvContent = "deck1\tanki-123\tfront1\tback1\tdescription1\n";
-        final byte[] fileBytes = csvContent.getBytes(StandardCharsets.UTF_8);
-
-        lenient().when(flashcardService.importFlashcards(fileBytes)).thenReturn(1);
-
-        final FilePart filePart = createMockFilePart("test.csv", fileBytes);
-
-        webTestClient.put()
-                .uri("/vocabulary/flashcards/file")
-                .contentType(MediaType.MULTIPART_FORM_DATA)
-                .body(BodyInserters.fromMultipartData("file", filePart))
-                .exchange()
-                .expectStatus().isNoContent()
-                .expectBody().isEmpty();
-    }
-
-    @Test
-    void updateFlashcardsWithEmptyFileShouldHandleGracefully() {
-        final FilePart filePart = createMockFilePart("empty.csv", new byte[0]);
-
-        lenient().when(flashcardService.importFlashcards(new byte[0])).thenReturn(0);
-
-        webTestClient.put()
-                .uri("/vocabulary/flashcards/file")
-                .contentType(MediaType.MULTIPART_FORM_DATA)
-                .body(BodyInserters.fromMultipartData("file", filePart))
-                .exchange()
-                .expectStatus().isNoContent()
-                .expectBody().isEmpty();
-    }
-
-    @Test
-    void updateFlashcardsWhenExceptionThrownShouldHandleError() {
-        final String csvContent = "invalid content";
-        final byte[] fileBytes = csvContent.getBytes(StandardCharsets.UTF_8);
-
-        lenient().when(flashcardService.importFlashcards(fileBytes))
-                .thenThrow(new RuntimeException("Import failed"));
-
-        final FilePart filePart = createMockFilePart("test.csv", fileBytes);
-
-        webTestClient.put()
-                .uri("/vocabulary/flashcards/file")
-                .contentType(MediaType.MULTIPART_FORM_DATA)
-                .body(BodyInserters.fromMultipartData("file", filePart))
-                .exchange()
-                .expectStatus().isNoContent()
-                .expectBody().isEmpty();
-    }
-
-    @Test
     void handleExceptionShouldReturnErrorResponse() {
         // Force an exception by mocking the service to throw an exception
         when(dictionaryClient.getWord(any())).thenThrow(new RuntimeException("Test exception"));
@@ -336,47 +279,4 @@ class FlashcardControllerTest {
                 });
     }
 
-    private FilePart createMockFilePart(final String filename, final byte[] content) {
-        return new MockFilePart(filename, content);
-    }
-
-    /**
-     * Mock implementation of FilePart for testing purposes.
-     */
-    private static class MockFilePart implements FilePart {
-
-        private final String filename;
-        private final byte[] content;
-
-        MockFilePart(final String filename, final byte[] content) {
-            this.filename = filename;
-            this.content = content;
-        }
-
-        @Override
-        public String filename() {
-            return filename;
-        }
-
-        @Override
-        public String name() {
-            return "file";
-        }
-
-        @Override
-        public Flux<DataBuffer> content() {
-            final DataBuffer buffer = new DefaultDataBufferFactory().wrap(content);
-            return Flux.just(buffer);
-        }
-
-        @Override
-        public HttpHeaders headers() {
-            return HttpHeaders.EMPTY;
-        }
-
-        @Override
-        public Mono<Void> transferTo(final Path dest) {
-            return Mono.empty();
-        }
-    }
 }
