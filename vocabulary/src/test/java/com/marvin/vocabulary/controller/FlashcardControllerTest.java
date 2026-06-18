@@ -190,11 +190,12 @@ class FlashcardControllerTest {
     }
 
     @Test
-    void getFileShouldReturnCsvFile() throws Exception {
-        final byte[] expectedFileContent = "#separator:tab\n#html:false\n#guid column:1\ntest-content"
+    void getFileShouldReturnStreamingCsvFile() {
+        final byte[] csvBytes = "#separator:tab\n#html:false\n#guid column:1\ntest-content"
                 .getBytes(StandardCharsets.UTF_8);
+        final DataBuffer dataBuffer = new DefaultDataBufferFactory().wrap(csvBytes);
 
-        when(flashcardService.getFile()).thenReturn(expectedFileContent);
+        when(flashcardService.streamCsvFile()).thenReturn(Flux.just(dataBuffer));
 
         webTestClient.get()
                 .uri("/vocabulary/flashcards/file")
@@ -203,23 +204,19 @@ class FlashcardControllerTest {
                 .expectHeader().contentType("text/csv")
                 .expectHeader().valueEquals("Content-Disposition", "attachment")
                 .expectHeader().valueEquals("filename", "Standard.csv")
-                .expectHeader()
-                .valueEquals("Content-Length", String.valueOf(expectedFileContent.length))
                 .expectBody(byte[].class)
-                .isEqualTo(expectedFileContent);
+                .isEqualTo(csvBytes);
     }
 
     @Test
-    void getFileWhenExceptionThrownShouldReturnInternalServerError() throws Exception {
-        when(flashcardService.getFile()).thenThrow(new RuntimeException("File generation failed"));
+    void getFileWhenStreamEmitsShouldReturnInternalServerError() {
+        when(flashcardService.streamCsvFile())
+                .thenReturn(Flux.error(new RuntimeException("File generation failed")));
 
         webTestClient.get()
                 .uri("/vocabulary/flashcards/file")
                 .exchange()
-                .expectStatus().is5xxServerError()
-                .expectBody()
-                .jsonPath("$.type").isEqualTo("RuntimeException")
-                .jsonPath("$.message").isEqualTo("File generation failed");
+                .expectStatus().is5xxServerError();
     }
 
     @Test

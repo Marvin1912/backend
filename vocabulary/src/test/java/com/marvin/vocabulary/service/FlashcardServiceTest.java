@@ -11,6 +11,8 @@ import com.marvin.vocabulary.model.DeckEntity;
 import com.marvin.vocabulary.model.FlashcardEntity;
 import com.marvin.vocabulary.repository.DeckRepository;
 import com.marvin.vocabulary.repository.FlashcardRepository;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -18,7 +20,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.dao.DataIntegrityViolationException;
+import reactor.test.StepVerifier;
 
 @ExtendWith(MockitoExtension.class)
 class FlashcardServiceTest {
@@ -72,6 +76,38 @@ class FlashcardServiceTest {
         assertThat(result).isEqualTo(savedOriginal);
         assertThat(result.getReverseFlashcard()).isEqualTo(savedReverse);
         assertThat(savedReverse.getReverseFlashcard()).isEqualTo(savedOriginal);
+    }
+
+    @Test
+    void streamCsvFileShouldEmitHeaderBuffersThenOneBufferPerFlashcard() {
+        final FlashcardEntity entity = new FlashcardEntity(
+                1, deck, null, "anki-1", "front", "back", "description", false);
+
+        when(flashcardRepository.findAll()).thenReturn(List.of(entity));
+
+        StepVerifier.create(flashcardService.streamCsvFile())
+                .assertNext(buf -> assertBufferContains(buf, "#separator:tab"))
+                .assertNext(buf -> assertBufferContains(buf, "#html:false"))
+                .assertNext(buf -> assertBufferContains(buf, "#guid column:1"))
+                .assertNext(buf -> assertBufferContains(buf, "front"))
+                .verifyComplete();
+    }
+
+    @Test
+    void streamCsvFileShouldEmitOnlyHeadersWhenNoFlashcardsExist() {
+        when(flashcardRepository.findAll()).thenReturn(List.of());
+
+        StepVerifier.create(flashcardService.streamCsvFile())
+                .assertNext(buf -> assertBufferContains(buf, "#separator:tab"))
+                .assertNext(buf -> assertBufferContains(buf, "#html:false"))
+                .assertNext(buf -> assertBufferContains(buf, "#guid column:1"))
+                .verifyComplete();
+    }
+
+    private void assertBufferContains(final DataBuffer buffer, final String expected) {
+        final byte[] bytes = new byte[buffer.readableByteCount()];
+        buffer.read(bytes);
+        assertThat(new String(bytes, StandardCharsets.UTF_8)).contains(expected);
     }
 
     @Test
