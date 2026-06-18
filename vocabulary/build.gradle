@@ -11,6 +11,7 @@ dependencies {
     implementation 'jakarta.validation:jakarta.validation-api'
     implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-csv'
     implementation 'org.hibernate.validator:hibernate-validator'
+    implementation 'org.glassfish.expressly:expressly:5.0.0'
 
     implementation 'io.swagger.core.v3:swagger-annotations:2.2.38'
     implementation("org.openapitools:jackson-databind-nullable:0.2.7")
