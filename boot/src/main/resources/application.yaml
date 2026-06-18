@@ -51,13 +51,13 @@ influxdb:
 
 salary:
   import:
-    ibans: ${SALARY_IMPORT_IBANS}
+    ibans: ${SALARY_IMPORT_IBANS:}
 special:
   cost:
-    blocked-ibans: ${SPECIAL_COST_BLOCKED_IBANS}
+    blocked-ibans: ${SPECIAL_COST_BLOCKED_IBANS:}
 monthly:
   cost:
-    blocked-ibans: ${MONTHLY_COST_BLOCKED_IBANS}
+    blocked-ibans: ${MONTHLY_COST_BLOCKED_IBANS:}
 
 logging:
   level:
