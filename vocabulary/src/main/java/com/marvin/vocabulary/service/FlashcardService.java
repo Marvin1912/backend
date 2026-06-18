@@ -1,6 +1,5 @@
 package com.marvin.vocabulary.service;
 
-import com.fasterxml.jackson.databind.MappingIterator;
 import com.fasterxml.jackson.databind.ObjectWriter;
 import com.fasterxml.jackson.dataformat.csv.CsvMapper;
 import com.fasterxml.jackson.dataformat.csv.CsvSchema;
@@ -13,8 +12,6 @@ import com.marvin.vocabulary.repository.FlashcardRepository;
 import jakarta.transaction.Transactional;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.buffer.DataBuffer;
@@ -26,7 +23,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.scheduler.Schedulers;
 
 /**
- * Service for managing vocabulary flashcards, including CRUD operations, CSV import, and streaming CSV export.
+ * Service for managing vocabulary flashcards, including CRUD operations and streaming CSV export.
  */
 @Slf4j
 @Service
@@ -171,17 +168,6 @@ public class FlashcardService {
     }
 
     /**
-     * Imports flashcards from a CSV file provided as a byte array.
-     *
-     * @param fileBytes the raw bytes of the CSV file
-     * @return the number of flashcards successfully imported
-     */
-    @Transactional
-    public Integer importFlashcards(byte[] fileBytes) {
-        return importFile(fileBytes);
-    }
-
-    /**
      * Streams all flashcards as CSV-formatted {@link DataBuffer} elements.
      *
      * <p>The response begins with Anki-compatible header lines, followed by one tab-separated row
@@ -223,52 +209,6 @@ public class FlashcardService {
         return Flux.concat(header, rows);
     }
 
-    private int importFile(byte[] fileBytes) {
-
-        final Set<String> allAnkiIds = flashcardRepository.getAllAnkiIds();
-
-        final AtomicInteger count = new AtomicInteger(0);
-        try (MappingIterator<FlashcardCsvDTO> iterator = new CsvMapper()
-                .readerFor(FlashcardCsvDTO.class)
-                .with(schema)
-                .readValues(fileBytes)
-        ) {
-            for (final FlashcardCsvDTO flashcardCsvDto : iterator.readAll()) {
-                try {
-                    importFlashcard(allAnkiIds, flashcardCsvDto, count);
-                } catch (Exception e) {
-                    log.error("Failed to import flashcard {}", flashcardCsvDto, e);
-                }
-            }
-        } catch (Exception e) {
-            log.error(e.getMessage(), e);
-        }
-
-        return count.get();
-    }
-
-    private void importFlashcard(Set<String> allAnkiIds, FlashcardCsvDTO flashcardCsvDto,
-            AtomicInteger count) {
-        if (!allAnkiIds.contains(flashcardCsvDto.guid())) {
-            flashcardRepository
-                    .findByFrontAndBack(flashcardCsvDto.front(), flashcardCsvDto.back())
-                    .ifPresentOrElse(
-                            flashcard -> flashcard.setAnkiId(flashcardCsvDto.guid()),
-                            () -> save(new Flashcard(
-                                    null,
-                                    getOrCreateDeck(flashcardCsvDto.deck()).getId(),
-                                    flashcardCsvDto.deck(),
-                                    flashcardCsvDto.guid(),
-                                    flashcardCsvDto.front(),
-                                    flashcardCsvDto.back(),
-                                    flashcardCsvDto.description(),
-                                    false
-                            ))
-                    );
-            count.incrementAndGet();
-        }
-    }
-
     /**
      * Returns a stream of all flashcards mapped to DTOs for export purposes.
      *
@@ -292,10 +232,6 @@ public class FlashcardService {
         return deckRepository.findById(deckId)
                 .orElseThrow(() -> new IllegalArgumentException(
                         "No deck found with id: " + deckId));
-    }
-
-    private DeckEntity getOrCreateDeck(String name) {
-        return findOrCreateDeckByName(name);
     }
 
     private DeckEntity getOrCreateReverseDeck(DeckEntity deck) {

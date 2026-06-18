@@ -22,11 +22,9 @@ import java.util.Map;
 import java.util.concurrent.Callable;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.buffer.DataBuffer;
-import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.codec.multipart.FilePart;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -35,7 +33,6 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Flux;
@@ -121,22 +118,6 @@ public class FlashcardController {
                 entity.getDescription(),
                 entity.isUpdated()
         );
-    }
-
-    /**
-     * Converts file part content to byte array.
-     *
-     * @param filePart the file part to convert
-     * @return a Mono containing the file content as byte array
-     */
-    private static Mono<byte[]> convertFilePartToBytes(FilePart filePart) {
-        return DataBufferUtils.join(filePart.content())
-                .flatMap(dataBuffer -> {
-                    byte[] bytes = new byte[dataBuffer.readableByteCount()];
-                    dataBuffer.read(bytes);
-                    DataBufferUtils.release(dataBuffer);
-                    return Mono.just(bytes);
-                });
     }
 
     /**
@@ -333,27 +314,6 @@ public class FlashcardController {
         return flashcardMono
                 .flatMap(entity -> executeBlocking(() -> flashcardService.update(entity)))
                 .map(updateResult -> ResponseEntity.noContent().build());
-    }
-
-    /**
-     * Imports flashcards from a CSV file.
-     *
-     * @param fileMono a Mono containing the file part to import
-     * @return a Mono with no content response
-     */
-    @PutMapping("/flashcards/file")
-    public Mono<ResponseEntity<Void>> updateFlashcards(
-            @RequestPart("file") Mono<FilePart> fileMono) {
-        return fileMono
-                .flatMap(FlashcardController::convertFilePartToBytes)
-                .switchIfEmpty(Mono.just(new byte[0]))
-                .flatMap(fileBytes -> executeBlocking(
-                        () -> flashcardService.importFlashcards(fileBytes)))
-                .onErrorResume(exception -> {
-                    log.error("Failed to import flashcards", exception);
-                    return Mono.just(0);
-                })
-                .map(importResult -> ResponseEntity.noContent().build());
     }
 
     /**
