@@ -16,6 +16,7 @@ import com.marvin.vocabulary.exceptions.RateLimitExceededException;
 import com.marvin.vocabulary.exceptions.WordNotFoundException;
 import com.marvin.vocabulary.model.FlashcardEntity;
 import com.marvin.vocabulary.service.FlashcardService;
+import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
@@ -25,6 +26,7 @@ import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -34,6 +36,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.support.WebExchangeBindException;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -44,6 +47,7 @@ import reactor.core.scheduler.Schedulers;
  * services via DeepL API.
  */
 @Slf4j
+@Validated
 @RestController
 @RequestMapping("/vocabulary")
 public class FlashcardController {
@@ -149,6 +153,24 @@ public class FlashcardController {
     @ExceptionHandler
     public ResponseEntity<Map<String, String>> handleException(Exception exception) {
         return createErrorResponse(exception, exception.getMessage());
+    }
+
+    /**
+     * Handles request body validation failures.
+     *
+     * @param exception the validation exception
+     * @return a 400 Bad Request error response
+     */
+    @ExceptionHandler
+    public ResponseEntity<Map<String, String>> handleWebExchangeBindException(
+            WebExchangeBindException exception) {
+        log.warn("Validation failed: {}", exception.getMessage());
+        return ResponseEntity.badRequest().body(
+                Map.of(
+                        "type", "VALIDATION_FAILED",
+                        "message", exception.getMessage()
+                )
+        );
     }
 
     /**
@@ -291,13 +313,12 @@ public class FlashcardController {
     /**
      * Creates a new flashcard.
      *
-     * @param flashcardMono a Mono containing the flashcard to create
+     * @param flashcard the flashcard to create
      * @return a Mono with the created flashcard location response
      */
     @PostMapping("/flashcards")
-    public Mono<ResponseEntity<Void>> addFlashcard(@RequestBody Mono<Flashcard> flashcardMono) {
-        return flashcardMono
-                .flatMap(entity -> executeBlocking(() -> flashcardService.save(entity)))
+    public Mono<ResponseEntity<Void>> addFlashcard(@RequestBody @Valid Flashcard flashcard) {
+        return executeBlocking(() -> flashcardService.save(flashcard))
                 .map(savedEntity -> ResponseEntity.created(
                         URI.create("/flashcards/" + savedEntity.getId())
                 ).build());
@@ -306,13 +327,12 @@ public class FlashcardController {
     /**
      * Updates an existing flashcard.
      *
-     * @param flashcardMono a Mono containing the flashcard to update
+     * @param flashcard the flashcard to update
      * @return a Mono with no content response
      */
     @PutMapping("/flashcards")
-    public Mono<ResponseEntity<Void>> updateFlashcard(@RequestBody Mono<Flashcard> flashcardMono) {
-        return flashcardMono
-                .flatMap(entity -> executeBlocking(() -> flashcardService.update(entity)))
+    public Mono<ResponseEntity<Void>> updateFlashcard(@RequestBody @Valid Flashcard flashcard) {
+        return executeBlocking(() -> flashcardService.update(flashcard))
                 .map(updateResult -> ResponseEntity.noContent().build());
     }
 
