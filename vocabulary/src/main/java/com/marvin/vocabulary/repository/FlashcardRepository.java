@@ -8,8 +8,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface FlashcardRepository extends JpaRepository<FlashcardEntity, Integer> {
 
-    List<FlashcardEntity> findByReverseFlashcardIsNull();
-
     List<FlashcardEntity> findByAnkiIdIsNull();
 
     List<FlashcardEntity> findByUpdated(boolean updated);
