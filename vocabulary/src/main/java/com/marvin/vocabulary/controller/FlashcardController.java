@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -159,21 +160,6 @@ public class FlashcardController {
     }
 
     /**
-     * Creates a CSV file download response.
-     *
-     * @param fileContent the file content as byte array
-     * @return a ResponseEntity configured for file download
-     */
-    private ResponseEntity<byte[]> createFileDownloadResponse(byte[] fileContent) {
-        return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType(CSV_MEDIA_TYPE))
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment")
-                .header("filename", CSV_FILENAME)
-                .contentLength(fileContent.length)
-                .body(fileContent);
-    }
-
-    /**
      * Handles general exceptions in the controller.
      *
      * @param exception the exception that occurred
@@ -304,19 +290,21 @@ public class FlashcardController {
     }
 
     /**
-     * Downloads all flashcards as a CSV file.
+     * Streams all flashcards as a CSV file download using reactive back-pressure.
      *
-     * @return a Mono containing the CSV file download response
+     * <p>No {@code Content-Length} header is set because the total size is unknown upfront.</p>
+     *
+     * @return a Mono containing a streaming CSV file download response
      */
     @GetMapping("/flashcards/file")
-    public Mono<ResponseEntity<byte[]>> getFile() {
-        try {
-            byte[] fileContent = flashcardService.getFile();
-            ResponseEntity<byte[]> responseEntity = createFileDownloadResponse(fileContent);
-            return Mono.just(responseEntity);
-        } catch (Exception exception) {
-            return Mono.error(exception);
-        }
+    public Mono<ResponseEntity<Flux<DataBuffer>>> getFile() {
+        final Flux<DataBuffer> csvStream = flashcardService.streamCsvFile();
+        final ResponseEntity<Flux<DataBuffer>> response = ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(CSV_MEDIA_TYPE))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment")
+                .header("filename", CSV_FILENAME)
+                .body(csvStream);
+        return Mono.just(response);
     }
 
     /**

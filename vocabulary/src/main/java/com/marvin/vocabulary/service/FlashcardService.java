@@ -1,7 +1,7 @@
 package com.marvin.vocabulary.service;
 
 import com.fasterxml.jackson.databind.MappingIterator;
-import com.fasterxml.jackson.databind.SequenceWriter;
+import com.fasterxml.jackson.databind.ObjectWriter;
 import com.fasterxml.jackson.dataformat.csv.CsvMapper;
 import com.fasterxml.jackson.dataformat.csv.CsvSchema;
 import com.marvin.vocabulary.dto.Flashcard;
@@ -11,16 +11,23 @@ import com.marvin.vocabulary.model.FlashcardEntity;
 import com.marvin.vocabulary.repository.DeckRepository;
 import com.marvin.vocabulary.repository.FlashcardRepository;
 import jakarta.transaction.Transactional;
-import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.core.io.buffer.DataBufferFactory;
+import org.springframework.core.io.buffer.DefaultDataBufferFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
+import reactor.core.scheduler.Schedulers;
 
+/**
+ * Service for managing vocabulary flashcards, including CRUD operations, CSV import, and streaming CSV export.
+ */
 @Slf4j
 @Service
 public class FlashcardService {
@@ -28,10 +35,18 @@ public class FlashcardService {
     private final CsvSchema schema;
     private final FlashcardRepository flashcardRepository;
     private final DeckRepository deckRepository;
+    private final DataBufferFactory dataBufferFactory;
 
+    /**
+     * Constructs a new FlashcardService with required dependencies.
+     *
+     * @param flashcardRepository the flashcard repository
+     * @param deckRepository      the deck repository
+     */
     public FlashcardService(FlashcardRepository flashcardRepository, DeckRepository deckRepository) {
         this.flashcardRepository = flashcardRepository;
         this.deckRepository = deckRepository;
+        this.dataBufferFactory = new DefaultDataBufferFactory();
 
         this.schema = CsvSchema.builder()
                 .setColumnSeparator('\t')
@@ -46,10 +61,23 @@ public class FlashcardService {
                 .build();
     }
 
+    /**
+     * Retrieves a flashcard by its ID.
+     *
+     * @param id the flashcard ID
+     * @return the flashcard entity, or {@code null} if not found
+     */
     public FlashcardEntity get(int id) {
         return flashcardRepository.findById(id).orElse(null);
     }
 
+    /**
+     * Retrieves flashcards with optional filtering.
+     *
+     * @param missing optional filter name (e.g. {@code "ankiId"})
+     * @param updated optional filter for updated status
+     * @return a list of matching flashcard entities
+     */
     public List<FlashcardEntity> get(String missing, Boolean updated) {
         if (missing == null && updated == null) {
             return flashcardRepository.findAll();
@@ -66,6 +94,12 @@ public class FlashcardService {
         return flashcardRepository.findAll();
     }
 
+    /**
+     * Saves a new flashcard and its reverse counterpart.
+     *
+     * @param flashcard the flashcard data to persist
+     * @return the saved original flashcard entity
+     */
     @Transactional
     public FlashcardEntity save(Flashcard flashcard) {
         DeckEntity deck = getDeckOrThrow(flashcard.deckId());
@@ -94,6 +128,12 @@ public class FlashcardService {
         return savedOriginal;
     }
 
+    /**
+     * Updates an existing flashcard and its reverse counterpart.
+     *
+     * @param flashcard the flashcard data to update
+     * @return the ID of the updated flashcard
+     */
     @Transactional
     public Integer update(Flashcard flashcard) {
         flashcardRepository.findById(flashcard.id())
@@ -130,45 +170,57 @@ public class FlashcardService {
         return flashcard.id();
     }
 
+    /**
+     * Imports flashcards from a CSV file provided as a byte array.
+     *
+     * @param fileBytes the raw bytes of the CSV file
+     * @return the number of flashcards successfully imported
+     */
     @Transactional
     public Integer importFlashcards(byte[] fileBytes) {
         return importFile(fileBytes);
     }
 
-    public byte[] getFile() throws Exception {
+    /**
+     * Streams all flashcards as CSV-formatted {@link DataBuffer} elements.
+     *
+     * <p>The response begins with Anki-compatible header lines, followed by one tab-separated row
+     * per flashcard entity. The blocking JPA {@code findAll()} call is offloaded to the bounded
+     * elastic scheduler so the event loop thread is never blocked.</p>
+     *
+     * @return a {@link Flux} of {@link DataBuffer} chunks representing the CSV content
+     */
+    public Flux<DataBuffer> streamCsvFile() {
+        final ObjectWriter csvWriter = new CsvMapper()
+                .writerFor(FlashcardCsvDTO.class)
+                .with(schema);
 
-        final CsvMapper csvMapper = new CsvMapper();
+        final Flux<DataBuffer> header = Flux.just(
+                dataBufferFactory.wrap("#separator:tab\n".getBytes(StandardCharsets.UTF_8)),
+                dataBufferFactory.wrap("#html:false\n".getBytes(StandardCharsets.UTF_8)),
+                dataBufferFactory.wrap("#guid column:1\n".getBytes(StandardCharsets.UTF_8))
+        );
 
-        byte[] file;
+        final Flux<DataBuffer> rows = Flux
+                .defer(() -> Flux.fromIterable(flashcardRepository.findAll()))
+                .subscribeOn(Schedulers.boundedElastic())
+                .map(entity -> new FlashcardCsvDTO(
+                        entity.getDeck().getName(),
+                        entity.getAnkiId(),
+                        entity.getFront(),
+                        entity.getBack(),
+                        entity.getDescription()
+                ))
+                .map(dto -> {
+                    try {
+                        final byte[] rowBytes = csvWriter.writeValueAsBytes(dto);
+                        return dataBufferFactory.wrap(rowBytes);
+                    } catch (Exception e) {
+                        throw new IllegalStateException("Failed to serialize flashcard to CSV", e);
+                    }
+                });
 
-        try (
-                ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-                SequenceWriter sequenceWriter = csvMapper
-                        .writerFor(FlashcardCsvDTO.class)
-                        .with(schema)
-                        .writeValues(byteArrayOutputStream)
-        ) {
-
-            byteArrayOutputStream.write("#separator:tab\n".getBytes(StandardCharsets.UTF_8));
-            byteArrayOutputStream.write("#html:false\n".getBytes(StandardCharsets.UTF_8));
-            byteArrayOutputStream.write("#guid column:1\n".getBytes(StandardCharsets.UTF_8));
-            byteArrayOutputStream.flush();
-
-            for (final FlashcardEntity flashcardEntity : flashcardRepository.findAll()) {
-                sequenceWriter.write(new FlashcardCsvDTO(
-                        flashcardEntity.getDeck().getName(),
-                        flashcardEntity.getAnkiId(),
-                        flashcardEntity.getFront(),
-                        flashcardEntity.getBack(),
-                        flashcardEntity.getDescription()
-                ));
-            }
-
-            file = byteArrayOutputStream.toByteArray();
-
-        }
-
-        return file;
+        return Flux.concat(header, rows);
     }
 
     private int importFile(byte[] fileBytes) {
@@ -217,6 +269,11 @@ public class FlashcardService {
         }
     }
 
+    /**
+     * Returns a stream of all flashcards mapped to DTOs for export purposes.
+     *
+     * @return a stream of {@link Flashcard} DTOs
+     */
     public Stream<Flashcard> getAllFlashcardsForExport() {
         return flashcardRepository.findAll().stream()
                 .map(entity -> new Flashcard(
