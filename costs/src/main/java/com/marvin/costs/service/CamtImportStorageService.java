@@ -32,9 +32,10 @@ public class CamtImportStorageService {
      *
      * @param fileName the name of the file to write
      * @param content  the raw bytes of the file
+     * @throws IllegalArgumentException if the resolved target path escapes the watched import directory
      */
     public void store(String fileName, byte[] content) {
-        final Path target = directoryIn.resolve(fileName);
+        final Path target = resolveWithinImportDirectory(fileName);
         try {
             Files.write(target, content);
             LOGGER.info("Stored uploaded CAMT file {} for import.", fileName);
@@ -42,6 +43,15 @@ public class CamtImportStorageService {
             LOGGER.error("Could not store uploaded CAMT file {}!", fileName, e);
             throw new UncheckedIOException(e);
         }
+    }
+
+    private Path resolveWithinImportDirectory(String fileName) {
+        final Path normalizedImportDirectory = directoryIn.toAbsolutePath().normalize();
+        final Path target = normalizedImportDirectory.resolve(fileName).normalize();
+        if (!target.startsWith(normalizedImportDirectory)) {
+            throw new IllegalArgumentException("File name escapes the import directory: " + fileName);
+        }
+        return target;
     }
 
     private void ensureDirectory() {

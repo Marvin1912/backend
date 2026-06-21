@@ -1,6 +1,7 @@
 package com.marvin.costs.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -56,5 +57,18 @@ class CamtImportStorageServiceTest {
 
         final Path storedFile = importDir.resolve("statement.zip");
         assertThat(Files.readString(storedFile)).isEqualTo("new-content");
+    }
+
+    @Test
+    void shouldRejectFileNameThatEscapesImportDirectoryViaPathTraversal() {
+        final Path importDir = tempDir.resolve("camt-in");
+        final CamtImportStorageService service = new CamtImportStorageService(importDir.toString());
+        final String traversalFileName = "../../../etc/passwd-traversal.zip";
+
+        assertThatThrownBy(() -> service.store(traversalFileName, "malicious-content".getBytes()))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        final Path escapedTarget = importDir.resolve(traversalFileName).normalize();
+        assertThat(escapedTarget).doesNotExist();
     }
 }

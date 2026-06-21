@@ -32,6 +32,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 @RestController
 @Tag(name = "CAMT Processing", description = "API for processing CAMT banking files")
@@ -158,12 +159,12 @@ public class CamtController {
             }
 
             return DataBufferUtils.join(file.content())
-                    .doOnNext(dataBuffer -> {
+                    .flatMap(dataBuffer -> Mono.<Void>fromRunnable(() -> {
                         final byte[] bytes = new byte[dataBuffer.readableByteCount()];
                         dataBuffer.read(bytes);
                         DataBufferUtils.release(dataBuffer);
                         camtImportStorageService.store(filename, bytes);
-                    })
+                    }).subscribeOn(Schedulers.boundedElastic()))
                     .then();
         });
     }
