@@ -1,6 +1,7 @@
 package com.marvin.api.controller;
 
 import com.marvin.costs.importer.DailyCostImportService;
+import com.marvin.costs.service.CamtImportStorageService;
 import com.marvin.camt.model.book_entry.BookingEntryDTO;
 import com.marvin.camt.model.book_entry.BookingsDTO;
 import com.marvin.camt.model.book_entry.CreditDebitCodeDTO;
@@ -22,10 +23,12 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.core.io.buffer.DataBufferUtils;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.multipart.FilePart;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -36,11 +39,14 @@ public class CamtController {
 
     private final CamtFileParser camtFileParser;
     private final DocumentUnmarshaller documentUnmarshaller;
+    private final CamtImportStorageService camtImportStorageService;
 
     public CamtController(CamtFileParser camtFileParser,
-            DocumentUnmarshaller documentUnmarshaller) {
+            DocumentUnmarshaller documentUnmarshaller,
+            CamtImportStorageService camtImportStorageService) {
         this.camtFileParser = camtFileParser;
         this.documentUnmarshaller = documentUnmarshaller;
+        this.camtImportStorageService = camtImportStorageService;
     }
 
     private static String replaceSpaces(String value) {
@@ -116,6 +122,49 @@ public class CamtController {
                     )
                     .collectList()
                     .map(this::getBookingsDTO);
+        });
+    }
+
+    @Operation(
+        summary = "Import a CAMT booking file",
+        description = "Uploads a zip file containing CAMT.052.001.08 XML files and stores it in the "
+                + "directory watched for asynchronous import. The file is not parsed or previewed here."
+    )
+    @ApiResponses(value = {
+        @ApiResponse(
+            responseCode = "202",
+            description = "File accepted and queued for asynchronous import"
+        ),
+        @ApiResponse(
+            responseCode = "400",
+            description = "Invalid file format",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE)
+        )
+    })
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    @PostMapping(
+            path = "/camt-entries/import",
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE
+    )
+    public Mono<Void> importBookings(
+            @Parameter(description = "Zip file containing CAMT XML files", required = true)
+            @RequestPart("file") Mono<FilePart> fileMono) {
+
+        return fileMono.flatMap(file -> {
+
+            final String filename = Objects.requireNonNull(file.filename());
+            if (!filename.toLowerCase().endsWith(".zip")) {
+                return Mono.error(new IllegalArgumentException("Only zip files are allowed"));
+            }
+
+            return DataBufferUtils.join(file.content())
+                    .doOnNext(dataBuffer -> {
+                        final byte[] bytes = new byte[dataBuffer.readableByteCount()];
+                        dataBuffer.read(bytes);
+                        DataBufferUtils.release(dataBuffer);
+                        camtImportStorageService.store(filename, bytes);
+                    })
+                    .then();
         });
     }
 
