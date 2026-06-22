@@ -77,8 +77,7 @@ public class SportActivityController {
                 .map(created -> {
                     final URI location = URI.create(ACTIVITIES_LOCATION_PREFIX + created.id());
                     return ResponseEntity.status(HttpStatus.CREATED).location(location).body(created);
-                })
-                .onErrorReturn(IllegalArgumentException.class, ResponseEntity.badRequest().build());
+                });
     }
 
     /**
@@ -108,8 +107,7 @@ public class SportActivityController {
             @Valid @RequestBody UpdateSportActivityRequest req) {
         return sportActivityService.updateActivity(id, req)
                 .map(ResponseEntity::ok)
-                .onErrorReturn(NoSuchElementException.class, ResponseEntity.notFound().build())
-                .onErrorReturn(IllegalArgumentException.class, ResponseEntity.badRequest().build());
+                .onErrorReturn(NoSuchElementException.class, ResponseEntity.notFound().build());
     }
 
     /**

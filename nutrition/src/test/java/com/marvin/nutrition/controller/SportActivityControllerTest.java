@@ -92,8 +92,8 @@ class SportActivityControllerTest {
     }
 
     @Test
-    @DisplayName("addActivity returns 400 when service emits IllegalArgumentException")
-    void addActivity_OtherTypeMissingDescription_Returns400() {
+    @DisplayName("addActivity propagates IllegalArgumentException with its message to the global handler")
+    void addActivity_OtherTypeMissingDescription_PropagatesIllegalArgumentException() {
         when(sportActivityService.addActivity(eq(today), any(CreateSportActivityRequest.class)))
                 .thenReturn(Mono.error(new IllegalArgumentException(
                         "description is required for OTHER activity type")));
@@ -102,8 +102,11 @@ class SportActivityControllerTest {
                 sportActivityController.addActivity(today, createRequest);
 
         StepVerifier.create(result)
-                .assertNext(response -> assertEquals(400, response.getStatusCode().value()))
-                .verifyComplete();
+                .expectErrorSatisfies(error -> {
+                    assertTrue(error instanceof IllegalArgumentException);
+                    assertEquals("description is required for OTHER activity type", error.getMessage());
+                })
+                .verify();
 
         verify(sportActivityService).addActivity(eq(today), any(CreateSportActivityRequest.class));
     }
@@ -153,8 +156,8 @@ class SportActivityControllerTest {
     }
 
     @Test
-    @DisplayName("updateActivity returns 400 when service emits IllegalArgumentException")
-    void updateActivity_OtherTypeMissingDescription_Returns400() {
+    @DisplayName("updateActivity propagates IllegalArgumentException with its message to the global handler")
+    void updateActivity_OtherTypeMissingDescription_PropagatesIllegalArgumentException() {
         when(sportActivityService.updateActivity(eq(activityId), any(UpdateSportActivityRequest.class)))
                 .thenReturn(Mono.error(new IllegalArgumentException(
                         "description is required for OTHER activity type")));
@@ -163,8 +166,11 @@ class SportActivityControllerTest {
                 sportActivityController.updateActivity(activityId, updateRequest);
 
         StepVerifier.create(result)
-                .assertNext(response -> assertEquals(400, response.getStatusCode().value()))
-                .verifyComplete();
+                .expectErrorSatisfies(error -> {
+                    assertTrue(error instanceof IllegalArgumentException);
+                    assertEquals("description is required for OTHER activity type", error.getMessage());
+                })
+                .verify();
 
         verify(sportActivityService).updateActivity(eq(activityId), any(UpdateSportActivityRequest.class));
     }
