@@ -10,12 +10,14 @@ import static org.mockito.Mockito.when;
 
 import com.marvin.nutrition.dto.CreateMealEntryRequest;
 import com.marvin.nutrition.dto.MealEntryDTO;
+import com.marvin.nutrition.dto.SportActivityDTO;
 import com.marvin.nutrition.dto.TargetsDTO;
 import com.marvin.nutrition.dto.UpdateMealEntryRequest;
 import com.marvin.nutrition.entity.DayTargetSnapshotEntity;
 import com.marvin.nutrition.entity.FoodEntity;
 import com.marvin.nutrition.entity.MealEntryEntity;
 import com.marvin.nutrition.entity.MealType;
+import com.marvin.nutrition.entity.SportActivityType;
 import com.marvin.nutrition.mapper.MealEntryMapper;
 import com.marvin.nutrition.repository.DayTargetSnapshotRepository;
 import com.marvin.nutrition.repository.FoodRepository;
@@ -23,6 +25,7 @@ import com.marvin.nutrition.repository.MealEntryRepository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -57,6 +60,9 @@ class MealEntryServiceTest {
 
     @Mock
     private MealEntryWriteService mealEntryWriteService;
+
+    @Mock
+    private SportActivityLookupService sportActivityLookupService;
 
     @InjectMocks
     private MealEntryService mealEntryService;
@@ -228,6 +234,67 @@ class MealEntryServiceTest {
                     assert BigDecimal.ZERO.compareTo(summary.totals().proteinG()) == 0;
                     assert BigDecimal.ZERO.compareTo(summary.totals().carbsG()) == 0;
                     assert BigDecimal.ZERO.compareTo(summary.totals().fatG()) == 0;
+                })
+                .verifyComplete();
+    }
+
+    // -----------------------------------------------------------------------
+    // getDay — sport activities reduce remaining kcal
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("getDay subtracts burned kcal from eaten kcal when computing remaining.kcal")
+    void getDay_WithBurnedKcal_SubtractsBurnedKcalFromRemaining() {
+        final MealEntryEntity entry = new MealEntryEntity();
+        entry.setKcal(new BigDecimal("1500.00"));
+        entry.setProteinG(new BigDecimal("100.00"));
+        entry.setCarbsG(new BigDecimal("150.00"));
+        entry.setFatG(new BigDecimal("50.00"));
+
+        final MealEntryDTO entryDto = new MealEntryDTO(
+                UUID.randomUUID(), today, MealType.LUNCH, null, "Mixed Meal", null,
+                new BigDecimal("1500.00"), new BigDecimal("100.00"),
+                new BigDecimal("150.00"), new BigDecimal("50.00"), null
+        );
+
+        final TargetsDTO targets = new TargetsDTO(1700, 2200, 2000, 150, 67, 248, "MIFFLIN_ST_JEOR");
+
+        final SportActivityDTO activityDto = new SportActivityDTO(
+                UUID.randomUUID(), today, SportActivityType.RUNNING, null, new BigDecimal("300.00")
+        );
+
+        when(mealEntryRepository.findByEntryDateOrderByCreationDateAsc(today))
+                .thenReturn(List.of(entry));
+        when(foodRepository.findAllById(any())).thenReturn(List.of());
+        when(mealEntryMapper.toDTO(any(MealEntryEntity.class), isNull())).thenReturn(entryDto);
+        when(nutritionTargetService.getTargets(today)).thenReturn(Mono.just(targets));
+        when(sportActivityLookupService.findByDate(today)).thenReturn(List.of(activityDto));
+
+        StepVerifier.create(mealEntryService.getDay(today))
+                .assertNext(summary -> {
+                    // target 2000, eaten 1500, burned 300 -> remaining.kcal = 800
+                    assertEquals(0, new BigDecimal("800").compareTo(summary.remaining().kcal()));
+                    assertEquals(0, new BigDecimal("300.00").compareTo(summary.totalKcalBurned()));
+                    assertEquals(1, summary.activities().size());
+                    assertEquals(activityDto, summary.activities().get(0));
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("getDay returns zero totalKcalBurned and an empty activities list when no activities are logged")
+    void getDay_NoActivities_ReturnsZeroTotalKcalBurned() {
+        when(mealEntryRepository.findByEntryDateOrderByCreationDateAsc(today))
+                .thenReturn(List.of());
+        when(foodRepository.findAllById(List.of())).thenReturn(List.of());
+        when(nutritionTargetService.getTargets(today))
+                .thenReturn(Mono.error(new TargetCalculationException("No data")));
+        when(sportActivityLookupService.findByDate(today)).thenReturn(List.of());
+
+        StepVerifier.create(mealEntryService.getDay(today))
+                .assertNext(summary -> {
+                    assertEquals(0, BigDecimal.ZERO.compareTo(summary.totalKcalBurned()));
+                    assertEquals(0, summary.activities().size());
                 })
                 .verifyComplete();
     }
@@ -486,6 +553,59 @@ class MealEntryServiceTest {
                     assertNull(summaries.get(0).targets());
                     assertNull(summaries.get(0).remaining());
                     assertEquals(2160, summaries.get(1).targets().targetKcal());
+                })
+                .verifyComplete();
+    }
+
+    // -----------------------------------------------------------------------
+    // getDays — sport activities reduce remaining kcal
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("getDays sums each day's burned kcal independently and subtracts it from that day's remaining.kcal")
+    void getDays_WithBurnedKcal_SubtractsBurnedKcalPerDay() {
+        final LocalDate from = today.minusDays(1);
+        final LocalDate to = today;
+
+        final MealEntryEntity entry = new MealEntryEntity();
+        entry.setEntryDate(today);
+        entry.setKcal(new BigDecimal("1500.00"));
+        entry.setProteinG(new BigDecimal("100.00"));
+        entry.setCarbsG(new BigDecimal("150.00"));
+        entry.setFatG(new BigDecimal("50.00"));
+
+        final MealEntryDTO entryDto = new MealEntryDTO(
+                UUID.randomUUID(), today, MealType.LUNCH, null, "Mixed Meal", null,
+                new BigDecimal("1500.00"), new BigDecimal("100.00"),
+                new BigDecimal("150.00"), new BigDecimal("50.00"), null
+        );
+
+        final TargetsDTO liveTargets = new TargetsDTO(1700, 2200, 2000, 150, 67, 248, "MIFFLIN_ST_JEOR");
+
+        final SportActivityDTO activityDto = new SportActivityDTO(
+                UUID.randomUUID(), today, SportActivityType.RUNNING, null, new BigDecimal("300.00")
+        );
+
+        when(mealEntryRepository.findByEntryDateBetweenOrderByEntryDateAscCreationDateAsc(from, to))
+                .thenReturn(List.of(entry));
+        when(foodRepository.findAllById(any())).thenReturn(List.of());
+        when(mealEntryMapper.toDTO(any(MealEntryEntity.class), isNull())).thenReturn(entryDto);
+        when(dayTargetSnapshotRepository.findByEntryDateBetween(from, to)).thenReturn(List.of());
+        when(nutritionTargetService.getTargetsSync(any(LocalDate.class))).thenReturn(liveTargets);
+        when(sportActivityLookupService.findByDateRangeGroupedByDate(from, to))
+                .thenReturn(Map.of(today, List.of(activityDto)));
+
+        StepVerifier.create(mealEntryService.getDays(from, to))
+                .assertNext(summaries -> {
+                    // 'from' has no entries and no activities: remaining.kcal = 2000 - 0 + 0 = 2000
+                    assertEquals(0, BigDecimal.ZERO.compareTo(summaries.get(0).totalKcalBurned()));
+                    assertEquals(0, summaries.get(0).activities().size());
+                    assertEquals(0, new BigDecimal("2000").compareTo(summaries.get(0).remaining().kcal()));
+
+                    // 'to' (today): target 2000, eaten 1500, burned 300 -> remaining.kcal = 800
+                    assertEquals(0, new BigDecimal("300.00").compareTo(summaries.get(1).totalKcalBurned()));
+                    assertEquals(1, summaries.get(1).activities().size());
+                    assertEquals(0, new BigDecimal("800").compareTo(summaries.get(1).remaining().kcal()));
                 })
                 .verifyComplete();
     }

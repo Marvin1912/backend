@@ -4,6 +4,7 @@ import com.marvin.nutrition.dto.CreateMealEntryRequest;
 import com.marvin.nutrition.dto.DaySummaryDTO;
 import com.marvin.nutrition.dto.MacrosDTO;
 import com.marvin.nutrition.dto.MealEntryDTO;
+import com.marvin.nutrition.dto.SportActivityDTO;
 import com.marvin.nutrition.dto.TargetsDTO;
 import com.marvin.nutrition.dto.UpdateMealEntryRequest;
 import com.marvin.nutrition.entity.DayTargetSnapshotEntity;
@@ -36,6 +37,7 @@ public class MealEntryService {
     private final NutritionTargetService nutritionTargetService;
     private final DayTargetSnapshotRepository dayTargetSnapshotRepository;
     private final MealEntryWriteService mealEntryWriteService;
+    private final SportActivityLookupService sportActivityLookupService;
 
     /**
      * Creates a new MealEntryService with the required dependencies.
@@ -46,6 +48,7 @@ public class MealEntryService {
      * @param nutritionTargetService      service for computing daily nutrition targets
      * @param dayTargetSnapshotRepository JPA repository for per-day nutrition target snapshots
      * @param mealEntryWriteService       service owning transactional meal entry write operations
+     * @param sportActivityLookupService  service owning read access to sport activities
      */
     public MealEntryService(
             MealEntryRepository mealEntryRepository,
@@ -53,13 +56,15 @@ public class MealEntryService {
             MealEntryMapper mealEntryMapper,
             NutritionTargetService nutritionTargetService,
             DayTargetSnapshotRepository dayTargetSnapshotRepository,
-            MealEntryWriteService mealEntryWriteService) {
+            MealEntryWriteService mealEntryWriteService,
+            SportActivityLookupService sportActivityLookupService) {
         this.mealEntryRepository = mealEntryRepository;
         this.foodRepository = foodRepository;
         this.mealEntryMapper = mealEntryMapper;
         this.nutritionTargetService = nutritionTargetService;
         this.dayTargetSnapshotRepository = dayTargetSnapshotRepository;
         this.mealEntryWriteService = mealEntryWriteService;
+        this.sportActivityLookupService = sportActivityLookupService;
     }
 
     /**
@@ -166,8 +171,12 @@ public class MealEntryService {
                     .onErrorReturn(TargetCalculationException.class, Optional.empty());
         });
 
-        return Mono.zip(entriesMono, targetsMono)
-                .map(tuple -> buildDaySummary(date, tuple.getT1(), tuple.getT2().orElse(null)));
+        final Mono<List<SportActivityDTO>> activitiesMono = Mono.fromCallable(() ->
+                sportActivityLookupService.findByDate(date)
+        ).subscribeOn(Schedulers.boundedElastic());
+
+        return Mono.zip(entriesMono, targetsMono, activitiesMono)
+                .map(tuple -> buildDaySummary(date, tuple.getT1(), tuple.getT2().orElse(null), tuple.getT3()));
     }
 
     /**
@@ -207,17 +216,24 @@ public class MealEntryService {
                         .collect(Collectors.toMap(DayTargetSnapshotEntity::getEntryDate, this::toTargetsDTO))
         ).subscribeOn(Schedulers.boundedElastic());
 
-        return Mono.zip(entriesByDateMono, snapshotsByDateMono)
+        final Mono<Map<LocalDate, List<SportActivityDTO>>> activitiesByDateMono = Mono.fromCallable(() ->
+                sportActivityLookupService.findByDateRangeGroupedByDate(from, to)
+        ).subscribeOn(Schedulers.boundedElastic());
+
+        return Mono.zip(entriesByDateMono, snapshotsByDateMono, activitiesByDateMono)
                 .flatMap(tuple -> {
                     final Map<LocalDate, List<MealEntryDTO>> entriesByDate = tuple.getT1();
                     final Map<LocalDate, TargetsDTO> snapshotsByDate = tuple.getT2();
+                    final Map<LocalDate, List<SportActivityDTO>> activitiesByDate = tuple.getT3();
 
                     return Mono.fromCallable(() -> {
                         final List<DaySummaryDTO> summaries = new ArrayList<>();
                         for (LocalDate date = from; !date.isAfter(to); date = date.plusDays(1)) {
                             final List<MealEntryDTO> entries = entriesByDate.getOrDefault(date, List.of());
                             final TargetsDTO targets = resolveTargets(date, snapshotsByDate);
-                            summaries.add(buildDaySummary(date, entries, targets));
+                            final List<SportActivityDTO> activities =
+                                    activitiesByDate.getOrDefault(date, List.of());
+                            summaries.add(buildDaySummary(date, entries, targets, activities));
                         }
                         return summaries;
                     }).subscribeOn(Schedulers.boundedElastic());
@@ -263,18 +279,20 @@ public class MealEntryService {
     }
 
     /**
-     * Assembles a {@link DaySummaryDTO} from the loaded entries and nullable targets.
+     * Assembles a {@link DaySummaryDTO} from the loaded entries, activities and nullable targets.
      *
-     * @param date    the summary date
-     * @param entries the mapped entry DTOs
-     * @param targets the daily nutrition targets, or null if unavailable
+     * @param date       the summary date
+     * @param entries    the mapped entry DTOs
+     * @param targets    the daily nutrition targets, or null if unavailable
+     * @param activities the mapped sport activity DTOs
      * @return the assembled day summary
      */
     private DaySummaryDTO buildDaySummary(
-            LocalDate date, List<MealEntryDTO> entries, TargetsDTO targets) {
+            LocalDate date, List<MealEntryDTO> entries, TargetsDTO targets, List<SportActivityDTO> activities) {
         final MacrosDTO totals = computeTotals(entries);
-        final MacrosDTO remaining = targets != null ? computeRemaining(targets, totals) : null;
-        return new DaySummaryDTO(date, entries, totals, targets, remaining);
+        final BigDecimal totalKcalBurned = computeTotalKcalBurned(activities);
+        final MacrosDTO remaining = targets != null ? computeRemaining(targets, totals, totalKcalBurned) : null;
+        return new DaySummaryDTO(date, entries, totals, targets, remaining, activities, totalKcalBurned);
     }
 
     /**
@@ -298,14 +316,29 @@ public class MealEntryService {
     }
 
     /**
-     * Computes the remaining macros as targets minus totals.
+     * Sums kilocalories burned across all sport activities.
      *
-     * @param targets the daily nutrition targets
-     * @param totals  the already-consumed totals
+     * @param activities the activities to sum
+     * @return the total kilocalories burned
+     */
+    private BigDecimal computeTotalKcalBurned(List<SportActivityDTO> activities) {
+        BigDecimal totalKcalBurned = BigDecimal.ZERO;
+        for (final SportActivityDTO activity : activities) {
+            totalKcalBurned = totalKcalBurned.add(activity.kcalBurned());
+        }
+        return totalKcalBurned;
+    }
+
+    /**
+     * Computes the remaining macros as targets minus totals, with burned kcal added back to the kcal line.
+     *
+     * @param targets         the daily nutrition targets
+     * @param totals          the already-consumed totals
+     * @param totalKcalBurned the kilocalories burned via sport activities on this day
      * @return a MacrosDTO with the remaining budget
      */
-    private MacrosDTO computeRemaining(TargetsDTO targets, MacrosDTO totals) {
-        final BigDecimal kcal = BigDecimal.valueOf(targets.targetKcal()).subtract(totals.kcal());
+    private MacrosDTO computeRemaining(TargetsDTO targets, MacrosDTO totals, BigDecimal totalKcalBurned) {
+        final BigDecimal kcal = BigDecimal.valueOf(targets.targetKcal()).subtract(totals.kcal()).add(totalKcalBurned);
         final BigDecimal proteinG = BigDecimal.valueOf(targets.proteinG()).subtract(totals.proteinG());
         final BigDecimal carbsG = BigDecimal.valueOf(targets.carbsG()).subtract(totals.carbsG());
         final BigDecimal fatG = BigDecimal.valueOf(targets.fatG()).subtract(totals.fatG());

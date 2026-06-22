@@ -172,7 +172,7 @@ class MealEntryControllerTest {
                 new BigDecimal("208.00"), new BigDecimal("57.00")
         );
         final DaySummaryDTO summaryDTO = new DaySummaryDTO(
-                today, List.of(mealEntryDTO), totals, targets, remaining
+                today, List.of(mealEntryDTO), totals, targets, remaining, List.of(), BigDecimal.ZERO
         );
 
         when(mealEntryService.getDay(today)).thenReturn(Mono.just(summaryDTO));
@@ -201,8 +201,9 @@ class MealEntryControllerTest {
     void getDays_ReturnsDays_Returns200WithSummaries() {
         final LocalDate from = today.minusDays(1);
         final MacrosDTO totals = new MacrosDTO(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
-        final DaySummaryDTO day1 = new DaySummaryDTO(from, List.of(), totals, null, null);
-        final DaySummaryDTO day2 = new DaySummaryDTO(today, List.of(mealEntryDTO), totals, null, null);
+        final DaySummaryDTO day1 = new DaySummaryDTO(from, List.of(), totals, null, null, List.of(), BigDecimal.ZERO);
+        final DaySummaryDTO day2 =
+                new DaySummaryDTO(today, List.of(mealEntryDTO), totals, null, null, List.of(), BigDecimal.ZERO);
 
         when(mealEntryService.getDays(from, today)).thenReturn(Mono.just(List.of(day1, day2)));
 
