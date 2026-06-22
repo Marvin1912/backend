@@ -27,7 +27,8 @@ public class TargetService {
     private static final double ACTIVITY_ACTIVE = 1.725;
     private static final double ACTIVITY_VERY_ACTIVE = 1.9;
 
-    private static final int GOAL_CUT_ADJUSTMENT = -500;
+    private static final double CUT_WEEKLY_LOSS_PCT = 0.7;
+    private static final int KCAL_PER_KG_FAT = 7700;
     private static final int GOAL_MAINTAIN_ADJUSTMENT = 0;
     private static final int GOAL_BULK_ADJUSTMENT = 300;
 
@@ -76,7 +77,7 @@ public class TargetService {
         final double weightKg = latestWeight.getWeightKg().doubleValue();
         final int bmr = resolveBmr(profile, weightKg, asOfDate);
         final int maintenanceKcal = computeMaintenance(bmr, profile.getActivityLevel());
-        final int targetKcal = maintenanceKcal + goalAdjustment(profile.getGoal());
+        final int targetKcal = maintenanceKcal + goalAdjustment(profile.getGoal(), weightKg);
 
         final int proteinG = (int) Math.round(profile.getProteinPerKg().doubleValue() * weightKg);
         final int fatG = profile.getFatPct()
@@ -154,14 +155,32 @@ public class TargetService {
     /**
      * Returns the kcal adjustment for the given dietary goal.
      *
-     * @param goal the dietary goal
+     * <p>For {@code CUT}, the deficit is scaled to bodyweight rather than a flat value, following
+     * Garthe et al. 2011, which found that a weekly bodyweight loss rate of about 0.7% best
+     * preserves lean mass during a cut. The weekly deficit is derived from that target loss rate
+     * assuming roughly {@value #KCAL_PER_KG_FAT} kcal per kg of fat mass, then spread evenly
+     * across the week to obtain the daily adjustment.</p>
+     *
+     * @param goal     the dietary goal
+     * @param weightKg current body weight in kilograms, used to scale the CUT deficit
      * @return positive, zero, or negative integer kcal adjustment
      */
-    private int goalAdjustment(Goal goal) {
+    private int goalAdjustment(Goal goal, double weightKg) {
         return switch (goal) {
-            case CUT -> GOAL_CUT_ADJUSTMENT;
+            case CUT -> -cutDailyDeficit(weightKg);
             case MAINTAIN -> GOAL_MAINTAIN_ADJUSTMENT;
             case BULK -> GOAL_BULK_ADJUSTMENT;
         };
+    }
+
+    /**
+     * Computes the daily kcal deficit for a CUT goal, scaled to bodyweight per Garthe et al. 2011.
+     *
+     * @param weightKg current body weight in kilograms
+     * @return the daily kcal deficit, rounded to the nearest whole kcal
+     */
+    private int cutDailyDeficit(double weightKg) {
+        final double weeklyDeficitKcal = weightKg * (CUT_WEEKLY_LOSS_PCT / 100) * KCAL_PER_KG_FAT;
+        return (int) Math.round(weeklyDeficitKcal / 7);
     }
 }
