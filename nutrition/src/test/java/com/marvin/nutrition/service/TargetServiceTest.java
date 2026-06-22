@@ -93,9 +93,10 @@ class TargetServiceTest {
     /**
      * Female, 25 years, 165 cm, 60 kg → BMR = 10*60 + 6.25*165 - 5*25 - 161 = 600+1031.25-125-161 = 1345.25 → 1345.
      * LIGHT activity: 1345 * 1.375 = 1849.375 → 1849.
-     * CUT goal: 1849 - 500 = 1349.
-     * protein = 2.0 * 60 = 120 g, fat = round(0.30 * 1349 / 9) = round(44.97) = 45 g,
-     * carbs = round((1349 - 120*4 - 45*9) / 4) = round((1349 - 480 - 405) / 4) = round(464 / 4) = round(116) = 116 g.
+     * CUT goal: weeklyDeficitKcal = 60 * (0.7/100) * 7700 = 3234, dailyDeficitKcal = round(3234/7) = 462,
+     * target = 1849 - 462 = 1387.
+     * protein = 2.0 * 60 = 120 g, fat = round(0.30 * 1387 / 9) = round(46.23) = 46 g,
+     * carbs = round((1387 - 120*4 - 46*9) / 4) = round((1387 - 480 - 414) / 4) = round(493 / 4) = round(123.25) = 123 g.
      */
     @Test
     @DisplayName("FEMALE LIGHT CUT uses Mifflin–St Jeor and returns correct macros")
@@ -109,10 +110,10 @@ class TargetServiceTest {
 
         assertEquals(1345, result.bmr());
         assertEquals(1849, result.maintenanceKcal());
-        assertEquals(1349, result.targetKcal());
+        assertEquals(1387, result.targetKcal());
         assertEquals(120, result.proteinG());
-        assertEquals(45, result.fatG());
-        assertEquals(116, result.carbsG());
+        assertEquals(46, result.fatG());
+        assertEquals(123, result.carbsG());
         assertEquals(TargetBasis.MIFFLIN_ST_JEOR.name(), result.basis());
     }
 
@@ -212,8 +213,8 @@ class TargetServiceTest {
     // -----------------------------------------------------------------------
 
     @Test
-    @DisplayName("CUT goal subtracts 500 kcal from maintenance")
-    void compute_CutGoal_Subtracts500() {
+    @DisplayName("CUT goal applies a bodyweight-scaled deficit")
+    void compute_CutGoal_AppliesBodyweightRateDeficit() {
         final LocalDate birthDate = LocalDate.now().minusYears(30);
         final ProfileEntity p = profile(Sex.MALE, birthDate, 175.0,
                 ActivityLevel.SEDENTARY, Goal.CUT, 2.0, 0.30, 2000);
@@ -221,9 +222,66 @@ class TargetServiceTest {
 
         final TargetsDTO result = targetService.computeTargets(p, w);
 
-        // maintenance = round(2000 * 1.2) = 2400; target = 2400 - 500 = 1900
+        // maintenance = round(2000 * 1.2) = 2400
+        // weeklyDeficitKcal = 80 * (0.7/100) * 7700 = 4312; dailyDeficitKcal = round(4312/7) = round(616.0) = 616
+        // target = 2400 - 616 = 1784
         assertEquals(2400, result.maintenanceKcal());
-        assertEquals(1900, result.targetKcal());
+        assertEquals(1784, result.targetKcal());
+    }
+
+    /**
+     * Garthe et al. 2011: a 0.7%/week bodyweight loss rate preserves lean mass during a cut.
+     * 50 kg → weeklyDeficitKcal = 50 * 0.007 * 7700 = 2695; dailyDeficitKcal = round(2695/7) = 385.
+     * basalKcal = 1500, SEDENTARY → maintenance = round(1500 * 1.2) = 1800; target = 1800 - 385 = 1415.
+     */
+    @Test
+    @DisplayName("CUT goal scales the deficit to bodyweight: 50 kg")
+    void compute_CutGoal_50kg_AppliesBodyweightRateDeficit() {
+        final LocalDate birthDate = LocalDate.now().minusYears(30);
+        final ProfileEntity p = profile(Sex.MALE, birthDate, 175.0,
+                ActivityLevel.SEDENTARY, Goal.CUT, 2.0, 0.30, 1500);
+        final WeightEntryEntity w = weight(50.0);
+
+        final TargetsDTO result = targetService.computeTargets(p, w);
+
+        assertEquals(1800, result.maintenanceKcal());
+        assertEquals(1415, result.targetKcal());
+    }
+
+    /**
+     * 70 kg → weeklyDeficitKcal = 70 * 0.007 * 7700 = 3773; dailyDeficitKcal = round(3773/7) = 539.
+     * basalKcal = 1500, SEDENTARY → maintenance = round(1500 * 1.2) = 1800; target = 1800 - 539 = 1261.
+     */
+    @Test
+    @DisplayName("CUT goal scales the deficit to bodyweight: 70 kg")
+    void compute_CutGoal_70kg_AppliesBodyweightRateDeficit() {
+        final LocalDate birthDate = LocalDate.now().minusYears(30);
+        final ProfileEntity p = profile(Sex.MALE, birthDate, 175.0,
+                ActivityLevel.SEDENTARY, Goal.CUT, 2.0, 0.30, 1500);
+        final WeightEntryEntity w = weight(70.0);
+
+        final TargetsDTO result = targetService.computeTargets(p, w);
+
+        assertEquals(1800, result.maintenanceKcal());
+        assertEquals(1261, result.targetKcal());
+    }
+
+    /**
+     * 90 kg → weeklyDeficitKcal = 90 * 0.007 * 7700 = 4851; dailyDeficitKcal = round(4851/7) = 693.
+     * basalKcal = 1500, SEDENTARY → maintenance = round(1500 * 1.2) = 1800; target = 1800 - 693 = 1107.
+     */
+    @Test
+    @DisplayName("CUT goal scales the deficit to bodyweight: 90 kg")
+    void compute_CutGoal_90kg_AppliesBodyweightRateDeficit() {
+        final LocalDate birthDate = LocalDate.now().minusYears(30);
+        final ProfileEntity p = profile(Sex.MALE, birthDate, 175.0,
+                ActivityLevel.SEDENTARY, Goal.CUT, 2.0, 0.30, 1500);
+        final WeightEntryEntity w = weight(90.0);
+
+        final TargetsDTO result = targetService.computeTargets(p, w);
+
+        assertEquals(1800, result.maintenanceKcal());
+        assertEquals(1107, result.targetKcal());
     }
 
     @Test
