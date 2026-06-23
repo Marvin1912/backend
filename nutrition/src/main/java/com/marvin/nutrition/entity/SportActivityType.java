@@ -12,6 +12,8 @@ public enum SportActivityType {
     WALKING,
     /** Resistance or weight training activity. */
     STRENGTH_TRAINING,
+    /** Cross trainer (elliptical) activity. */
+    CROSS_TRAINER,
     /** Any other activity type not covered above. */
     OTHER
 }

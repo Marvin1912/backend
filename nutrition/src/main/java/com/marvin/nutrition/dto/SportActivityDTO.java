@@ -11,7 +11,7 @@ import java.util.UUID;
  *
  * @param id           server-assigned unique identifier
  * @param entryDate    the date this activity belongs to
- * @param activityType the activity category (RUNNING, SWIMMING, CYCLING, WALKING, STRENGTH_TRAINING, OTHER)
+ * @param activityType the activity category (RUNNING, SWIMMING, CYCLING, WALKING, STRENGTH_TRAINING, CROSS_TRAINER, OTHER)
  * @param description  free-text label, required when {@code activityType} is OTHER
  * @param kcalBurned   kilocalories burned during the activity
  */

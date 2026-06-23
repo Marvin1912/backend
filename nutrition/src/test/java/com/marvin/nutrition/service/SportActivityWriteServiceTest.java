@@ -87,6 +87,34 @@ class SportActivityWriteServiceTest {
     }
 
     @Test
+    @DisplayName("createActivity persists a CROSS_TRAINER activity without requiring a description")
+    void createActivity_CrossTrainerType_PersistsWithoutDescription() {
+        final CreateSportActivityRequest req =
+                new CreateSportActivityRequest(SportActivityType.CROSS_TRAINER, null, new BigDecimal("250.00"));
+
+        final SportActivityEntity saved = new SportActivityEntity();
+        saved.setEntryDate(today);
+        saved.setActivityType(SportActivityType.CROSS_TRAINER);
+        saved.setKcalBurned(new BigDecimal("250.00"));
+
+        final SportActivityDTO dto = new SportActivityDTO(
+                activityId, today, SportActivityType.CROSS_TRAINER, null, new BigDecimal("250.00")
+        );
+
+        when(sportActivityRepository.save(any(SportActivityEntity.class))).thenReturn(saved);
+        when(sportActivityMapper.toDTO(saved)).thenReturn(dto);
+
+        final SportActivityDTO result = sportActivityWriteService.createActivity(today, req);
+
+        assertEquals(dto, result);
+        verify(sportActivityRepository).save(argThat(e ->
+                SportActivityType.CROSS_TRAINER.equals(e.getActivityType())
+                        && today.equals(e.getEntryDate())
+                        && new BigDecimal("250.00").compareTo(e.getKcalBurned()) == 0
+        ));
+    }
+
+    @Test
     @DisplayName("createActivity persists an OTHER activity when description is supplied")
     void createActivity_OtherTypeWithDescription_Persists() {
         final CreateSportActivityRequest req =
