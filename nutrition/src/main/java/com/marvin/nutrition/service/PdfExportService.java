@@ -11,7 +11,6 @@ import com.lowagie.text.pdf.PdfPCell;
 import com.lowagie.text.pdf.PdfPTable;
 import com.lowagie.text.pdf.PdfWriter;
 import com.marvin.nutrition.dto.DaySummaryDTO;
-import com.marvin.nutrition.dto.MacrosDTO;
 import com.marvin.nutrition.dto.MealEntryDTO;
 import com.marvin.nutrition.dto.ProfileDTO;
 import com.marvin.nutrition.dto.SportActivityDTO;
@@ -116,16 +115,19 @@ public class PdfExportService {
     private byte[] buildPdf(PdfContext ctx, LocalDate from, LocalDate to) throws DocumentException {
         final ByteArrayOutputStream baos = new ByteArrayOutputStream();
         final Document doc = new Document();
-        PdfWriter.getInstance(doc, baos);
-        doc.open();
-        doc.add(new Paragraph("Nutrition Diary Export", FONT_TITLE));
-        doc.add(new Paragraph("Period: " + from + " – " + to, FONT_BODY));
-        doc.add(Chunk.NEWLINE);
-        addProfileSection(doc, ctx);
-        addPeriodSummarySection(doc, ctx, from, to);
-        addWeightTrendSection(doc, ctx, from, to);
-        addDailyLogSection(doc, ctx, from, to);
-        doc.close();
+        try {
+            PdfWriter.getInstance(doc, baos);
+            doc.open();
+            doc.add(new Paragraph("Nutrition Diary Export", FONT_TITLE));
+            doc.add(new Paragraph("Period: " + from + " - " + to, FONT_BODY));
+            doc.add(Chunk.NEWLINE);
+            addProfileSection(doc, ctx);
+            addPeriodSummarySection(doc, ctx, from, to);
+            addWeightTrendSection(doc, ctx, from, to);
+            addDailyLogSection(doc, ctx);
+        } finally {
+            doc.close();
+        }
         return baos.toByteArray();
     }
 
@@ -158,6 +160,7 @@ public class PdfExportService {
                     + " g  |  Carbs: " + t.carbsG() + " g", FONT_BODY));
         }
         if (!ctx.weights().isEmpty()) {
+            // ctx.weights() is in descending date order (from WeightService.findAll())
             final WeightEntryDTO latest = ctx.weights().get(0);
             doc.add(new Paragraph(
                     "Latest Weight: " + latest.weightKg() + " kg  (" + latest.entryDate() + ")",
@@ -180,7 +183,7 @@ public class PdfExportService {
         doc.add(new Paragraph("2. Period Summary", FONT_SECTION));
         final List<DaySummaryDTO> trackedDays = ctx.days().stream()
                 .filter(d -> !d.entries().isEmpty())
-                .collect(Collectors.toList());
+                .toList();
         final long calendarDays = from.datesUntil(to.plusDays(1)).count();
         doc.add(new Paragraph(
                 "Days tracked: " + trackedDays.size() + " / " + calendarDays, FONT_BODY));
@@ -231,9 +234,11 @@ public class PdfExportService {
         final BigDecimal tolerance = BigDecimal.valueOf(targetKcal)
                 .multiply(BigDecimal.valueOf(ON_TARGET_TOLERANCE));
         return trackedDays.stream()
-                .filter(d -> d.totals().kcal()
-                        .subtract(BigDecimal.valueOf(targetKcal)).abs()
-                        .compareTo(tolerance) <= 0)
+                .filter(d -> {
+                    final BigDecimal net = d.totals().kcal().subtract(d.totalKcalBurned());
+                    return net.subtract(BigDecimal.valueOf(targetKcal)).abs()
+                            .compareTo(tolerance) <= 0;
+                })
                 .count();
     }
 
@@ -251,7 +256,7 @@ public class PdfExportService {
         doc.add(new Paragraph("3. Weight Trend", FONT_SECTION));
         final List<WeightEntryDTO> inRange = ctx.weights().stream()
                 .filter(w -> !w.entryDate().isBefore(from) && !w.entryDate().isAfter(to))
-                .collect(Collectors.toList());
+                .toList();
         if (inRange.isEmpty()) {
             doc.add(new Paragraph("No weight entries recorded in this period.", FONT_BODY));
             doc.add(Chunk.NEWLINE);
@@ -271,21 +276,16 @@ public class PdfExportService {
 
     /**
      * Adds the daily log section (section 4), one subsection per calendar day in the range.
-     * Days without a matching {@link DaySummaryDTO} from the service are rendered as empty stubs.
+     * {@link MealEntryService#getDays} guarantees exactly one {@link DaySummaryDTO} per calendar
+     * day, so {@code ctx.days()} is iterated directly.
      *
-     * @param doc  the document to write to
-     * @param ctx  the PDF context containing the day summaries
-     * @param from the first calendar day to render
-     * @param to   the last calendar day to render
+     * @param doc the document to write to
+     * @param ctx the PDF context containing the day summaries
      * @throws DocumentException if the PDF library encounters an error
      */
-    private void addDailyLogSection(
-            Document doc, PdfContext ctx, LocalDate from, LocalDate to) throws DocumentException {
+    private void addDailyLogSection(Document doc, PdfContext ctx) throws DocumentException {
         doc.add(new Paragraph("4. Daily Log", FONT_SECTION));
-        final Map<LocalDate, DaySummaryDTO> byDate = ctx.days().stream()
-                .collect(Collectors.toMap(DaySummaryDTO::date, d -> d));
-        for (LocalDate date = from; !date.isAfter(to); date = date.plusDays(1)) {
-            final DaySummaryDTO day = byDate.getOrDefault(date, emptyDaySummary(date));
+        for (final DaySummaryDTO day : ctx.days()) {
             renderDaySection(doc, day);
         }
     }
@@ -382,7 +382,7 @@ public class PdfExportService {
         final BigDecimal consumed = day.totals().kcal();
         final BigDecimal burned = day.totalKcalBurned();
         final BigDecimal net = consumed.subtract(burned);
-        doc.add(new Paragraph("Totals — Kcal: " + consumed
+        doc.add(new Paragraph("Totals - Kcal: " + consumed
                 + "  Protein: " + day.totals().proteinG() + " g"
                 + "  Carbs: " + day.totals().carbsG() + " g"
                 + "  Fat: " + day.totals().fatG() + " g", FONT_BODY));
@@ -419,18 +419,6 @@ public class PdfExportService {
             return s;
         }
         return Character.toUpperCase(s.charAt(0)) + s.substring(1).toLowerCase(Locale.ROOT);
-    }
-
-    /**
-     * Creates a zero-valued day summary stub for dates that have no data from the service.
-     *
-     * @param date the date for which to create the stub
-     * @return a DaySummaryDTO with zero totals and empty entry and activity lists
-     */
-    private DaySummaryDTO emptyDaySummary(LocalDate date) {
-        final MacrosDTO zero = new MacrosDTO(
-                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
-        return new DaySummaryDTO(date, List.of(), zero, null, null, List.of(), BigDecimal.ZERO);
     }
 
     /**

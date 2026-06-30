@@ -133,6 +133,23 @@ class PdfExportServiceTest {
     }
 
     @Test
+    @DisplayName("generatePdf still produces a valid PDF when nutritionTargetService emits an error")
+    void gracefulWhenTargetsMissing() {
+        when(profileService.getProfile()).thenReturn(Mono.just(sampleProfile()));
+        when(nutritionTargetService.getTargets()).thenReturn(
+                Mono.error(new RuntimeException("targets unavailable")));
+        when(weightService.findAll()).thenReturn(Flux.empty());
+        when(mealEntryService.getDays(from, to)).thenReturn(Mono.just(List.of()));
+
+        StepVerifier.create(pdfExportService.generatePdf(from, to))
+                .assertNext(bytes -> {
+                    assertNotNull(bytes);
+                    assertEquals('%', (char) bytes[0]);
+                })
+                .verifyComplete();
+    }
+
+    @Test
     @DisplayName("generatePdf calls mealEntryService.getDays(from, to) and weightService.findAll()")
     void callsCorrectServices() {
         setupHappyPathMocks();
