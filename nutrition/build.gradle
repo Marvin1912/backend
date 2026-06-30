@@ -4,6 +4,8 @@ version = '0.0.1-SNAPSHOT'
 dependencies {
     implementation project(':costs')
 
+    implementation 'com.github.librepdf:openpdf:2.0.3'
+
     implementation 'org.mapstruct:mapstruct:1.6.3'
     implementation 'org.springdoc:springdoc-openapi-starter-webflux-ui:2.8.3'
     implementation 'jakarta.validation:jakarta.validation-api'
