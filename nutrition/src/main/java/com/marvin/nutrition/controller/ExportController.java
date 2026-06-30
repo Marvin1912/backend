@@ -3,6 +3,7 @@ package com.marvin.nutrition.controller;
 import com.marvin.nutrition.service.PdfExportService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.LocalDate;
@@ -37,18 +38,24 @@ public class ExportController {
 
     /**
      * Exports the nutrition diary as a downloadable PDF for the given date range.
-     * Returns {@code 400 Bad Request} immediately if {@code from} is after {@code to}.
+     * Throws {@link IllegalArgumentException} (mapped to 400 by the global exception handler)
+     * if {@code from} is after {@code to}.
      *
      * @param from the first date to include in the export (ISO-8601, inclusive)
      * @param to   the last date to include in the export (ISO-8601, inclusive)
-     * @return a Mono with 200 and the PDF bytes, or 400 if from is after to
+     * @return a Mono with 200 and the PDF bytes as an attachment
+     * @throws IllegalArgumentException if from is after to
      */
     @GetMapping("/nutrition/export/pdf")
     @Operation(
             summary = "Export nutrition diary as PDF",
             description = "Generates a PDF nutrition diary export for the given inclusive date range.",
             responses = {
-                @ApiResponse(responseCode = "200", description = "PDF generated and returned as attachment"),
+                @ApiResponse(
+                        responseCode = "200",
+                        description = "PDF generated and returned as attachment",
+                        content = @Content(mediaType = "application/pdf")
+                ),
                 @ApiResponse(responseCode = "400", description = "from is after to")
             }
     )
@@ -60,7 +67,7 @@ public class ExportController {
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
             @Parameter(description = "End date (ISO-8601)", example = "2026-01-31") LocalDate to) {
         if (from.isAfter(to)) {
-            return Mono.just(ResponseEntity.badRequest().<byte[]>build());
+            throw new IllegalArgumentException("from (" + from + ") must not be after to (" + to + ")");
         }
         final String filename = "nutrition-export-" + from + "-" + to + ".pdf";
         final HttpHeaders responseHeaders = new HttpHeaders();

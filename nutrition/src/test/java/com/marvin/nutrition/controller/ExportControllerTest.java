@@ -2,7 +2,7 @@ package com.marvin.nutrition.controller;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.ArgumentMatchers.any;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -45,6 +45,10 @@ class ExportControllerTest {
         pdfBytes = new byte[]{1, 2, 3, 4, 5};
     }
 
+    // -----------------------------------------------------------------------
+    // GET /nutrition/export/pdf — happy paths
+    // -----------------------------------------------------------------------
+
     @Test
     @DisplayName("returns 200 with PDF content type and attachment header when service returns bytes")
     void exportPdf_ServiceReturnsBytes_Returns200WithPdfContentTypeAndAttachmentHeader() {
@@ -69,17 +73,52 @@ class ExportControllerTest {
     }
 
     @Test
-    @DisplayName("returns 400 Bad Request when from is after to without calling service")
-    void exportPdf_FromAfterTo_Returns400WithoutCallingService() {
+    @DisplayName("returns 200 for a single-day range when from equals to")
+    void exportPdf_FromEqualsTo_Returns200() {
+        final LocalDate singleDay = LocalDate.of(2026, 6, 15);
+        when(pdfExportService.generatePdf(singleDay, singleDay)).thenReturn(Mono.just(pdfBytes));
+
+        final Mono<ResponseEntity<byte[]>> result = exportController.exportPdf(singleDay, singleDay);
+
+        StepVerifier.create(result)
+                .assertNext(response -> {
+                    assertEquals(200, response.getStatusCode().value());
+                    assertEquals(MediaType.APPLICATION_PDF, response.getHeaders().getContentType());
+                    final String contentDisposition =
+                            response.getHeaders().getFirst(HttpHeaders.CONTENT_DISPOSITION);
+                    assertEquals(
+                            "attachment; filename=\"nutrition-export-2026-06-15-2026-06-15.pdf\"",
+                            contentDisposition);
+                })
+                .verifyComplete();
+
+        verify(pdfExportService).generatePdf(singleDay, singleDay);
+    }
+
+    // -----------------------------------------------------------------------
+    // GET /nutrition/export/pdf — error paths
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("throws IllegalArgumentException synchronously when from is after to without calling service")
+    void exportPdf_FromAfterTo_ThrowsIllegalArgumentException() {
         final LocalDate laterDate = LocalDate.of(2026, 1, 31);
         final LocalDate earlierDate = LocalDate.of(2026, 1, 1);
 
-        final Mono<ResponseEntity<byte[]>> result = exportController.exportPdf(laterDate, earlierDate);
+        assertThrows(IllegalArgumentException.class,
+                () -> exportController.exportPdf(laterDate, earlierDate));
 
-        StepVerifier.create(result)
-                .assertNext(response -> assertEquals(400, response.getStatusCode().value()))
-                .verifyComplete();
+        verify(pdfExportService, never()).generatePdf(laterDate, earlierDate);
+    }
 
-        verify(pdfExportService, never()).generatePdf(any(LocalDate.class), any(LocalDate.class));
+    @Test
+    @DisplayName("propagates error from service as reactor error signal")
+    void exportPdf_ServiceReturnsError_PropagatesError() {
+        when(pdfExportService.generatePdf(from, to))
+                .thenReturn(Mono.error(new RuntimeException("pdf build failed")));
+
+        StepVerifier.create(exportController.exportPdf(from, to))
+                .expectError(RuntimeException.class)
+                .verify();
     }
 }
