@@ -127,7 +127,8 @@ public class MealPlanController {
     @PutMapping("/sections/{id}")
     @Operation(
             summary = "Update a meal-plan section",
-            description = "Applies partial updates to an existing meal-plan section's title, note and/or callout.",
+            description = "Applies partial updates to an existing meal-plan section's title, note, callout and/or "
+                    + "totals row (label, kcal, protein).",
             responses = {
                 @ApiResponse(
                         responseCode = "200",

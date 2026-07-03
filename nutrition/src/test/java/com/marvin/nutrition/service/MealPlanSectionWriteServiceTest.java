@@ -88,6 +88,71 @@ class MealPlanSectionWriteServiceTest {
         assertThrows(NoSuchElementException.class, () -> mealPlanSectionWriteService.updateSection(sectionId, req));
     }
 
+    @Test
+    @DisplayName("updateSection applies totalsLabel/totalsKcal/totalsProtein when provided")
+    void updateSection_AppliesTotalsFields_ReturnsUpdatedSectionWithRows() {
+        final UUID sectionId = UUID.randomUUID();
+        final MealPlanSectionEntity section = new MealPlanSectionEntity();
+        section.setId(sectionId);
+        section.setTitle("title");
+        section.setNote("note");
+        section.setTotalsLabel("old label");
+        section.setTotalsKcal("2.000 kcal");
+        section.setTotalsProtein("150,0 g");
+
+        final MealPlanSectionDTO sectionDTO =
+                new MealPlanSectionDTO(sectionId, "title", "note", List.of(), null, null);
+
+        final UpdateMealPlanSectionRequest req =
+                new UpdateMealPlanSectionRequest(null, null, null, "Tagesgesamt", "2.407 kcal", "182,2 g");
+
+        when(mealPlanSectionRepository.findById(sectionId)).thenReturn(Optional.of(section));
+        when(mealPlanSectionRepository.save(section)).thenReturn(section);
+        when(mealPlanRowRepository.findAllByMealPlanSectionIdOrderBySortOrderAsc(sectionId))
+                .thenReturn(List.of());
+        when(mealPlanMapper.toRowDTOs(List.of())).thenReturn(List.of());
+        when(mealPlanMapper.toSectionDTO(section, List.of())).thenReturn(sectionDTO);
+
+        final MealPlanSectionDTO result = mealPlanSectionWriteService.updateSection(sectionId, req);
+
+        assertEquals("Tagesgesamt", section.getTotalsLabel());
+        assertEquals("2.407 kcal", section.getTotalsKcal());
+        assertEquals("182,2 g", section.getTotalsProtein());
+        assertEquals(sectionDTO, result);
+    }
+
+    @Test
+    @DisplayName("updateSection leaves totals untouched when totals fields are null")
+    void updateSection_TotalsFieldsNull_LeavesTotalsUnchanged() {
+        final UUID sectionId = UUID.randomUUID();
+        final MealPlanSectionEntity section = new MealPlanSectionEntity();
+        section.setId(sectionId);
+        section.setTitle("title");
+        section.setNote("note");
+        section.setTotalsLabel("Tagesgesamt");
+        section.setTotalsKcal("2.407 kcal");
+        section.setTotalsProtein("182,2 g");
+
+        final MealPlanSectionDTO sectionDTO =
+                new MealPlanSectionDTO(sectionId, "title", "note", List.of(), null, null);
+
+        final UpdateMealPlanSectionRequest req = new UpdateMealPlanSectionRequest("title", null, null);
+
+        when(mealPlanSectionRepository.findById(sectionId)).thenReturn(Optional.of(section));
+        when(mealPlanSectionRepository.save(section)).thenReturn(section);
+        when(mealPlanRowRepository.findAllByMealPlanSectionIdOrderBySortOrderAsc(sectionId))
+                .thenReturn(List.of());
+        when(mealPlanMapper.toRowDTOs(List.of())).thenReturn(List.of());
+        when(mealPlanMapper.toSectionDTO(section, List.of())).thenReturn(sectionDTO);
+
+        final MealPlanSectionDTO result = mealPlanSectionWriteService.updateSection(sectionId, req);
+
+        assertEquals("Tagesgesamt", section.getTotalsLabel());
+        assertEquals("2.407 kcal", section.getTotalsKcal());
+        assertEquals("182,2 g", section.getTotalsProtein());
+        assertEquals(sectionDTO, result);
+    }
+
     // -----------------------------------------------------------------------
     // updateRow
     // -----------------------------------------------------------------------
