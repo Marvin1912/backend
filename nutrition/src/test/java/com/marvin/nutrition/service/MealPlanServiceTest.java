@@ -24,6 +24,7 @@ import com.marvin.nutrition.repository.MealPlanStatRepository;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -97,34 +98,35 @@ class MealPlanServiceTest {
                 new MealPlanStatEntity(), new MealPlanStatEntity(),
                 new MealPlanStatEntity(), new MealPlanStatEntity());
         statDTOs = List.of(
-                new MealPlanStatDTO("Tagesbudget (Ø)", "2.416 kcal"),
-                new MealPlanStatDTO("Protein", "~184 g"),
-                new MealPlanStatDTO("Kohlenhydrate", "~291 g"),
-                new MealPlanStatDTO("Fett", "~52 g"));
+                new MealPlanStatDTO(UUID.randomUUID(), "Tagesbudget (Ø)", "2.416 kcal"),
+                new MealPlanStatDTO(UUID.randomUUID(), "Protein", "~184 g"),
+                new MealPlanStatDTO(UUID.randomUUID(), "Kohlenhydrate", "~291 g"),
+                new MealPlanStatDTO(UUID.randomUUID(), "Fett", "~52 g"));
 
         changelogEntities = List.of(new MealPlanChangelogEntryEntity(), new MealPlanChangelogEntryEntity());
         changelogDTOs = List.of(
-                new MealPlanChangelogEntryDTO("Whey", "80 g/Tag (2×40 g)", "→ 40 g/Tag"),
-                new MealPlanChangelogEntryDTO("Magerquark", null, "neu: 300 g/Tag"));
+                new MealPlanChangelogEntryDTO(UUID.randomUUID(), "Whey", "80 g/Tag (2×40 g)", "→ 40 g/Tag"),
+                new MealPlanChangelogEntryDTO(UUID.randomUUID(), "Magerquark", null, "neu: 300 g/Tag"));
 
         sourceEntities = List.of(new MealPlanSourceEntity(), new MealPlanSourceEntity());
         sourceDTOs = List.of(
-                new MealPlanSourceDTO("Magerquark (fatsecret.de)", "https://www.fatsecret.de/magerquark"),
-                new MealPlanSourceDTO("Basmatireis (fatsecret.de)", "https://www.fatsecret.de/basmatireis"));
+                new MealPlanSourceDTO(UUID.randomUUID(), "Magerquark (fatsecret.de)", "https://www.fatsecret.de/magerquark"),
+                new MealPlanSourceDTO(UUID.randomUUID(), "Basmatireis (fatsecret.de)", "https://www.fatsecret.de/basmatireis"));
 
-        final MealPlanRowDTO row = new MealPlanRowDTO("Frühstück", "Haferflocken, Whey", "90g/20g", "519", "28,0 g");
+        final MealPlanRowDTO row =
+                new MealPlanRowDTO(UUID.randomUUID(), "Frühstück", "Haferflocken, Whey", "90g/20g", "519", "28,0 g");
         sectionDTOs = List.of(
-                new MealPlanSectionDTO("1 · Tagesstruktur", "note", List.of(row), null, "callout"),
-                new MealPlanSectionDTO("2 · Wochentage", "note", List.of(row), null, null),
-                new MealPlanSectionDTO("3 · Wochenende", "note", List.of(row), null, "callout"));
+                new MealPlanSectionDTO(UUID.randomUUID(), "1 · Tagesstruktur", "note", List.of(row), null, "callout"),
+                new MealPlanSectionDTO(UUID.randomUUID(), "2 · Wochentage", "note", List.of(row), null, null),
+                new MealPlanSectionDTO(UUID.randomUUID(), "3 · Wochenende", "note", List.of(row), null, "callout"));
 
         final MealPlanShoppingItemDTO plainItem =
-                new MealPlanShoppingItemDTO("Rinderhüftsteak", "Lidl", null, null, "435 g");
+                new MealPlanShoppingItemDTO(UUID.randomUUID(), "Rinderhüftsteak", "Lidl", null, null, "435 g");
         final MealPlanShoppingItemDTO badgedItem = new MealPlanShoppingItemDTO(
-                "Hähnchenbrustfilet", "frisch, Kühltheke", "warn", "nur 1.200 g verfügbar", "1.200 g");
+                UUID.randomUUID(), "Hähnchenbrustfilet", "frisch, Kühltheke", "warn", "nur 1.200 g verfügbar", "1.200 g");
         categoryDTOs = List.of(
-                new MealPlanShoppingCategoryDTO("Fleisch & Fisch", List.of(badgedItem, plainItem)),
-                new MealPlanShoppingCategoryDTO("Milchprodukte & Eier", List.of(plainItem)));
+                new MealPlanShoppingCategoryDTO(UUID.randomUUID(), "Fleisch & Fisch", List.of(badgedItem, plainItem)),
+                new MealPlanShoppingCategoryDTO(UUID.randomUUID(), "Milchprodukte & Eier", List.of(plainItem)));
     }
 
     /** Stubs every repository/assembler/mapper call needed for a full, successful {@code getMealPlan()} read. */

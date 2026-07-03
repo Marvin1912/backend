@@ -58,15 +58,15 @@ class MealPlanShoppingListAssemblerTest {
         itemTwoEntity.setId(UUID.randomUUID());
         itemTwoEntity.setName("Magerquark");
 
-        final MealPlanShoppingItemDTO itemOneDTO =
-                new MealPlanShoppingItemDTO("Hähnchenbrustfilet", "frisch, Kühltheke", "warn", "nur 1.200 g verfügbar", "1.200 g");
+        final MealPlanShoppingItemDTO itemOneDTO = new MealPlanShoppingItemDTO(
+                itemOneEntity.getId(), "Hähnchenbrustfilet", "frisch, Kühltheke", "warn", "nur 1.200 g verfügbar", "1.200 g");
         final MealPlanShoppingItemDTO itemTwoDTO =
-                new MealPlanShoppingItemDTO("Magerquark", "Milbona", null, null, "2.100 g");
+                new MealPlanShoppingItemDTO(itemTwoEntity.getId(), "Magerquark", "Milbona", null, null, "2.100 g");
 
         final MealPlanShoppingCategoryDTO categoryOneDTO =
-                new MealPlanShoppingCategoryDTO("Fleisch & Fisch", List.of(itemOneDTO));
+                new MealPlanShoppingCategoryDTO(categoryOneId, "Fleisch & Fisch", List.of(itemOneDTO));
         final MealPlanShoppingCategoryDTO categoryTwoDTO =
-                new MealPlanShoppingCategoryDTO("Milchprodukte & Eier", List.of(itemTwoDTO));
+                new MealPlanShoppingCategoryDTO(categoryTwoId, "Milchprodukte & Eier", List.of(itemTwoDTO));
 
         when(mealPlanShoppingCategoryRepository.findAllByMealPlanIdOrderBySortOrderAsc(mealPlanId))
                 .thenReturn(List.of(categoryOne, categoryTwo));
