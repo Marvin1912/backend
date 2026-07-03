@@ -2,6 +2,7 @@ package com.marvin.nutrition.dto;
 
 import com.marvin.nutrition.dto.validation.NullOrNotBlank;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Size;
 
 /**
  * Request body for updating a meal-plan footer source.
@@ -13,10 +14,12 @@ import io.swagger.v3.oas.annotations.media.Schema;
 @Schema(description = "Request to update a meal-plan footer source")
 public record UpdateMealPlanSourceRequest(
         @NullOrNotBlank
+        @Size(max = 500)
         @Schema(description = "Updated display label of the source", example = "Magerquark (Milbona/Milsani, fatsecret.de)")
         String label,
 
         @NullOrNotBlank
+        @Size(max = 1000)
         @Schema(description = "Updated link to the source", example = "https://www.fatsecret.de/magerquark")
         String url
 ) {

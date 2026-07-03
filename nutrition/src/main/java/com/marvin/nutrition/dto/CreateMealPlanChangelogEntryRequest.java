@@ -4,6 +4,7 @@ import com.marvin.nutrition.dto.validation.NullOrNotBlank;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 /**
  * Request body for appending a new entry to the meal plan's changelog.
@@ -18,10 +19,12 @@ import jakarta.validation.constraints.NotNull;
 @Schema(description = "Request to append a new entry to the meal plan's changelog")
 public record CreateMealPlanChangelogEntryRequest(
         @NotBlank
+        @Size(max = 255)
         @Schema(description = "Short label identifying what changed", example = "Whey")
         String tag,
 
         @NullOrNotBlank
+        @Size(max = 500)
         @Schema(description = "Previous value, absent if this is a newly introduced item", example = "80 g/Tag (2×40 g)")
         String was,
 

@@ -2,6 +2,7 @@ package com.marvin.nutrition.dto;
 
 import com.marvin.nutrition.dto.validation.NullOrNotBlank;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Size;
 
 /**
  * Request body for updating a meal-plan headline statistic.
@@ -13,10 +14,12 @@ import io.swagger.v3.oas.annotations.media.Schema;
 @Schema(description = "Request to update a meal-plan headline statistic")
 public record UpdateMealPlanStatRequest(
         @NullOrNotBlank
+        @Size(max = 255)
         @Schema(description = "Updated statistic label", example = "Tagesbudget (Ø)")
         String label,
 
         @NullOrNotBlank
+        @Size(max = 255)
         @Schema(description = "Updated statistic display value", example = "2.416 kcal")
         String value
 ) {
