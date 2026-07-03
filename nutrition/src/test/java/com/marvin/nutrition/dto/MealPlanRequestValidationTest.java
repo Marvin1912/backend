@@ -141,6 +141,54 @@ public class MealPlanRequestValidationTest {
     }
 
     @Test
+    @DisplayName("UpdateMealPlanSectionRequest with over-long totalsLabel yields a violation")
+    void updateMealPlanSectionRequest_overLongTotalsLabel_yieldsViolation() {
+        final UpdateMealPlanSectionRequest req =
+                new UpdateMealPlanSectionRequest(null, null, null, "x".repeat(256), null, null);
+
+        final Set<ConstraintViolation<UpdateMealPlanSectionRequest>> violations = validator.validate(req);
+
+        assertFalse(violations.isEmpty(), "Expected a violation for totalsLabel exceeding 255 chars");
+        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("totalsLabel")));
+    }
+
+    @Test
+    @DisplayName("UpdateMealPlanSectionRequest with over-long totalsKcal yields a violation")
+    void updateMealPlanSectionRequest_overLongTotalsKcal_yieldsViolation() {
+        final UpdateMealPlanSectionRequest req =
+                new UpdateMealPlanSectionRequest(null, null, null, null, "x".repeat(256), null);
+
+        final Set<ConstraintViolation<UpdateMealPlanSectionRequest>> violations = validator.validate(req);
+
+        assertFalse(violations.isEmpty(), "Expected a violation for totalsKcal exceeding 255 chars");
+        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("totalsKcal")));
+    }
+
+    @Test
+    @DisplayName("UpdateMealPlanSectionRequest with over-long totalsProtein yields a violation")
+    void updateMealPlanSectionRequest_overLongTotalsProtein_yieldsViolation() {
+        final UpdateMealPlanSectionRequest req =
+                new UpdateMealPlanSectionRequest(null, null, null, null, null, "x".repeat(256));
+
+        final Set<ConstraintViolation<UpdateMealPlanSectionRequest>> violations = validator.validate(req);
+
+        assertFalse(violations.isEmpty(), "Expected a violation for totalsProtein exceeding 255 chars");
+        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("totalsProtein")));
+    }
+
+    @Test
+    @DisplayName("UpdateMealPlanSectionRequest with blank totalsLabel yields a violation")
+    void updateMealPlanSectionRequest_blankTotalsLabel_yieldsViolation() {
+        final UpdateMealPlanSectionRequest req =
+                new UpdateMealPlanSectionRequest(null, null, null, " ", null, null);
+
+        final Set<ConstraintViolation<UpdateMealPlanSectionRequest>> violations = validator.validate(req);
+
+        assertFalse(violations.isEmpty(), "Expected a violation for blank totalsLabel");
+        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("totalsLabel")));
+    }
+
+    @Test
     @DisplayName("UpdateMealPlanRowRequest with valid-length fields yields zero violations")
     void updateMealPlanRowRequest_valid_noViolations() {
         final UpdateMealPlanRowRequest req = new UpdateMealPlanRowRequest("meal", "details", "qty", "kcal", "protein");
