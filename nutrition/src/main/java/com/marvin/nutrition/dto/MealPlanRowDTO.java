@@ -1,10 +1,12 @@
 package com.marvin.nutrition.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.util.UUID;
 
 /**
  * Data Transfer Object representing a single meal row within a meal plan section.
  *
+ * @param id      the row's unique identifier
  * @param meal    the meal's name
  * @param details description of the meal's ingredients
  * @param qty     quantities of the ingredients as a display string
@@ -13,6 +15,9 @@ import io.swagger.v3.oas.annotations.media.Schema;
  */
 @Schema(description = "A single meal row within a meal plan section")
 public record MealPlanRowDTO(
+        @Schema(description = "Row unique identifier")
+        UUID id,
+
         @Schema(description = "Meal name", example = "Frühstück")
         String meal,
 

@@ -1,10 +1,12 @@
 package com.marvin.nutrition.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.util.UUID;
 
 /**
  * Data Transfer Object representing a single item on the shopping list.
  *
+ * @param id        the item's unique identifier
  * @param name      the item's name
  * @param brand     brand or sourcing note, or {@code null} if none
  * @param badge     badge severity, either {@code "ok"} or {@code "warn"}, or {@code null} if none
@@ -13,6 +15,9 @@ import io.swagger.v3.oas.annotations.media.Schema;
  */
 @Schema(description = "A single item on the shopping list")
 public record MealPlanShoppingItemDTO(
+        @Schema(description = "Item unique identifier")
+        UUID id,
+
         @Schema(description = "Item name", example = "Hähnchenbrustfilet")
         String name,
 

@@ -58,13 +58,15 @@ class MealPlanSectionAssemblerTest {
         rowTwoEntity.setId(UUID.randomUUID());
         rowTwoEntity.setMeal("Abendessen");
 
-        final MealPlanRowDTO rowOneDTO = new MealPlanRowDTO("Frühstück", "details", "qty", "519", "28,0 g");
-        final MealPlanRowDTO rowTwoDTO = new MealPlanRowDTO("Abendessen", "details", "qty", "923", "73,9 g");
+        final MealPlanRowDTO rowOneDTO =
+                new MealPlanRowDTO(rowOneEntity.getId(), "Frühstück", "details", "qty", "519", "28,0 g");
+        final MealPlanRowDTO rowTwoDTO =
+                new MealPlanRowDTO(rowTwoEntity.getId(), "Abendessen", "details", "qty", "923", "73,9 g");
 
         final MealPlanSectionDTO sectionOneDTO =
-                new MealPlanSectionDTO("1 · Tagesstruktur", "note", List.of(rowOneDTO), null, null);
+                new MealPlanSectionDTO(sectionOneId, "1 · Tagesstruktur", "note", List.of(rowOneDTO), null, null);
         final MealPlanSectionDTO sectionTwoDTO =
-                new MealPlanSectionDTO("2 · Wochentage", "note", List.of(rowTwoDTO), null, null);
+                new MealPlanSectionDTO(sectionTwoId, "2 · Wochentage", "note", List.of(rowTwoDTO), null, null);
 
         when(mealPlanSectionRepository.findAllByMealPlanIdOrderBySortOrderAsc(mealPlanId))
                 .thenReturn(List.of(sectionOne, sectionTwo));

@@ -5,8 +5,11 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 
 import com.marvin.nutrition.dto.MealPlanRowDTO;
 import com.marvin.nutrition.dto.MealPlanSectionDTO;
+import com.marvin.nutrition.dto.MealPlanStatDTO;
 import com.marvin.nutrition.entity.MealPlanSectionEntity;
+import com.marvin.nutrition.entity.MealPlanStatEntity;
 import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -40,12 +43,40 @@ class MealPlanMapperTest {
         section.setTotalsKcal("2.407 kcal");
         section.setTotalsProtein("182,2 g");
 
-        final MealPlanRowDTO row = new MealPlanRowDTO("Frühstück", "details", "qty", "519", "28,0 g");
+        final MealPlanRowDTO row = new MealPlanRowDTO(UUID.randomUUID(), "Frühstück", "details", "qty", "519", "28,0 g");
         final MealPlanSectionDTO dto = mealPlanMapper.toSectionDTO(section, List.of(row));
 
         assertEquals(List.of(row), dto.rows());
         assertEquals("Tagesgesamt", dto.totals().label());
         assertEquals("2.407 kcal", dto.totals().kcal());
         assertEquals("182,2 g", dto.totals().protein());
+    }
+
+    @Test
+    @DisplayName("toSectionDTO carries over the section entity's id")
+    void toSectionDTO_MapsId() {
+        final UUID sectionId = UUID.randomUUID();
+        final MealPlanSectionEntity section = new MealPlanSectionEntity();
+        section.setId(sectionId);
+        section.setTitle("title");
+        section.setNote("note");
+
+        final MealPlanSectionDTO dto = mealPlanMapper.toSectionDTO(section, List.of());
+
+        assertEquals(sectionId, dto.id());
+    }
+
+    @Test
+    @DisplayName("toStatDTO carries over the stat entity's id")
+    void toStatDTO_MapsId() {
+        final UUID statId = UUID.randomUUID();
+        final MealPlanStatEntity stat = new MealPlanStatEntity();
+        stat.setId(statId);
+        stat.setLabel("label");
+        stat.setValue("value");
+
+        final MealPlanStatDTO dto = mealPlanMapper.toStatDTO(stat);
+
+        assertEquals(statId, dto.id());
     }
 }
