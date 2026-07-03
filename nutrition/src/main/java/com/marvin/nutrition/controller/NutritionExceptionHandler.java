@@ -12,9 +12,9 @@ import org.springframework.core.io.buffer.DataBufferLimitException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.bind.support.WebExchangeBindException;
 
 /** Global exception handler for the nutrition module REST controllers. */
 @RestControllerAdvice(basePackages = "com.marvin.nutrition")
@@ -147,13 +147,17 @@ public class NutritionExceptionHandler {
     }
 
     /**
-     * Maps bean-validation failures ({@link MethodArgumentNotValidException}) to HTTP 400.
+     * Maps bean-validation failures on {@code @Valid @RequestBody} arguments
+     * ({@link WebExchangeBindException}) to HTTP 400.
+     *
+     * <p>WebFlux annotated controllers raise {@link WebExchangeBindException} for these failures,
+     * not the Spring MVC {@code MethodArgumentNotValidException}.</p>
      *
      * @param ex the exception carrying field error details
      * @return 400 response with comma-separated field error messages
      */
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<String> handleValidation(MethodArgumentNotValidException ex) {
+    @ExceptionHandler(WebExchangeBindException.class)
+    public ResponseEntity<String> handleValidation(WebExchangeBindException ex) {
         final String errors = ex.getBindingResult().getFieldErrors().stream()
                 .map(e -> e.getField() + ": " + e.getDefaultMessage())
                 .collect(Collectors.joining(", "));
