@@ -1,5 +1,5 @@
 {
-  "eyebrow": "Version 2 — abgeglichen mit Tracking & Lebensmitteldatenbank",
+  "eyebrow": "Version 3 — Ei & Magerquark aus dem Frühstück ins Abendessen verschoben",
   "title": "Ernährungsplan & Einkaufsliste",
   "description": "Fettabbau & Muskelerhalt (Cut) · Whey reduziert, Magerquark als Hauptproteinquelle, Ei kontrolliert statt ad-hoc.",
   "stats": [
@@ -14,27 +14,30 @@
     {"tag": "Ei", "was": null, "text": "fest auf 1 Ei/Tag im Frühstück begrenzt, statt wie im Tracking unregelmäßig 1–2 Eier über mehrere Mahlzeiten verteilt."},
     {"tag": "Korrektur", "was": null, "text": "Abendessen ist an allen 7 Tagen identisch berechnet. Der alte Plan hatte für dieselbe Zutatenliste zwei unterschiedliche Werte (858 vs. 926 kcal) — das war ein Rechenfehler, nicht real erreichbar."},
     {"tag": "Olivenöl", "was": null, "text": "10 g neu bei Mittag (Wochenende) & Abendessen ausgewiesen, um das Fettziel realistisch zu erreichen, statt es implizit wegzulassen."},
-    {"tag": "Hähnchen-Engpass", "was": null, "text": "nur 1.200 g statt 1.400 g Hähnchenbrust verfügbar → Portion beim Abendessen auf 170 g/Tag reduziert (statt 200 g). Ausgleich über +50 g Magerquark im Nachmittagssnack (150 g → 200 g), das deckt den Protein- & Kalorienverlust fast exakt — Wochenschnitt bleibt praktisch unverändert."}
+    {"tag": "Hähnchen-Engpass", "was": null, "text": "nur 1.200 g statt 1.400 g Hähnchenbrust verfügbar → Portion beim Abendessen auf 170 g/Tag reduziert (statt 200 g). Ausgleich über +50 g Magerquark im Nachmittagssnack (150 g → 200 g), das deckt den Protein- & Kalorienverlust fast exakt — Wochenschnitt bleibt praktisch unverändert."},
+    {"tag": "Frühstück", "was": "+ 100 g Magerquark, 1 Ei", "text": "Magerquark und Ei aus dem Frühstück entfernt — Frühstück besteht jetzt nur noch aus Haferflocken, Haferdrink, Whey, TK-Himbeeren und Mandeln."},
+    {"tag": "Ei", "was": "1 Ei/Tag im Frühstück", "text": "→ 1 Ei/Tag im Abendessen (alle 7 Tage) — Ei wird nur noch zu Mittag/Abendbrot am Wochenende bzw. zum Abendbrot an Wochentagen gegessen, nicht mehr morgens."},
+    {"tag": "Magerquark", "was": "100 g Frühstück + 200 g Nachmittag", "text": "→ 200 g Nachmittag + 100 g Abendessen — nicht mehr im Frühstück, sondern auf Nachmittag & Abendessen verteilt. Tagesmenge bleibt bei 300 g."}
   ],
   "sections": [
     {
       "title": "1 · Tagesstruktur (täglich gleich)",
       "note": "Frühstück & Nachmittag identisch an allen 7 Tagen",
       "rows": [
-        {"meal": "Frühstück", "details": "Haferflocken, Haferdrink, Whey, Magerquark, TK-Himbeeren, Mandeln, Ei", "qty": "90g/200ml/20g/100g/50g/10g/1 Stk", "kcal": "663", "protein": "46,5 g"},
+        {"meal": "Frühstück", "details": "Haferflocken, Haferdrink, Whey, TK-Himbeeren, Mandeln", "qty": "90g/200ml/20g/50g/10g", "kcal": "519", "protein": "28,0 g"},
         {"meal": "Nachmittag", "details": "Whey, Magerquark, Banane", "qty": "20g/200g/1 Stk", "kcal": "314", "protein": "40,3 g"}
       ],
       "totals": null,
-      "callout": "Der Whey-Shake wird jetzt kleiner (20 g statt 40 g) und durch Magerquark ergänzt — pro 100 g liefert Magerquark 12 g Protein bei nur 66 kcal und 0,2 g Fett, macht das Cut-Ziel also nicht teurer. Das Ei ersetzt keine der bisherigen Proteinquellen, sondern deckelt den Konsum bewusst auf eine Portion täglich. Die Nachmittags-Portion Magerquark ist bewusst größer als rechnerisch nötig (200 g statt 150 g) — das federt den Hähnchen-Engpass beim Abendessen ab."
+      "callout": "Der Whey-Shake wird jetzt kleiner (20 g statt 40 g) und durch Magerquark ergänzt — pro 100 g liefert Magerquark 12 g Protein bei nur 66 kcal und 0,2 g Fett, macht das Cut-Ziel also nicht teurer. Ei und ein Teil des Magerquarks (100 g) sind aus dem Frühstück verschwunden und wandern ins Abendessen: das Frühstück besteht dadurch nur noch aus Haferflocken, Haferdrink, Whey, TK-Himbeeren und Mandeln. Magerquark ist damit auf Nachmittag (200 g) und Abendessen (100 g) verteilt, das Ei gibt es nur noch zu Mittag/Abendbrot am Wochenende bzw. zum Abendbrot an Wochentagen. Die Nachmittags-Portion Magerquark ist weiterhin bewusst größer als rechnerisch nötig (200 g statt 150 g) — das federt den Hähnchen-Engpass beim Abendessen ab."
     },
     {
       "title": "2 · Wochentage (Montag – Donnerstag)",
       "note": "Kantine am Mittag bleibt Richtwert",
       "rows": [
-        {"meal": "Frühstück", "details": "siehe Tagesstruktur", "qty": "—", "kcal": "663", "protein": "46,5 g"},
+        {"meal": "Frühstück", "details": "siehe Tagesstruktur", "qty": "—", "kcal": "519", "protein": "28,0 g"},
         {"meal": "Mittag (Kantine)", "details": "Mageres Protein, komplexe Carbs, Gemüse (Richtwert)", "qty": "1 Portion", "kcal": "650", "protein": "40,0 g"},
         {"meal": "Nachmittag", "details": "siehe Tagesstruktur", "qty": "—", "kcal": "314", "protein": "40,3 g"},
-        {"meal": "Abendessen", "details": "Hähnchenbrustfilet, Dinkel-Penne, Kaisergemüse, Olivenöl", "qty": "170g/120g/200g/10g", "kcal": "779", "protein": "55,4 g"}
+        {"meal": "Abendessen", "details": "Hähnchenbrustfilet, Dinkel-Penne, Kaisergemüse, Olivenöl, Magerquark, Ei", "qty": "170g/120g/200g/10g/100g/1 Stk", "kcal": "923", "protein": "73,9 g"}
       ],
       "totals": {"label": "Tagesgesamt", "kcal": "2.407 kcal", "protein": "182,2 g"},
       "callout": null
@@ -43,12 +46,12 @@
       "title": "3 · Wochenende (Freitag – Sonntag)",
       "note": "Mittag wird selbst zubereitet",
       "rows": [
-        {"meal": "Frühstück", "details": "siehe Tagesstruktur", "qty": "—", "kcal": "663", "protein": "46,5 g"},
+        {"meal": "Frühstück", "details": "siehe Tagesstruktur", "qty": "—", "kcal": "519", "protein": "28,0 g"},
         {"meal": "Mittagessen", "details": "Rinderhüftsteak, Basmatireis, Kaisergemüse, Olivenöl", "qty": "145g/100g/200g/10g", "kcal": "672", "protein": "44,3 g"},
         {"meal": "Nachmittag", "details": "siehe Tagesstruktur", "qty": "—", "kcal": "314", "protein": "40,3 g"},
-        {"meal": "Abendessen", "details": "Hähnchenbrustfilet, Dinkel-Penne, Kaisergemüse, Olivenöl", "qty": "170g/120g/200g/10g", "kcal": "779", "protein": "55,4 g"}
+        {"meal": "Abendessen", "details": "Hähnchenbrustfilet, Dinkel-Penne, Kaisergemüse, Olivenöl, Magerquark, Ei", "qty": "170g/120g/200g/10g/100g/1 Stk", "kcal": "923", "protein": "73,9 g"}
       ],
-      "totals": {"label": "Tagesgesamt", "kcal": "2.429 kcal", "protein": "186,4 g"},
+      "totals": {"label": "Tagesgesamt", "kcal": "2.428 kcal", "protein": "186,5 g"},
       "callout": "Zielabweichung über die Woche: im Schnitt 2.416 kcal / 184,0 g Protein / 291,0 g Kohlenhydrate / 52,3 g Fett gegen ein Ziel von 2.422 kcal / 188 g / 296 g / 54 g — trotz reduzierter Hähnchenmenge weiterhin unter 2 % Abweichung, dank der Magerquark-Kompensation."
     }
   ],
