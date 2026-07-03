@@ -1,0 +1,96 @@
+{
+  "eyebrow": "Version 2 — abgeglichen mit Tracking & Lebensmitteldatenbank",
+  "title": "Ernährungsplan & Einkaufsliste",
+  "description": "Fettabbau & Muskelerhalt (Cut) · Whey reduziert, Magerquark als Hauptproteinquelle, Ei kontrolliert statt ad-hoc.",
+  "stats": [
+    {"label": "Tagesbudget (Ø)", "value": "2.416 kcal"},
+    {"label": "Protein", "value": "~184 g"},
+    {"label": "Kohlenhydrate", "value": "~291 g"},
+    {"label": "Fett", "value": "~52 g"}
+  ],
+  "changelog": [
+    {"tag": "Whey", "was": "80 g/Tag (2×40 g)", "text": "→ 40 g/Tag (je 20 g zu Frühstück & Nachmittagssnack) — halbiert, wie gewünscht."},
+    {"tag": "Magerquark", "was": null, "text": "neu: 300 g/Tag (100 g Frühstück + 200 g Nachmittag) übernimmt den Proteinanteil, den der Whey abgibt."},
+    {"tag": "Ei", "was": null, "text": "fest auf 1 Ei/Tag im Frühstück begrenzt, statt wie im Tracking unregelmäßig 1–2 Eier über mehrere Mahlzeiten verteilt."},
+    {"tag": "Korrektur", "was": null, "text": "Abendessen ist an allen 7 Tagen identisch berechnet. Der alte Plan hatte für dieselbe Zutatenliste zwei unterschiedliche Werte (858 vs. 926 kcal) — das war ein Rechenfehler, nicht real erreichbar."},
+    {"tag": "Olivenöl", "was": null, "text": "10 g neu bei Mittag (Wochenende) & Abendessen ausgewiesen, um das Fettziel realistisch zu erreichen, statt es implizit wegzulassen."},
+    {"tag": "Hähnchen-Engpass", "was": null, "text": "nur 1.200 g statt 1.400 g Hähnchenbrust verfügbar → Portion beim Abendessen auf 170 g/Tag reduziert (statt 200 g). Ausgleich über +50 g Magerquark im Nachmittagssnack (150 g → 200 g), das deckt den Protein- & Kalorienverlust fast exakt — Wochenschnitt bleibt praktisch unverändert."}
+  ],
+  "sections": [
+    {
+      "title": "1 · Tagesstruktur (täglich gleich)",
+      "note": "Frühstück & Nachmittag identisch an allen 7 Tagen",
+      "rows": [
+        {"meal": "Frühstück", "details": "Haferflocken, Haferdrink, Whey, Magerquark, TK-Himbeeren, Mandeln, Ei", "qty": "90g/200ml/20g/100g/50g/10g/1 Stk", "kcal": "663", "protein": "46,5 g"},
+        {"meal": "Nachmittag", "details": "Whey, Magerquark, Banane", "qty": "20g/200g/1 Stk", "kcal": "314", "protein": "40,3 g"}
+      ],
+      "totals": null,
+      "callout": "Der Whey-Shake wird jetzt kleiner (20 g statt 40 g) und durch Magerquark ergänzt — pro 100 g liefert Magerquark 12 g Protein bei nur 66 kcal und 0,2 g Fett, macht das Cut-Ziel also nicht teurer. Das Ei ersetzt keine der bisherigen Proteinquellen, sondern deckelt den Konsum bewusst auf eine Portion täglich. Die Nachmittags-Portion Magerquark ist bewusst größer als rechnerisch nötig (200 g statt 150 g) — das federt den Hähnchen-Engpass beim Abendessen ab."
+    },
+    {
+      "title": "2 · Wochentage (Montag – Donnerstag)",
+      "note": "Kantine am Mittag bleibt Richtwert",
+      "rows": [
+        {"meal": "Frühstück", "details": "siehe Tagesstruktur", "qty": "—", "kcal": "663", "protein": "46,5 g"},
+        {"meal": "Mittag (Kantine)", "details": "Mageres Protein, komplexe Carbs, Gemüse (Richtwert)", "qty": "1 Portion", "kcal": "650", "protein": "40,0 g"},
+        {"meal": "Nachmittag", "details": "siehe Tagesstruktur", "qty": "—", "kcal": "314", "protein": "40,3 g"},
+        {"meal": "Abendessen", "details": "Hähnchenbrustfilet, Dinkel-Penne, Kaisergemüse, Olivenöl", "qty": "170g/120g/200g/10g", "kcal": "779", "protein": "55,4 g"}
+      ],
+      "totals": {"label": "Tagesgesamt", "kcal": "2.407 kcal", "protein": "182,2 g"},
+      "callout": null
+    },
+    {
+      "title": "3 · Wochenende (Freitag – Sonntag)",
+      "note": "Mittag wird selbst zubereitet",
+      "rows": [
+        {"meal": "Frühstück", "details": "siehe Tagesstruktur", "qty": "—", "kcal": "663", "protein": "46,5 g"},
+        {"meal": "Mittagessen", "details": "Rinderhüftsteak, Basmatireis, Kaisergemüse, Olivenöl", "qty": "145g/100g/200g/10g", "kcal": "672", "protein": "44,3 g"},
+        {"meal": "Nachmittag", "details": "siehe Tagesstruktur", "qty": "—", "kcal": "314", "protein": "40,3 g"},
+        {"meal": "Abendessen", "details": "Hähnchenbrustfilet, Dinkel-Penne, Kaisergemüse, Olivenöl", "qty": "170g/120g/200g/10g", "kcal": "779", "protein": "55,4 g"}
+      ],
+      "totals": {"label": "Tagesgesamt", "kcal": "2.429 kcal", "protein": "186,4 g"},
+      "callout": "Zielabweichung über die Woche: im Schnitt 2.416 kcal / 184,0 g Protein / 291,0 g Kohlenhydrate / 52,3 g Fett gegen ein Ziel von 2.422 kcal / 188 g / 296 g / 54 g — trotz reduzierter Hähnchenmenge weiterhin unter 2 % Abweichung, dank der Magerquark-Kompensation."
+    }
+  ],
+  "shoppingList": {
+    "title": "4 · Einkaufsliste für Lidl (1 Woche)",
+    "note": "4× Kantine Mo–Do · 3× Selbstkochen Fr–So · 40 g Whey/Tag",
+    "categories": [
+      {"title": "Fleisch & Fisch", "items": [
+        {"name": "Hähnchenbrustfilet", "brand": "frisch, Kühltheke", "badge": "warn", "badgeText": "nur 1.200 g verfügbar", "qty": "1.200 g"},
+        {"name": "Frisches Rinderhüftsteak", "brand": "Lidl", "badge": null, "badgeText": null, "qty": "435 g"}
+      ]},
+      {"title": "Milchprodukte & Eier", "items": [
+        {"name": "Magerquark", "brand": "Milbona (Lidl), 4× 500 g + 1× 250 g Tuben", "badge": null, "badgeText": null, "qty": "2.100 g"},
+        {"name": "Eier", "brand": "10er-Packung", "badge": null, "badgeText": null, "qty": "7 Stk"}
+      ]},
+      {"title": "Proteinpulver", "items": [
+        {"name": "Whey Protein Konzentrat Erdbeere", "brand": "Rühls Bestes", "badge": "warn", "badgeText": "nicht bei Lidl", "qty": "280 g"}
+      ]},
+      {"title": "Gemüse & Obst (TK & frisch)", "items": [
+        {"name": "Kaisergemüse TK", "brand": "Freshona (Lidl)", "badge": null, "badgeText": null, "qty": "2.000 g"},
+        {"name": "TK-Himbeeren", "brand": "Freshona (Lidl)", "badge": null, "badgeText": null, "qty": "350 g"},
+        {"name": "Bananen", "brand": "frisch", "badge": null, "badgeText": null, "qty": "7 Stk"}
+      ]},
+      {"title": "Kohlenhydrate & Getreide", "items": [
+        {"name": "Haferflocken", "brand": "Bio Hafervollkornflocken Kleinblatt, Lidl", "badge": null, "badgeText": null, "qty": "630 g"},
+        {"name": "Dinkel-Penne", "brand": "Bio, Lidl/Bioland", "badge": null, "badgeText": null, "qty": "840 g"},
+        {"name": "Basmatireis", "brand": "Lidl, roh", "badge": null, "badgeText": null, "qty": "300 g"}
+      ]},
+      {"title": "Fette, Nüsse & Drinks", "items": [
+        {"name": "Olivenöl", "brand": "Lidl", "badge": null, "badgeText": null, "qty": "100 ml"},
+        {"name": "Mandeln, blanchiert & gehackt", "brand": "Alesto (Lidl)", "badge": null, "badgeText": null, "qty": "70 g"},
+        {"name": "Bio Haferdrink", "brand": "Lidl, 2 Packungen", "badge": null, "badgeText": null, "qty": "1,4 L"}
+      ]}
+    ],
+    "callout": "Whey Protein wird bei Lidl nicht durchgängig geführt — separat online oder in der Drogerie besorgen. Alle anderen Positionen entsprechen den Produkten, die bereits im Tracking als Lidl-Artikel hinterlegt sind (Freshona, Milbona, Alesto, Bio-Eigenmarken); Basmatireis- und Magerquark-Nährwerte wurden ergänzend recherchiert, da sie bisher nicht im Tracking vorkamen."
+  },
+  "footer": {
+    "note": "Nährwerte für Haferflocken, Haferdrink, Whey, Himbeeren, Hähnchenbrust, Rinderhüftsteak, Dinkel-Penne, Kaisergemüse und Ei stammen aus der bestehenden Lebensmitteldatenbank des Nutrition-Trackings. Magerquark, Basmatireis und Banane waren dort nicht erfasst und wurden recherchiert:",
+    "sources": [
+      {"label": "Magerquark (Milbona/Milsani, fatsecret.de)", "url": "https://www.fatsecret.de/Kalorien-Ern%C3%A4hrung/milsani/magerquark/100g"},
+      {"label": "Basmatireis Lidl, roh (fatsecret.de)", "url": "https://www.fatsecret.de/Kalorien-Ern%C3%A4hrung/lidl/basmati-reis/100g"},
+      {"label": "Banane, frisch (yazio.com)", "url": "https://www.yazio.com/de/kalorientabelle/banane-frisch.html"}
+    ]
+  }
+}
