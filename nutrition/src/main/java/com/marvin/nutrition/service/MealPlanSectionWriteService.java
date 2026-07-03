@@ -46,9 +46,9 @@ public class MealPlanSectionWriteService {
     }
 
     /**
-     * Updates an existing meal-plan section's title, note and/or callout.
-     * Only non-null fields from the request are applied. The returned DTO includes the section's
-     * current (unmodified) rows.
+     * Updates an existing meal-plan section's title, note, callout and/or totals row
+     * (label/kcal/protein). Only non-null fields from the request are applied. The returned DTO
+     * includes the section's current (unmodified) rows.
      * Throws {@link NoSuchElementException} if no section with the given id exists.
      *
      * @param id  the UUID of the section to update
@@ -68,6 +68,15 @@ public class MealPlanSectionWriteService {
         }
         if (req.callout() != null) {
             section.setCallout(req.callout());
+        }
+        if (req.totalsLabel() != null) {
+            section.setTotalsLabel(req.totalsLabel());
+        }
+        if (req.totalsKcal() != null) {
+            section.setTotalsKcal(req.totalsKcal());
+        }
+        if (req.totalsProtein() != null) {
+            section.setTotalsProtein(req.totalsProtein());
         }
 
         final MealPlanSectionEntity saved = mealPlanSectionRepository.save(section);

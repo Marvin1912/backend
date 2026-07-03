@@ -53,6 +53,22 @@ class MealPlanMapperTest {
     }
 
     @Test
+    @DisplayName("toSectionDTO builds totals when only totalsKcal/totalsProtein are set and totalsLabel is null")
+    void toSectionDTO_NullTotalsLabelButKcalAndProteinSet_ReturnsPartialTotals() {
+        final MealPlanSectionEntity section = new MealPlanSectionEntity();
+        section.setTitle("2 · Wochentage (Montag – Donnerstag)");
+        section.setNote("note");
+        section.setTotalsKcal("2.407 kcal");
+        section.setTotalsProtein("182,2 g");
+
+        final MealPlanSectionDTO dto = mealPlanMapper.toSectionDTO(section, List.of());
+
+        assertNull(dto.totals().label());
+        assertEquals("2.407 kcal", dto.totals().kcal());
+        assertEquals("182,2 g", dto.totals().protein());
+    }
+
+    @Test
     @DisplayName("toSectionDTO carries over the section entity's id")
     void toSectionDTO_MapsId() {
         final UUID sectionId = UUID.randomUUID();
