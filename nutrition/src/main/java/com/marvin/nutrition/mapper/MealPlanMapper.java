@@ -130,10 +130,11 @@ public interface MealPlanMapper {
      * section has no totals row.
      *
      * @param entity the section entity
-     * @return the totals DTO, or {@code null} if {@code totalsLabel} is {@code null}
+     * @return the totals DTO, or {@code null} if {@code totalsLabel}, {@code totalsKcal} and
+     *     {@code totalsProtein} are all {@code null}
      */
     default MealPlanTotalsDTO toTotals(MealPlanSectionEntity entity) {
-        if (entity.getTotalsLabel() == null) {
+        if (entity.getTotalsLabel() == null && entity.getTotalsKcal() == null && entity.getTotalsProtein() == null) {
             return null;
         }
         return new MealPlanTotalsDTO(entity.getTotalsLabel(), entity.getTotalsKcal(), entity.getTotalsProtein());
