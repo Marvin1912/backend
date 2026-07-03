@@ -2,6 +2,7 @@ package com.marvin.nutrition.dto;
 
 import com.marvin.nutrition.dto.validation.NullOrNotBlank;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Size;
 
 /**
  * Request body for updating a meal-plan shopping-list category.
@@ -12,6 +13,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 @Schema(description = "Request to update a meal-plan shopping-list category")
 public record UpdateMealPlanShoppingCategoryRequest(
         @NullOrNotBlank
+        @Size(max = 500)
         @Schema(description = "Updated category title", example = "Fleisch & Fisch")
         String title
 ) {

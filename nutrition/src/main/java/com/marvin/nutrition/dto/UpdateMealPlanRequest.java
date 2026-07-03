@@ -2,6 +2,7 @@ package com.marvin.nutrition.dto;
 
 import com.marvin.nutrition.dto.validation.NullOrNotBlank;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Size;
 
 /**
  * Request body for updating the meal plan's header content.
@@ -18,10 +19,12 @@ import io.swagger.v3.oas.annotations.media.Schema;
 @Schema(description = "Request to update the meal plan's header content")
 public record UpdateMealPlanRequest(
         @NullOrNotBlank
+        @Size(max = 500)
         @Schema(description = "Updated small label shown above the title", example = "Version 3 — abgeglichen mit Tracking")
         String eyebrow,
 
         @NullOrNotBlank
+        @Size(max = 500)
         @Schema(description = "Updated document title", example = "Ernährungsplan & Einkaufsliste")
         String title,
 
@@ -30,10 +33,12 @@ public record UpdateMealPlanRequest(
         String description,
 
         @NullOrNotBlank
+        @Size(max = 500)
         @Schema(description = "Updated shopping list title", example = "4 · Einkaufsliste für Lidl (1 Woche)")
         String shoppingListTitle,
 
         @NullOrNotBlank
+        @Size(max = 500)
         @Schema(description = "Updated shopping list note", example = "4× Kantine Mo–Do · 3× Selbstkochen Fr–So")
         String shoppingListNote,
 

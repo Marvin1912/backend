@@ -2,6 +2,7 @@ package com.marvin.nutrition.dto;
 
 import com.marvin.nutrition.dto.validation.NullOrNotBlank;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Size;
 
 /**
  * Request body for updating a meal-plan row.
@@ -16,6 +17,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 @Schema(description = "Request to update a meal-plan row")
 public record UpdateMealPlanRowRequest(
         @NullOrNotBlank
+        @Size(max = 255)
         @Schema(description = "Updated meal name", example = "Frühstück")
         String meal,
 
@@ -24,14 +26,17 @@ public record UpdateMealPlanRowRequest(
         String details,
 
         @NullOrNotBlank
+        @Size(max = 255)
         @Schema(description = "Updated quantities of the ingredients as a display string", example = "90g/200ml/20g/100g/50g/10g/1 Stk")
         String qty,
 
         @NullOrNotBlank
+        @Size(max = 255)
         @Schema(description = "Updated kilocalories as a display string", example = "663")
         String kcal,
 
         @NullOrNotBlank
+        @Size(max = 255)
         @Schema(description = "Updated grams of protein as a display string", example = "46,5 g")
         String protein
 ) {
