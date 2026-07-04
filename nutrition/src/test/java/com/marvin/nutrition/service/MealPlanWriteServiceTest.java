@@ -191,6 +191,33 @@ class MealPlanWriteServiceTest {
     }
 
     // -----------------------------------------------------------------------
+    // deleteSource
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("deleteSource deletes the found source entity")
+    void deleteSource_DeletesFoundEntity() {
+        final UUID sourceId = UUID.randomUUID();
+        final MealPlanSourceEntity source = new MealPlanSourceEntity();
+        source.setId(sourceId);
+
+        when(mealPlanSourceRepository.findById(sourceId)).thenReturn(Optional.of(source));
+
+        mealPlanWriteService.deleteSource(sourceId);
+
+        verify(mealPlanSourceRepository).delete(source);
+    }
+
+    @Test
+    @DisplayName("deleteSource throws NoSuchElementException when the source does not exist")
+    void deleteSource_NotFound_ThrowsNoSuchElementException() {
+        final UUID sourceId = UUID.randomUUID();
+        when(mealPlanSourceRepository.findById(sourceId)).thenReturn(Optional.empty());
+
+        assertThrows(NoSuchElementException.class, () -> mealPlanWriteService.deleteSource(sourceId));
+    }
+
+    // -----------------------------------------------------------------------
     // addChangelogEntry
     // -----------------------------------------------------------------------
 
