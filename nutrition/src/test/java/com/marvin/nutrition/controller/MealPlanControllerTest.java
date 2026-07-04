@@ -2,9 +2,11 @@ package com.marvin.nutrition.controller;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -348,6 +350,39 @@ class MealPlanControllerTest {
                 .thenThrow(new NoSuchElementException("not found"));
 
         final Mono<ResponseEntity<MealPlanSourceDTO>> result = mealPlanController.updateSource(sourceId, req);
+
+        StepVerifier.create(result)
+                .assertNext(response -> assertEquals(404, response.getStatusCode().value()))
+                .verifyComplete();
+    }
+
+    // -----------------------------------------------------------------------
+    // DELETE /nutrition/meal-plan/sources/{id}
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("deleteSource returns 204 with no body")
+    void deleteSource_Returns204() {
+        final UUID sourceId = UUID.randomUUID();
+
+        final Mono<ResponseEntity<Void>> result = mealPlanController.deleteSource(sourceId);
+
+        StepVerifier.create(result)
+                .assertNext(response -> {
+                    assertEquals(204, response.getStatusCode().value());
+                    assertNull(response.getBody());
+                })
+                .verifyComplete();
+        verify(mealPlanWriteService).deleteSource(sourceId);
+    }
+
+    @Test
+    @DisplayName("deleteSource returns 404 when the source does not exist")
+    void deleteSource_NotFound_Returns404() {
+        final UUID sourceId = UUID.randomUUID();
+        doThrow(new NoSuchElementException("not found")).when(mealPlanWriteService).deleteSource(sourceId);
+
+        final Mono<ResponseEntity<Void>> result = mealPlanController.deleteSource(sourceId);
 
         StepVerifier.create(result)
                 .assertNext(response -> assertEquals(404, response.getStatusCode().value()))

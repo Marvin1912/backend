@@ -179,6 +179,19 @@ public class MealPlanWriteService {
     }
 
     /**
+     * Deletes the footer source with the given id.
+     * Throws {@link NoSuchElementException} if no source with the given id exists.
+     *
+     * @param id the UUID of the source to delete
+     */
+    @Transactional
+    public void deleteSource(UUID id) {
+        final MealPlanSourceEntity source = mealPlanSourceRepository.findById(id)
+                .orElseThrow(() -> new NoSuchElementException("Meal plan source not found: " + id));
+        mealPlanSourceRepository.delete(source);
+    }
+
+    /**
      * Appends a new entry to the meal plan's changelog. The changelog is an append-only historical
      * log; there is no update or delete operation for existing entries.
      *

@@ -31,6 +31,7 @@ import java.util.NoSuchElementException;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -297,6 +298,29 @@ public class MealPlanController {
         return Mono.fromCallable(() -> mealPlanWriteService.updateSource(id, req))
                 .subscribeOn(Schedulers.boundedElastic())
                 .map(ResponseEntity::ok)
+                .onErrorReturn(NoSuchElementException.class, ResponseEntity.notFound().build());
+    }
+
+    /**
+     * Deletes a meal-plan footer source, or returns 404 if not found.
+     *
+     * @param id the UUID of the source to delete
+     * @return a Mono with 204 on success, or 404 if not found
+     */
+    @DeleteMapping("/sources/{id}")
+    @Operation(
+            summary = "Delete a meal-plan footer source",
+            description = "Deletes an existing footer source.",
+            responses = {
+                @ApiResponse(responseCode = "204", description = "Source deleted"),
+                @ApiResponse(responseCode = "404", description = "Source not found")
+            }
+    )
+    public Mono<ResponseEntity<Void>> deleteSource(
+            @PathVariable @Parameter(description = "UUID of the source to delete") UUID id) {
+        return Mono.fromRunnable(() -> mealPlanWriteService.deleteSource(id))
+                .subscribeOn(Schedulers.boundedElastic())
+                .then(Mono.just(ResponseEntity.noContent().<Void>build()))
                 .onErrorReturn(NoSuchElementException.class, ResponseEntity.notFound().build());
     }
 
