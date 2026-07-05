@@ -1,6 +1,9 @@
 package com.marvin.nutrition.controller;
 
+import com.marvin.nutrition.dto.FoodReferencedByDTO;
+import com.marvin.nutrition.dto.FoodReferencedResponse;
 import com.marvin.nutrition.service.BarcodeLookupException;
+import com.marvin.nutrition.service.FoodReferencedException;
 import com.marvin.nutrition.service.LabelReadException;
 import com.marvin.nutrition.service.MealEstimateException;
 import com.marvin.nutrition.service.TargetCalculationException;
@@ -77,6 +80,20 @@ public class NutritionExceptionHandler {
         }
         final String constraintName = constraintViolation.getConstraintName();
         return constraintName != null && constraintName.startsWith("weight_entry");
+    }
+
+    /**
+     * Maps {@link FoodReferencedException} to HTTP 409 Conflict with a structured body describing
+     * how many meal-plan rows and meal-template items still reference the food.
+     *
+     * @param ex the exception carrying the reference counts
+     * @return 409 response with a {@link FoodReferencedResponse} body
+     */
+    @ExceptionHandler(FoodReferencedException.class)
+    public ResponseEntity<FoodReferencedResponse> handleFoodReferenced(FoodReferencedException ex) {
+        final FoodReferencedByDTO referencedBy =
+                new FoodReferencedByDTO(ex.getMealPlanRowCount(), ex.getMealTemplateItemCount());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new FoodReferencedResponse(referencedBy));
     }
 
     /**

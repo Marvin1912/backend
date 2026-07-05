@@ -1,98 +1,91 @@
 package com.marvin.nutrition.mapper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 
 import com.marvin.nutrition.dto.MealPlanRowDTO;
 import com.marvin.nutrition.dto.MealPlanSectionDTO;
-import com.marvin.nutrition.dto.MealPlanStatDTO;
+import com.marvin.nutrition.entity.MealPlanRowEntity;
 import com.marvin.nutrition.entity.MealPlanSectionEntity;
-import com.marvin.nutrition.entity.MealPlanStatEntity;
+import com.marvin.nutrition.entity.MealType;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-/** Unit tests for {@link MealPlanMapper}, focused on the nullable {@code totals} branch of {@code toSectionDTO}. */
+/**
+ * Unit tests for {@link MealPlanMapper}, covering the food-backed row shape and section assembly
+ * now that stats/changelog/shopping-list/totals no longer exist (issue #225 rewrite).
+ */
 @DisplayName("MealPlanMapper Tests")
 class MealPlanMapperTest {
 
     private final MealPlanMapper mealPlanMapper = new MealPlanMapperImpl();
 
     @Test
-    @DisplayName("toSectionDTO returns null totals when the section has no totals label")
-    void toSectionDTO_NoTotalsLabel_ReturnsNullTotals() {
+    @DisplayName("toRowDTO maps all food-backed fields, ignoring the section-id foreign key")
+    void toRowDTO_MapsAllFields() {
+        final UUID rowId = UUID.randomUUID();
+        final UUID foodId = UUID.randomUUID();
+        final MealPlanRowEntity row = new MealPlanRowEntity();
+        row.setId(rowId);
+        row.setMealPlanSectionId(UUID.randomUUID());
+        row.setMealType(MealType.BREAKFAST);
+        row.setFoodId(foodId);
+        row.setFoodName("Haferflocken");
+        row.setQuantityG(new BigDecimal("90.00"));
+        row.setKcal(new BigDecimal("519.00"));
+        row.setProteinG(new BigDecimal("28.00"));
+        row.setCarbsG(new BigDecimal("60.00"));
+        row.setFatG(new BigDecimal("10.00"));
+
+        final MealPlanRowDTO dto = mealPlanMapper.toRowDTO(row);
+
+        assertEquals(rowId, dto.id());
+        assertEquals(MealType.BREAKFAST, dto.mealType());
+        assertEquals(foodId, dto.foodId());
+        assertEquals("Haferflocken", dto.foodName());
+        assertEquals(new BigDecimal("90.00"), dto.quantityG());
+        assertEquals(new BigDecimal("519.00"), dto.kcal());
+        assertEquals(new BigDecimal("28.00"), dto.proteinG());
+        assertEquals(new BigDecimal("60.00"), dto.carbsG());
+        assertEquals(new BigDecimal("10.00"), dto.fatG());
+    }
+
+    @Test
+    @DisplayName("toSectionDTO carries over the section's id, title, note, callout and given rows")
+    void toSectionDTO_MapsFieldsAndRows() {
+        final UUID sectionId = UUID.randomUUID();
         final MealPlanSectionEntity section = new MealPlanSectionEntity();
+        section.setId(sectionId);
         section.setTitle("1 · Tagesstruktur (täglich gleich)");
         section.setNote("note");
         section.setCallout("callout");
 
-        final MealPlanSectionDTO dto = mealPlanMapper.toSectionDTO(section, List.of());
+        final MealPlanRowDTO row = new MealPlanRowDTO(
+                UUID.randomUUID(), MealType.BREAKFAST, UUID.randomUUID(), "Haferflocken",
+                new BigDecimal("90.00"), new BigDecimal("519.00"), new BigDecimal("28.00"),
+                new BigDecimal("60.00"), new BigDecimal("10.00"));
 
-        assertEquals("1 · Tagesstruktur (täglich gleich)", dto.title());
-        assertNull(dto.totals());
-    }
-
-    @Test
-    @DisplayName("toSectionDTO builds totals when the section has a totals label")
-    void toSectionDTO_WithTotalsLabel_ReturnsTotals() {
-        final MealPlanSectionEntity section = new MealPlanSectionEntity();
-        section.setTitle("2 · Wochentage (Montag – Donnerstag)");
-        section.setNote("note");
-        section.setTotalsLabel("Tagesgesamt");
-        section.setTotalsKcal("2.407 kcal");
-        section.setTotalsProtein("182,2 g");
-
-        final MealPlanRowDTO row = new MealPlanRowDTO(UUID.randomUUID(), "Frühstück", "details", "qty", "519", "28,0 g");
         final MealPlanSectionDTO dto = mealPlanMapper.toSectionDTO(section, List.of(row));
 
+        assertEquals(sectionId, dto.id());
+        assertEquals("1 · Tagesstruktur (täglich gleich)", dto.title());
+        assertEquals("note", dto.note());
+        assertEquals("callout", dto.callout());
         assertEquals(List.of(row), dto.rows());
-        assertEquals("Tagesgesamt", dto.totals().label());
-        assertEquals("2.407 kcal", dto.totals().kcal());
-        assertEquals("182,2 g", dto.totals().protein());
     }
 
     @Test
-    @DisplayName("toSectionDTO builds totals when only totalsKcal/totalsProtein are set and totalsLabel is null")
-    void toSectionDTO_NullTotalsLabelButKcalAndProteinSet_ReturnsPartialTotals() {
+    @DisplayName("toSectionDTO returns a null callout when the section has none")
+    void toSectionDTO_NullCallout_ReturnsNullCallout() {
         final MealPlanSectionEntity section = new MealPlanSectionEntity();
-        section.setTitle("2 · Wochentage (Montag – Donnerstag)");
-        section.setNote("note");
-        section.setTotalsKcal("2.407 kcal");
-        section.setTotalsProtein("182,2 g");
-
-        final MealPlanSectionDTO dto = mealPlanMapper.toSectionDTO(section, List.of());
-
-        assertNull(dto.totals().label());
-        assertEquals("2.407 kcal", dto.totals().kcal());
-        assertEquals("182,2 g", dto.totals().protein());
-    }
-
-    @Test
-    @DisplayName("toSectionDTO carries over the section entity's id")
-    void toSectionDTO_MapsId() {
-        final UUID sectionId = UUID.randomUUID();
-        final MealPlanSectionEntity section = new MealPlanSectionEntity();
-        section.setId(sectionId);
+        section.setId(UUID.randomUUID());
         section.setTitle("title");
         section.setNote("note");
 
         final MealPlanSectionDTO dto = mealPlanMapper.toSectionDTO(section, List.of());
 
-        assertEquals(sectionId, dto.id());
-    }
-
-    @Test
-    @DisplayName("toStatDTO carries over the stat entity's id")
-    void toStatDTO_MapsId() {
-        final UUID statId = UUID.randomUUID();
-        final MealPlanStatEntity stat = new MealPlanStatEntity();
-        stat.setId(statId);
-        stat.setLabel("label");
-        stat.setValue("value");
-
-        final MealPlanStatDTO dto = mealPlanMapper.toStatDTO(stat);
-
-        assertEquals(statId, dto.id());
+        assertEquals(null, dto.callout());
     }
 }

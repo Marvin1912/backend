@@ -2,6 +2,7 @@ package com.marvin.nutrition.controller;
 
 import com.marvin.nutrition.dto.FoodDTO;
 import com.marvin.nutrition.dto.FoodDraftDTO;
+import com.marvin.nutrition.dto.FoodReferencedResponse;
 import com.marvin.nutrition.service.BarcodeLookup;
 import com.marvin.nutrition.service.FoodService;
 import com.marvin.nutrition.service.LabelReader;
@@ -192,6 +193,7 @@ public class FoodController {
 
     /**
      * Deletes the food entry with the given id, or returns 404 if not found.
+     * Returns 409 if the food is still referenced by any meal-plan row or meal-template item.
      *
      * @param id the UUID of the food entry to delete
      * @return a Mono with 204 No Content on success, or 404 if not found
@@ -199,10 +201,16 @@ public class FoodController {
     @DeleteMapping("/{id}")
     @Operation(
             summary = "Delete a food entry",
-            description = "Permanently removes the food entry from the catalog.",
+            description = "Permanently removes the food entry from the catalog. Fails with 409 if the "
+                    + "food is still referenced by any meal-plan row or meal-template item.",
             responses = {
                 @ApiResponse(responseCode = "204", description = "Food entry deleted"),
-                @ApiResponse(responseCode = "404", description = "Food entry not found")
+                @ApiResponse(responseCode = "404", description = "Food entry not found"),
+                @ApiResponse(
+                        responseCode = "409",
+                        description = "Food is still referenced by meal-plan rows and/or meal-template items",
+                        content = @Content(schema = @Schema(implementation = FoodReferencedResponse.class))
+                )
             }
     )
     public Mono<ResponseEntity<Void>> deleteFood(

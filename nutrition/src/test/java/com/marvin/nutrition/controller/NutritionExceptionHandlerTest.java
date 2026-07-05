@@ -3,6 +3,8 @@ package com.marvin.nutrition.controller;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
+import com.marvin.nutrition.dto.FoodReferencedResponse;
+import com.marvin.nutrition.service.FoodReferencedException;
 import jakarta.validation.ConstraintViolationException;
 import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
@@ -28,6 +30,19 @@ class NutritionExceptionHandlerTest {
         assertEquals(HttpStatus.PAYLOAD_TOO_LARGE, response.getStatusCode());
         assertNotNull(response.getBody());
         assertEquals("Uploaded file exceeds the maximum allowed size of 10 MB", response.getBody());
+    }
+
+    @Test
+    @DisplayName("handleFoodReferenced returns 409 with the referenced-by counts from the exception")
+    void handleFoodReferenced_ReturnsConflictWithCounts() {
+        final FoodReferencedException ex = new FoodReferencedException(2, 1);
+
+        final ResponseEntity<FoodReferencedResponse> response = handler.handleFoodReferenced(ex);
+
+        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals(2L, response.getBody().referencedBy().mealPlanRows());
+        assertEquals(1L, response.getBody().referencedBy().mealTemplateItems());
     }
 
     @Test

@@ -1,43 +1,33 @@
 package com.marvin.nutrition.dto;
 
-import com.marvin.nutrition.dto.validation.NullOrNotBlank;
+import com.marvin.nutrition.entity.MealType;
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
+import java.math.BigDecimal;
+import java.util.UUID;
 
 /**
- * Request body for updating a meal-plan row.
- * All fields are optional; only non-null values are applied.
+ * Request body for updating a meal-plan row. {@code mealType} is optional and only applied when
+ * non-null; {@code foodId} and {@code quantityG} are always required and macros are re-snapshotted
+ * from the referenced food's per-100g values on every update.
  *
- * @param meal    updated meal name (nullable)
- * @param details updated description of the meal's ingredients (nullable)
- * @param qty     updated quantities of the ingredients as a display string (nullable)
- * @param kcal    updated kilocalories as a display string (nullable)
- * @param protein updated grams of protein as a display string (nullable)
+ * @param mealType  updated meal category (nullable)
+ * @param foodId    UUID of the food catalog item the row references (required)
+ * @param quantityG updated portion size in grams; must be positive (required)
  */
 @Schema(description = "Request to update a meal-plan row")
 public record UpdateMealPlanRowRequest(
-        @NullOrNotBlank
-        @Size(max = 255)
-        @Schema(description = "Updated meal name", example = "Frühstück")
-        String meal,
+        @Schema(description = "Updated meal category (nullable)", example = "DINNER")
+        MealType mealType,
 
-        @NullOrNotBlank
-        @Schema(description = "Updated description of the meal's ingredients")
-        String details,
+        @NotNull
+        @Schema(description = "Food catalog item UUID the row references", requiredMode = Schema.RequiredMode.REQUIRED)
+        UUID foodId,
 
-        @NullOrNotBlank
-        @Size(max = 255)
-        @Schema(description = "Updated quantities of the ingredients as a display string", example = "90g/200ml/20g/100g/50g/10g/1 Stk")
-        String qty,
-
-        @NullOrNotBlank
-        @Size(max = 255)
-        @Schema(description = "Updated kilocalories as a display string", example = "663")
-        String kcal,
-
-        @NullOrNotBlank
-        @Size(max = 255)
-        @Schema(description = "Updated grams of protein as a display string", example = "46,5 g")
-        String protein
+        @NotNull
+        @Positive
+        @Schema(description = "Updated portion size in grams", example = "150.00", requiredMode = Schema.RequiredMode.REQUIRED)
+        BigDecimal quantityG
 ) {
 }

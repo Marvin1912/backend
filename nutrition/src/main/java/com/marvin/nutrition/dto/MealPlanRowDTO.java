@@ -1,36 +1,50 @@
 package com.marvin.nutrition.dto;
 
+import com.marvin.nutrition.entity.MealType;
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.math.BigDecimal;
 import java.util.UUID;
 
 /**
- * Data Transfer Object representing a single meal row within a meal plan section.
+ * Data Transfer Object representing a single food-backed meal row within a meal plan section.
  *
- * @param id      the row's unique identifier
- * @param meal    the meal's name
- * @param details description of the meal's ingredients
- * @param qty     quantities of the ingredients as a display string
- * @param kcal    kilocalories as a display string
- * @param protein grams of protein as a display string
+ * @param id        the row's unique identifier
+ * @param mealType  the meal category (BREAKFAST, LUNCH, DINNER, SNACK)
+ * @param foodId    UUID of the referenced food catalog item
+ * @param foodName  snapshot of the food's name at write time
+ * @param quantityG portion size in grams
+ * @param kcal      snapshotted kilocalories
+ * @param proteinG  snapshotted grams of protein
+ * @param carbsG    snapshotted grams of carbohydrates
+ * @param fatG      snapshotted grams of fat
  */
-@Schema(description = "A single meal row within a meal plan section")
+@Schema(description = "A single food-backed meal row within a meal plan section")
 public record MealPlanRowDTO(
         @Schema(description = "Row unique identifier")
         UUID id,
 
-        @Schema(description = "Meal name", example = "Frühstück")
-        String meal,
+        @Schema(description = "Meal category", example = "BREAKFAST")
+        MealType mealType,
 
-        @Schema(description = "Description of the meal's ingredients")
-        String details,
+        @Schema(description = "Referenced food catalog item UUID")
+        UUID foodId,
 
-        @Schema(description = "Quantities of the ingredients as a display string", example = "90g/200ml/20g/100g/50g/10g/1 Stk")
-        String qty,
+        @Schema(description = "Snapshot of the food's name at write time", example = "Haferflocken")
+        String foodName,
 
-        @Schema(description = "Kilocalories as a display string", example = "663")
-        String kcal,
+        @Schema(description = "Portion size in grams", example = "90.00")
+        BigDecimal quantityG,
 
-        @Schema(description = "Grams of protein as a display string", example = "46,5 g")
-        String protein
+        @Schema(description = "Snapshotted kilocalories", example = "519.00")
+        BigDecimal kcal,
+
+        @Schema(description = "Snapshotted grams of protein", example = "28.00")
+        BigDecimal proteinG,
+
+        @Schema(description = "Snapshotted grams of carbohydrates", example = "60.00")
+        BigDecimal carbsG,
+
+        @Schema(description = "Snapshotted grams of fat", example = "10.00")
+        BigDecimal fatG
 ) {
 }

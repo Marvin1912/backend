@@ -12,6 +12,8 @@ import com.marvin.nutrition.entity.FoodEntity;
 import com.marvin.nutrition.entity.FoodSource;
 import com.marvin.nutrition.mapper.FoodMapper;
 import com.marvin.nutrition.repository.FoodRepository;
+import com.marvin.nutrition.repository.MealPlanRowRepository;
+import com.marvin.nutrition.repository.MealTemplateItemRepository;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -39,6 +41,12 @@ class FoodServiceTest {
 
     @Mock
     private FoodMapper foodMapper;
+
+    @Mock
+    private MealPlanRowRepository mealPlanRowRepository;
+
+    @Mock
+    private MealTemplateItemRepository mealTemplateItemRepository;
 
     @InjectMocks
     private FoodService foodService;
@@ -296,6 +304,44 @@ class FoodServiceTest {
                 .verifyComplete();
 
         verify(foodRepository).deleteById(testId);
+    }
+
+    @Test
+    @DisplayName("delete emits FoodReferencedException with meal-plan-row count when referenced by rows")
+    void delete_ReferencedByMealPlanRows_ThrowsFoodReferencedException() {
+        when(foodRepository.existsById(testId)).thenReturn(true);
+        when(mealPlanRowRepository.countByFoodId(testId)).thenReturn(2L);
+        when(mealTemplateItemRepository.countByFoodId(testId)).thenReturn(0L);
+
+        StepVerifier.create(foodService.delete(testId))
+                .expectErrorSatisfies(ex -> {
+                    assert ex instanceof FoodReferencedException;
+                    final FoodReferencedException referenced = (FoodReferencedException) ex;
+                    assert referenced.getMealPlanRowCount() == 2L;
+                    assert referenced.getMealTemplateItemCount() == 0L;
+                })
+                .verify();
+
+        verify(foodRepository, never()).deleteById(any());
+    }
+
+    @Test
+    @DisplayName("delete emits FoodReferencedException with meal-template-item count when referenced by template items")
+    void delete_ReferencedByMealTemplateItems_ThrowsFoodReferencedException() {
+        when(foodRepository.existsById(testId)).thenReturn(true);
+        when(mealPlanRowRepository.countByFoodId(testId)).thenReturn(0L);
+        when(mealTemplateItemRepository.countByFoodId(testId)).thenReturn(1L);
+
+        StepVerifier.create(foodService.delete(testId))
+                .expectErrorSatisfies(ex -> {
+                    assert ex instanceof FoodReferencedException;
+                    final FoodReferencedException referenced = (FoodReferencedException) ex;
+                    assert referenced.getMealPlanRowCount() == 0L;
+                    assert referenced.getMealTemplateItemCount() == 1L;
+                })
+                .verify();
+
+        verify(foodRepository, never()).deleteById(any());
     }
 
     // -----------------------------------------------------------------------

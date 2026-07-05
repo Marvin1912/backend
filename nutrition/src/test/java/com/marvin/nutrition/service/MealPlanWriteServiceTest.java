@@ -2,35 +2,26 @@ package com.marvin.nutrition.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.marvin.nutrition.dto.CreateMealPlanChangelogEntryRequest;
-import com.marvin.nutrition.dto.MealPlanChangelogEntryDTO;
+import com.marvin.nutrition.dto.CreateMealPlanRowRequest;
 import com.marvin.nutrition.dto.MealPlanHeaderDTO;
 import com.marvin.nutrition.dto.MealPlanRowDTO;
 import com.marvin.nutrition.dto.MealPlanSectionDTO;
-import com.marvin.nutrition.dto.MealPlanShoppingCategoryDTO;
-import com.marvin.nutrition.dto.MealPlanShoppingItemDTO;
 import com.marvin.nutrition.dto.MealPlanSourceDTO;
-import com.marvin.nutrition.dto.MealPlanStatDTO;
 import com.marvin.nutrition.dto.UpdateMealPlanRequest;
 import com.marvin.nutrition.dto.UpdateMealPlanRowRequest;
 import com.marvin.nutrition.dto.UpdateMealPlanSectionRequest;
-import com.marvin.nutrition.dto.UpdateMealPlanShoppingCategoryRequest;
-import com.marvin.nutrition.dto.UpdateMealPlanShoppingItemRequest;
 import com.marvin.nutrition.dto.UpdateMealPlanSourceRequest;
-import com.marvin.nutrition.dto.UpdateMealPlanStatRequest;
-import com.marvin.nutrition.entity.MealPlanChangelogEntryEntity;
 import com.marvin.nutrition.entity.MealPlanEntity;
 import com.marvin.nutrition.entity.MealPlanSourceEntity;
-import com.marvin.nutrition.entity.MealPlanStatEntity;
+import com.marvin.nutrition.entity.MealType;
 import com.marvin.nutrition.mapper.MealPlanMapper;
-import com.marvin.nutrition.repository.MealPlanChangelogEntryRepository;
 import com.marvin.nutrition.repository.MealPlanRepository;
 import com.marvin.nutrition.repository.MealPlanSourceRepository;
-import com.marvin.nutrition.repository.MealPlanStatRepository;
+import java.math.BigDecimal;
+import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.UUID;
@@ -42,9 +33,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
- * Unit tests for {@link MealPlanWriteService}, covering the header/stat/source/changelog updates it
- * owns directly, and the delegation to {@link MealPlanSectionWriteService} and
- * {@link MealPlanShoppingListWriteService} for section/row and shopping category/item updates.
+ * Unit tests for {@link MealPlanWriteService}, covering the header/source updates it owns
+ * directly, and the delegation to {@link MealPlanSectionWriteService} for section/row operations
+ * (issue #225 rewrite).
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("MealPlanWriteService Tests")
@@ -54,22 +45,13 @@ class MealPlanWriteServiceTest {
     private MealPlanRepository mealPlanRepository;
 
     @Mock
-    private MealPlanStatRepository mealPlanStatRepository;
-
-    @Mock
     private MealPlanSourceRepository mealPlanSourceRepository;
-
-    @Mock
-    private MealPlanChangelogEntryRepository mealPlanChangelogEntryRepository;
 
     @Mock
     private MealPlanMapper mealPlanMapper;
 
     @Mock
     private MealPlanSectionWriteService mealPlanSectionWriteService;
-
-    @Mock
-    private MealPlanShoppingListWriteService mealPlanShoppingListWriteService;
 
     @InjectMocks
     private MealPlanWriteService mealPlanWriteService;
@@ -86,12 +68,9 @@ class MealPlanWriteServiceTest {
         entity.setEyebrow("old eyebrow");
         entity.setTitle("old title");
         entity.setDescription("old description");
-        entity.setShoppingListTitle("old shopping title");
-        entity.setShoppingListNote("old shopping note");
         entity.setFooterNote("old footer");
 
-        final UpdateMealPlanRequest req =
-                new UpdateMealPlanRequest("new eyebrow", null, null, null, null, null, null);
+        final UpdateMealPlanRequest req = new UpdateMealPlanRequest("new eyebrow", null, null, null);
 
         when(mealPlanRepository.findById(MealPlanEntity.SINGLETON_ID)).thenReturn(Optional.of(entity));
         when(mealPlanRepository.save(entity)).thenReturn(entity);
@@ -100,9 +79,7 @@ class MealPlanWriteServiceTest {
 
         assertEquals("new eyebrow", entity.getEyebrow());
         assertEquals("old title", entity.getTitle());
-        assertEquals(new MealPlanHeaderDTO(
-                "new eyebrow", "old title", "old description",
-                "old shopping title", "old shopping note", null, "old footer"), result);
+        assertEquals(new MealPlanHeaderDTO("new eyebrow", "old title", "old description", "old footer"), result);
     }
 
     @Test
@@ -110,47 +87,9 @@ class MealPlanWriteServiceTest {
     void updateMealPlan_NotFound_ThrowsNoSuchElementException() {
         when(mealPlanRepository.findById(MealPlanEntity.SINGLETON_ID)).thenReturn(Optional.empty());
 
-        final UpdateMealPlanRequest req =
-                new UpdateMealPlanRequest("eyebrow", null, null, null, null, null, null);
+        final UpdateMealPlanRequest req = new UpdateMealPlanRequest("eyebrow", null, null, null);
 
         assertThrows(NoSuchElementException.class, () -> mealPlanWriteService.updateMealPlan(req));
-    }
-
-    // -----------------------------------------------------------------------
-    // updateStat
-    // -----------------------------------------------------------------------
-
-    @Test
-    @DisplayName("updateStat applies non-null fields, saves and returns the updated stat")
-    void updateStat_AppliesNonNullFields_ReturnsUpdatedStat() {
-        final UUID statId = UUID.randomUUID();
-        final MealPlanStatEntity stat = new MealPlanStatEntity();
-        stat.setId(statId);
-        stat.setLabel("old label");
-        stat.setValue("old value");
-
-        final MealPlanStatDTO statDTO = new MealPlanStatDTO(statId, "new label", "old value");
-        final UpdateMealPlanStatRequest req = new UpdateMealPlanStatRequest("new label", null);
-
-        when(mealPlanStatRepository.findById(statId)).thenReturn(Optional.of(stat));
-        when(mealPlanStatRepository.save(stat)).thenReturn(stat);
-        when(mealPlanMapper.toStatDTO(stat)).thenReturn(statDTO);
-
-        final MealPlanStatDTO result = mealPlanWriteService.updateStat(statId, req);
-
-        assertEquals("new label", stat.getLabel());
-        assertEquals(statDTO, result);
-    }
-
-    @Test
-    @DisplayName("updateStat throws NoSuchElementException when the stat does not exist")
-    void updateStat_NotFound_ThrowsNoSuchElementException() {
-        final UUID statId = UUID.randomUUID();
-        when(mealPlanStatRepository.findById(statId)).thenReturn(Optional.empty());
-
-        final UpdateMealPlanStatRequest req = new UpdateMealPlanStatRequest("label", null);
-
-        assertThrows(NoSuchElementException.class, () -> mealPlanWriteService.updateStat(statId, req));
     }
 
     // -----------------------------------------------------------------------
@@ -218,31 +157,7 @@ class MealPlanWriteServiceTest {
     }
 
     // -----------------------------------------------------------------------
-    // addChangelogEntry
-    // -----------------------------------------------------------------------
-
-    @Test
-    @DisplayName("addChangelogEntry creates, saves and returns the new changelog entry")
-    void addChangelogEntry_CreatesAndReturnsEntry() {
-        final CreateMealPlanChangelogEntryRequest req =
-                new CreateMealPlanChangelogEntryRequest("Whey", "80 g/Tag", "-> 40 g/Tag", 0);
-
-        final MealPlanChangelogEntryEntity saved = new MealPlanChangelogEntryEntity();
-        saved.setId(UUID.randomUUID());
-        final MealPlanChangelogEntryDTO dto =
-                new MealPlanChangelogEntryDTO(saved.getId(), "Whey", "80 g/Tag", "-> 40 g/Tag");
-
-        when(mealPlanChangelogEntryRepository.save(any(MealPlanChangelogEntryEntity.class))).thenReturn(saved);
-        when(mealPlanMapper.toChangelogEntryDTO(saved)).thenReturn(dto);
-
-        final MealPlanChangelogEntryDTO result = mealPlanWriteService.addChangelogEntry(req);
-
-        assertEquals(dto, result);
-        verify(mealPlanChangelogEntryRepository).save(any(MealPlanChangelogEntryEntity.class));
-    }
-
-    // -----------------------------------------------------------------------
-    // delegation to MealPlanSectionWriteService / MealPlanShoppingListWriteService
+    // delegation to MealPlanSectionWriteService
     // -----------------------------------------------------------------------
 
     @Test
@@ -250,7 +165,7 @@ class MealPlanWriteServiceTest {
     void updateSection_DelegatesToSectionWriteService() {
         final UUID sectionId = UUID.randomUUID();
         final UpdateMealPlanSectionRequest req = new UpdateMealPlanSectionRequest("title", null, null);
-        final MealPlanSectionDTO sectionDTO = new MealPlanSectionDTO(sectionId, "title", "note", java.util.List.of(), null, null);
+        final MealPlanSectionDTO sectionDTO = new MealPlanSectionDTO(sectionId, "title", "note", List.of(), null);
 
         when(mealPlanSectionWriteService.updateSection(sectionId, req)).thenReturn(sectionDTO);
 
@@ -260,11 +175,50 @@ class MealPlanWriteServiceTest {
     }
 
     @Test
+    @DisplayName("addRow delegates to MealPlanSectionWriteService")
+    void addRow_DelegatesToSectionWriteService() {
+        final UUID sectionId = UUID.randomUUID();
+        final CreateMealPlanRowRequest req =
+                new CreateMealPlanRowRequest(MealType.BREAKFAST, UUID.randomUUID(), new BigDecimal("90.00"));
+        final MealPlanRowDTO rowDTO = new MealPlanRowDTO(
+                UUID.randomUUID(), MealType.BREAKFAST, UUID.randomUUID(), "Haferflocken",
+                new BigDecimal("90.00"), new BigDecimal("519.00"), new BigDecimal("28.00"),
+                new BigDecimal("60.00"), new BigDecimal("10.00"));
+
+        when(mealPlanSectionWriteService.addRow(sectionId, req)).thenReturn(rowDTO);
+
+        final MealPlanRowDTO result = mealPlanWriteService.addRow(sectionId, req);
+
+        assertEquals(rowDTO, result);
+    }
+
+    @Test
+    @DisplayName("addRows delegates to MealPlanSectionWriteService")
+    void addRows_DelegatesToSectionWriteService() {
+        final UUID sectionId = UUID.randomUUID();
+        final List<CreateMealPlanRowRequest> requests = List.of(
+                new CreateMealPlanRowRequest(MealType.BREAKFAST, UUID.randomUUID(), new BigDecimal("90.00")));
+        final MealPlanRowDTO rowDTO = new MealPlanRowDTO(
+                UUID.randomUUID(), MealType.BREAKFAST, UUID.randomUUID(), "Haferflocken",
+                new BigDecimal("90.00"), new BigDecimal("519.00"), new BigDecimal("28.00"),
+                new BigDecimal("60.00"), new BigDecimal("10.00"));
+
+        when(mealPlanSectionWriteService.addRows(sectionId, requests)).thenReturn(List.of(rowDTO));
+
+        final List<MealPlanRowDTO> result = mealPlanWriteService.addRows(sectionId, requests);
+
+        assertEquals(List.of(rowDTO), result);
+    }
+
+    @Test
     @DisplayName("updateRow delegates to MealPlanSectionWriteService")
     void updateRow_DelegatesToSectionWriteService() {
         final UUID rowId = UUID.randomUUID();
-        final UpdateMealPlanRowRequest req = new UpdateMealPlanRowRequest("meal", null, null, null, null);
-        final MealPlanRowDTO rowDTO = new MealPlanRowDTO(rowId, "meal", "details", "qty", "kcal", "protein");
+        final UpdateMealPlanRowRequest req = new UpdateMealPlanRowRequest(MealType.LUNCH, UUID.randomUUID(), new BigDecimal("100.00"));
+        final MealPlanRowDTO rowDTO = new MealPlanRowDTO(
+                rowId, MealType.LUNCH, UUID.randomUUID(), "Haferflocken",
+                new BigDecimal("100.00"), new BigDecimal("577.00"), new BigDecimal("31.00"),
+                new BigDecimal("66.00"), new BigDecimal("11.00"));
 
         when(mealPlanSectionWriteService.updateRow(rowId, req)).thenReturn(rowDTO);
 
@@ -274,31 +228,12 @@ class MealPlanWriteServiceTest {
     }
 
     @Test
-    @DisplayName("updateShoppingCategory delegates to MealPlanShoppingListWriteService")
-    void updateShoppingCategory_DelegatesToShoppingListWriteService() {
-        final UUID categoryId = UUID.randomUUID();
-        final UpdateMealPlanShoppingCategoryRequest req = new UpdateMealPlanShoppingCategoryRequest("title");
-        final MealPlanShoppingCategoryDTO categoryDTO =
-                new MealPlanShoppingCategoryDTO(categoryId, "title", java.util.List.of());
+    @DisplayName("deleteRow delegates to MealPlanSectionWriteService")
+    void deleteRow_DelegatesToSectionWriteService() {
+        final UUID rowId = UUID.randomUUID();
 
-        when(mealPlanShoppingListWriteService.updateShoppingCategory(categoryId, req)).thenReturn(categoryDTO);
+        mealPlanWriteService.deleteRow(rowId);
 
-        final MealPlanShoppingCategoryDTO result = mealPlanWriteService.updateShoppingCategory(categoryId, req);
-
-        assertEquals(categoryDTO, result);
-    }
-
-    @Test
-    @DisplayName("updateShoppingItem delegates to MealPlanShoppingListWriteService")
-    void updateShoppingItem_DelegatesToShoppingListWriteService() {
-        final UUID itemId = UUID.randomUUID();
-        final UpdateMealPlanShoppingItemRequest req = new UpdateMealPlanShoppingItemRequest("name", null, null, null, null);
-        final MealPlanShoppingItemDTO itemDTO = new MealPlanShoppingItemDTO(itemId, "name", null, null, null, "qty");
-
-        when(mealPlanShoppingListWriteService.updateShoppingItem(itemId, req)).thenReturn(itemDTO);
-
-        final MealPlanShoppingItemDTO result = mealPlanWriteService.updateShoppingItem(itemId, req);
-
-        assertEquals(itemDTO, result);
+        verify(mealPlanSectionWriteService).deleteRow(rowId);
     }
 }

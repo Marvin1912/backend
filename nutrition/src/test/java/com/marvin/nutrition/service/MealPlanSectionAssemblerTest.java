@@ -7,9 +7,11 @@ import com.marvin.nutrition.dto.MealPlanRowDTO;
 import com.marvin.nutrition.dto.MealPlanSectionDTO;
 import com.marvin.nutrition.entity.MealPlanRowEntity;
 import com.marvin.nutrition.entity.MealPlanSectionEntity;
+import com.marvin.nutrition.entity.MealType;
 import com.marvin.nutrition.mapper.MealPlanMapper;
 import com.marvin.nutrition.repository.MealPlanRowRepository;
 import com.marvin.nutrition.repository.MealPlanSectionRepository;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -53,20 +55,24 @@ class MealPlanSectionAssemblerTest {
 
         final MealPlanRowEntity rowOneEntity = new MealPlanRowEntity();
         rowOneEntity.setId(UUID.randomUUID());
-        rowOneEntity.setMeal("Frühstück");
+        rowOneEntity.setMealType(MealType.BREAKFAST);
         final MealPlanRowEntity rowTwoEntity = new MealPlanRowEntity();
         rowTwoEntity.setId(UUID.randomUUID());
-        rowTwoEntity.setMeal("Abendessen");
+        rowTwoEntity.setMealType(MealType.DINNER);
 
-        final MealPlanRowDTO rowOneDTO =
-                new MealPlanRowDTO(rowOneEntity.getId(), "Frühstück", "details", "qty", "519", "28,0 g");
-        final MealPlanRowDTO rowTwoDTO =
-                new MealPlanRowDTO(rowTwoEntity.getId(), "Abendessen", "details", "qty", "923", "73,9 g");
+        final MealPlanRowDTO rowOneDTO = new MealPlanRowDTO(
+                rowOneEntity.getId(), MealType.BREAKFAST, UUID.randomUUID(), "Haferflocken",
+                new BigDecimal("90.00"), new BigDecimal("519.00"), new BigDecimal("28.00"),
+                new BigDecimal("60.00"), new BigDecimal("10.00"));
+        final MealPlanRowDTO rowTwoDTO = new MealPlanRowDTO(
+                rowTwoEntity.getId(), MealType.DINNER, UUID.randomUUID(), "Hähnchenbrustfilet",
+                new BigDecimal("170.00"), new BigDecimal("923.00"), new BigDecimal("73.90"),
+                new BigDecimal("60.00"), new BigDecimal("20.00"));
 
         final MealPlanSectionDTO sectionOneDTO =
-                new MealPlanSectionDTO(sectionOneId, "1 · Tagesstruktur", "note", List.of(rowOneDTO), null, null);
+                new MealPlanSectionDTO(sectionOneId, "1 · Tagesstruktur", "note", List.of(rowOneDTO), null);
         final MealPlanSectionDTO sectionTwoDTO =
-                new MealPlanSectionDTO(sectionTwoId, "2 · Wochentage", "note", List.of(rowTwoDTO), null, null);
+                new MealPlanSectionDTO(sectionTwoId, "2 · Wochentage", "note", List.of(rowTwoDTO), null);
 
         when(mealPlanSectionRepository.findAllByMealPlanIdOrderBySortOrderAsc(mealPlanId))
                 .thenReturn(List.of(sectionOne, sectionTwo));

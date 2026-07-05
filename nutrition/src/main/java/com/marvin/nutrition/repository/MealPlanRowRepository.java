@@ -17,4 +17,12 @@ public interface MealPlanRowRepository extends JpaRepository<MealPlanRowEntity, 
      * @return list of rows ordered by sort order ascending
      */
     List<MealPlanRowEntity> findAllByMealPlanSectionIdOrderBySortOrderAsc(UUID mealPlanSectionId);
+
+    /**
+     * Counts how many rows reference the given food, used to guard against deleting a still-referenced food.
+     *
+     * @param foodId the id of the food catalog entry
+     * @return the number of rows referencing the food
+     */
+    long countByFoodId(UUID foodId);
 }
