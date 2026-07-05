@@ -33,15 +33,6 @@ public class MealPlanSectionEntity extends BasicEntity {
     @Column(name = "note", nullable = false, length = 500)
     private String note;
 
-    @Column(name = "totals_label", length = 255)
-    private String totalsLabel;
-
-    @Column(name = "totals_kcal", length = 255)
-    private String totalsKcal;
-
-    @Column(name = "totals_protein", length = 255)
-    private String totalsProtein;
-
     @Column(name = "callout")
     private String callout;
 

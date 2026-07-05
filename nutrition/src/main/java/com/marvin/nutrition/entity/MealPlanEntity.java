@@ -32,15 +32,6 @@ public class MealPlanEntity extends BasicEntity {
     @Column(name = "description", nullable = false)
     private String description;
 
-    @Column(name = "shopping_list_title", nullable = false, length = 500)
-    private String shoppingListTitle;
-
-    @Column(name = "shopping_list_note", nullable = false, length = 500)
-    private String shoppingListNote;
-
-    @Column(name = "shopping_list_callout")
-    private String shoppingListCallout;
-
     @Column(name = "footer_note", nullable = false)
     private String footerNote;
 

@@ -123,6 +123,23 @@ class MealTemplateRepositoryTest {
     }
 
     @Test
+    void countByFoodIdCountsItemsReferencingTheFood() {
+        final MealTemplateEntity template = new MealTemplateEntity();
+        template.setName("Snack");
+        final MealTemplateEntity savedTemplate = mealTemplateRepository.save(template);
+
+        final MealTemplateItemEntity item = new MealTemplateItemEntity();
+        item.setMealTemplateId(savedTemplate.getId());
+        item.setFoodId(food.getId());
+        item.setQuantityG(BigDecimal.valueOf(30));
+        mealTemplateItemRepository.save(item);
+
+        assertThat(mealTemplateItemRepository.countByFoodId(food.getId())).isEqualTo(1);
+
+        mealTemplateRepository.delete(savedTemplate);
+    }
+
+    @Test
     void deleteByMealTemplateIdRemovesOnlyMatchingItems() {
         final MealTemplateEntity template = new MealTemplateEntity();
         template.setName("Lunch");

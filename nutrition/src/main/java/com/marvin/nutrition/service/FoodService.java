@@ -5,6 +5,8 @@ import com.marvin.nutrition.entity.FoodEntity;
 import com.marvin.nutrition.entity.FoodSource;
 import com.marvin.nutrition.mapper.FoodMapper;
 import com.marvin.nutrition.repository.FoodRepository;
+import com.marvin.nutrition.repository.MealPlanRowRepository;
+import com.marvin.nutrition.repository.MealTemplateItemRepository;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.UUID;
@@ -22,16 +24,26 @@ public class FoodService {
 
     private final FoodRepository foodRepository;
     private final FoodMapper foodMapper;
+    private final MealPlanRowRepository mealPlanRowRepository;
+    private final MealTemplateItemRepository mealTemplateItemRepository;
 
     /**
      * Creates a new FoodService with the required dependencies.
      *
-     * @param foodRepository JPA repository for food entries
-     * @param foodMapper     MapStruct mapper for entity/DTO conversion
+     * @param foodRepository             JPA repository for food entries
+     * @param foodMapper                 MapStruct mapper for entity/DTO conversion
+     * @param mealPlanRowRepository      JPA repository for meal-plan rows, used to guard food deletion
+     * @param mealTemplateItemRepository JPA repository for meal-template items, used to guard food deletion
      */
-    public FoodService(FoodRepository foodRepository, FoodMapper foodMapper) {
+    public FoodService(
+            FoodRepository foodRepository,
+            FoodMapper foodMapper,
+            MealPlanRowRepository mealPlanRowRepository,
+            MealTemplateItemRepository mealTemplateItemRepository) {
         this.foodRepository = foodRepository;
         this.foodMapper = foodMapper;
+        this.mealPlanRowRepository = mealPlanRowRepository;
+        this.mealTemplateItemRepository = mealTemplateItemRepository;
     }
 
     /**
@@ -118,6 +130,8 @@ public class FoodService {
     /**
      * Deletes the food entry with the given id.
      * Emits {@link NoSuchElementException} if no entry with that id exists.
+     * Emits {@link FoodReferencedException} if the food is still referenced by any meal-plan row
+     * or meal-template item, carrying the reference counts for the caller to report.
      *
      * @param id the UUID of the food entry to delete
      * @return an empty Mono on success
@@ -126,6 +140,11 @@ public class FoodService {
         return Mono.fromCallable(() -> {
             if (!foodRepository.existsById(id)) {
                 throw new NoSuchElementException("Food not found: " + id);
+            }
+            final long mealPlanRowCount = mealPlanRowRepository.countByFoodId(id);
+            final long mealTemplateItemCount = mealTemplateItemRepository.countByFoodId(id);
+            if (mealPlanRowCount > 0 || mealTemplateItemCount > 0) {
+                throw new FoodReferencedException(mealPlanRowCount, mealTemplateItemCount);
             }
             foodRepository.deleteById(id);
             return null;

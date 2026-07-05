@@ -24,4 +24,12 @@ public interface MealTemplateItemRepository extends JpaRepository<MealTemplateIt
      * @param mealTemplateId the id of the meal template
      */
     void deleteByMealTemplateId(UUID mealTemplateId);
+
+    /**
+     * Counts how many items reference the given food, used to guard against deleting a still-referenced food.
+     *
+     * @param foodId the id of the food catalog entry
+     * @return the number of items referencing the food
+     */
+    long countByFoodId(UUID foodId);
 }

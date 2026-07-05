@@ -13,6 +13,7 @@ import com.marvin.nutrition.dto.FoodDraftDTO;
 import com.marvin.nutrition.entity.FoodSource;
 import com.marvin.nutrition.service.BarcodeLookup;
 import com.marvin.nutrition.service.BarcodeLookupException;
+import com.marvin.nutrition.service.FoodReferencedException;
 import com.marvin.nutrition.service.FoodService;
 import com.marvin.nutrition.service.LabelReadException;
 import com.marvin.nutrition.service.LabelReader;
@@ -247,6 +248,20 @@ class FoodControllerTest {
                 .verifyComplete();
 
         verify(foodService).delete(unknownId);
+    }
+
+    @Test
+    @DisplayName("deleteFood propagates FoodReferencedException when the food is still referenced")
+    void deleteFood_Referenced_PropagatesFoodReferencedException() {
+        when(foodService.delete(testId)).thenReturn(Mono.error(new FoodReferencedException(2, 1)));
+
+        final Mono<ResponseEntity<Void>> result = foodController.deleteFood(testId);
+
+        StepVerifier.create(result)
+                .expectError(FoodReferencedException.class)
+                .verify();
+
+        verify(foodService).delete(testId);
     }
 
     @Test

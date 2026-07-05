@@ -1,32 +1,28 @@
 package com.marvin.nutrition.controller;
 
-import com.marvin.nutrition.dto.CreateMealPlanChangelogEntryRequest;
-import com.marvin.nutrition.dto.MealPlanChangelogEntryDTO;
+import com.marvin.nutrition.dto.CreateMealPlanRowRequest;
+import com.marvin.nutrition.dto.CreateMealPlanRowsRequest;
 import com.marvin.nutrition.dto.MealPlanDTO;
 import com.marvin.nutrition.dto.MealPlanHeaderDTO;
 import com.marvin.nutrition.dto.MealPlanRowDTO;
 import com.marvin.nutrition.dto.MealPlanSectionDTO;
-import com.marvin.nutrition.dto.MealPlanShoppingCategoryDTO;
-import com.marvin.nutrition.dto.MealPlanShoppingItemDTO;
 import com.marvin.nutrition.dto.MealPlanSourceDTO;
-import com.marvin.nutrition.dto.MealPlanStatDTO;
 import com.marvin.nutrition.dto.UpdateMealPlanRequest;
 import com.marvin.nutrition.dto.UpdateMealPlanRowRequest;
 import com.marvin.nutrition.dto.UpdateMealPlanSectionRequest;
-import com.marvin.nutrition.dto.UpdateMealPlanShoppingCategoryRequest;
-import com.marvin.nutrition.dto.UpdateMealPlanShoppingItemRequest;
 import com.marvin.nutrition.dto.UpdateMealPlanSourceRequest;
-import com.marvin.nutrition.dto.UpdateMealPlanStatRequest;
 import com.marvin.nutrition.service.MealPlanService;
 import com.marvin.nutrition.service.MealPlanWriteService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.net.URI;
+import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -44,16 +40,16 @@ import reactor.core.scheduler.Schedulers;
 
 /**
  * REST controller serving the weekly meal-plan reference document and its content-write endpoints.
- * The document is assembled from normalized database tables; its content (section text, row
- * details/macros, headline stats, shopping list, changelog, header text) can be corrected through
- * this API instead of hand-written SQL or new Flyway migrations.
+ * The document is assembled from normalized database tables; rows are food-backed and their macros
+ * are derived server-side. Content (section text, header text, footer sources, and food-backed rows)
+ * can be corrected through this API instead of hand-written SQL or new Flyway migrations.
  */
 @RestController
 @RequestMapping("/nutrition/meal-plan")
 @Tag(name = "Nutrition", description = "Nutrition profile, weight tracking and target calculation")
 public class MealPlanController {
 
-    private static final String CHANGELOG_LOCATION_PREFIX = "/nutrition/meal-plan/changelog/";
+    private static final String ROWS_LOCATION_PREFIX = "/nutrition/meal-plan/rows/";
 
     private final MealPlanService mealPlanService;
     private final MealPlanWriteService mealPlanWriteService;
@@ -77,7 +73,7 @@ public class MealPlanController {
     @GetMapping
     @Operation(
             summary = "Get the weekly meal plan",
-            description = "Returns the weekly meal-plan reference document, including the shopping list.",
+            description = "Returns the weekly meal-plan reference document.",
             responses = {
                 @ApiResponse(
                         responseCode = "200",
@@ -99,8 +95,7 @@ public class MealPlanController {
     @PutMapping
     @Operation(
             summary = "Update the meal plan's header content",
-            description = "Applies partial updates to the meal plan's header (eyebrow, title, description, "
-                    + "shopping-list title/note/callout, footer note).",
+            description = "Applies partial updates to the meal plan's header (eyebrow, title, description, footer note).",
             responses = {
                 @ApiResponse(
                         responseCode = "200",
@@ -128,8 +123,7 @@ public class MealPlanController {
     @PutMapping("/sections/{id}")
     @Operation(
             summary = "Update a meal-plan section",
-            description = "Applies partial updates to an existing meal-plan section's title, note, callout and/or "
-                    + "totals row (label, kcal, protein).",
+            description = "Applies partial updates to an existing meal-plan section's title, note and/or callout.",
             responses = {
                 @ApiResponse(
                         responseCode = "200",
@@ -150,6 +144,73 @@ public class MealPlanController {
     }
 
     /**
+     * Creates a new food-backed row within the given section and returns 201 Created with a Location header.
+     *
+     * @param sectionId the UUID of the section to add the row to
+     * @param req       the create request body
+     * @return a Mono with 201 Created, Location header, and the created row DTO
+     */
+    @PostMapping("/sections/{sectionId}/rows")
+    @Operation(
+            summary = "Create a meal-plan row",
+            description = "Adds a food-backed row to the given section. Macros are derived server-side "
+                    + "from the referenced food's per-100g values and the supplied quantity.",
+            responses = {
+                @ApiResponse(
+                        responseCode = "201",
+                        description = "Row created; Location header contains the URI",
+                        content = @Content(schema = @Schema(implementation = MealPlanRowDTO.class))
+                ),
+                @ApiResponse(responseCode = "400", description = "Validation failed"),
+                @ApiResponse(responseCode = "404", description = "Section or referenced food not found")
+            }
+    )
+    public Mono<ResponseEntity<MealPlanRowDTO>> addRow(
+            @PathVariable @Parameter(description = "UUID of the section to add the row to") UUID sectionId,
+            @Valid @RequestBody CreateMealPlanRowRequest req) {
+        return Mono.fromCallable(() -> mealPlanWriteService.addRow(sectionId, req))
+                .subscribeOn(Schedulers.boundedElastic())
+                .map(created -> {
+                    final URI location = URI.create(ROWS_LOCATION_PREFIX + created.id());
+                    return ResponseEntity.status(HttpStatus.CREATED).location(location).body(created);
+                })
+                .onErrorReturn(NoSuchElementException.class, ResponseEntity.notFound().build());
+    }
+
+    /**
+     * Creates multiple food-backed rows within the given section in a single database transaction and
+     * returns 201 Created with the created rows as a JSON array (no Location header).
+     *
+     * @param sectionId the UUID of the section to add the rows to
+     * @param req       the batch create request body, containing a non-empty list of rows
+     * @return a Mono with 201 Created and the created row DTOs, or 404 if the section or any referenced food is not found
+     */
+    @PostMapping("/sections/{sectionId}/rows/batch")
+    @Operation(
+            summary = "Create multiple meal-plan rows in one transaction",
+            description = "Adds multiple food-backed rows to the given section in a single database "
+                    + "transaction. If any referenced food is unknown, the whole batch is rolled back. "
+                    + "The response body is a JSON array and no Location header is set.",
+            responses = {
+                @ApiResponse(
+                        responseCode = "201",
+                        description = "Rows created",
+                        content = @Content(array = @ArraySchema(schema = @Schema(implementation = MealPlanRowDTO.class)))
+                ),
+                @ApiResponse(responseCode = "400", description = "Validation failed: empty list or invalid row"),
+                @ApiResponse(responseCode = "404", description = "Section or a referenced food not found; nothing was persisted")
+            }
+    )
+    public Mono<ResponseEntity<List<MealPlanRowDTO>>> addRows(
+            @PathVariable @Parameter(description = "UUID of the section to add the rows to") UUID sectionId,
+            @Valid @RequestBody CreateMealPlanRowsRequest req) {
+        return Mono.fromCallable(() -> mealPlanWriteService.addRows(sectionId, req.rows()))
+                .subscribeOn(Schedulers.boundedElastic())
+                .map(created -> ResponseEntity.status(HttpStatus.CREATED).body(created))
+                .onErrorReturn(NoSuchElementException.class, ResponseEntity.notFound().build());
+    }
+
+    /**
      * Updates a meal-plan row, or returns 404 if not found.
      *
      * @param id  the UUID of the row to update
@@ -159,8 +220,8 @@ public class MealPlanController {
     @PutMapping("/rows/{id}")
     @Operation(
             summary = "Update a meal-plan row",
-            description = "Applies partial updates to an existing meal-plan row's meal, details, quantity, "
-                    + "kcal and/or protein.",
+            description = "Applies updates to an existing meal-plan row's meal type, referenced food "
+                    + "and/or quantity. Macros are re-snapshotted from the referenced food on every update.",
             responses = {
                 @ApiResponse(
                         responseCode = "200",
@@ -168,7 +229,7 @@ public class MealPlanController {
                         content = @Content(schema = @Schema(implementation = MealPlanRowDTO.class))
                 ),
                 @ApiResponse(responseCode = "400", description = "Validation failed"),
-                @ApiResponse(responseCode = "404", description = "Row not found")
+                @ApiResponse(responseCode = "404", description = "Row or referenced food not found")
             }
     )
     public Mono<ResponseEntity<MealPlanRowDTO>> updateRow(
@@ -181,93 +242,25 @@ public class MealPlanController {
     }
 
     /**
-     * Updates a meal-plan headline statistic, or returns 404 if not found.
+     * Deletes a meal-plan row, or returns 404 if not found.
      *
-     * @param id  the UUID of the stat to update
-     * @param req the update request body
-     * @return a Mono with 200 and the updated stat DTO, or 404 if not found
+     * @param id the UUID of the row to delete
+     * @return a Mono with 204 on success, or 404 if not found
      */
-    @PutMapping("/stats/{id}")
+    @DeleteMapping("/rows/{id}")
     @Operation(
-            summary = "Update a meal-plan headline statistic",
-            description = "Applies partial updates to an existing headline statistic's label and/or value.",
+            summary = "Delete a meal-plan row",
+            description = "Permanently removes the meal-plan row.",
             responses = {
-                @ApiResponse(
-                        responseCode = "200",
-                        description = "Stat updated",
-                        content = @Content(schema = @Schema(implementation = MealPlanStatDTO.class))
-                ),
-                @ApiResponse(responseCode = "400", description = "Validation failed"),
-                @ApiResponse(responseCode = "404", description = "Stat not found")
+                @ApiResponse(responseCode = "204", description = "Row deleted"),
+                @ApiResponse(responseCode = "404", description = "Row not found")
             }
     )
-    public Mono<ResponseEntity<MealPlanStatDTO>> updateStat(
-            @PathVariable @Parameter(description = "UUID of the stat to update") UUID id,
-            @Valid @RequestBody UpdateMealPlanStatRequest req) {
-        return Mono.fromCallable(() -> mealPlanWriteService.updateStat(id, req))
+    public Mono<ResponseEntity<Void>> deleteRow(
+            @PathVariable @Parameter(description = "UUID of the row to delete") UUID id) {
+        return Mono.fromRunnable(() -> mealPlanWriteService.deleteRow(id))
                 .subscribeOn(Schedulers.boundedElastic())
-                .map(ResponseEntity::ok)
-                .onErrorReturn(NoSuchElementException.class, ResponseEntity.notFound().build());
-    }
-
-    /**
-     * Updates a meal-plan shopping-list category, or returns 404 if not found.
-     *
-     * @param id  the UUID of the category to update
-     * @param req the update request body
-     * @return a Mono with 200 and the updated category DTO, or 404 if not found
-     */
-    @PutMapping("/shopping-categories/{id}")
-    @Operation(
-            summary = "Update a meal-plan shopping-list category",
-            description = "Applies partial updates to an existing shopping-list category's title.",
-            responses = {
-                @ApiResponse(
-                        responseCode = "200",
-                        description = "Shopping category updated",
-                        content = @Content(schema = @Schema(implementation = MealPlanShoppingCategoryDTO.class))
-                ),
-                @ApiResponse(responseCode = "400", description = "Validation failed"),
-                @ApiResponse(responseCode = "404", description = "Shopping category not found")
-            }
-    )
-    public Mono<ResponseEntity<MealPlanShoppingCategoryDTO>> updateShoppingCategory(
-            @PathVariable @Parameter(description = "UUID of the shopping category to update") UUID id,
-            @Valid @RequestBody UpdateMealPlanShoppingCategoryRequest req) {
-        return Mono.fromCallable(() -> mealPlanWriteService.updateShoppingCategory(id, req))
-                .subscribeOn(Schedulers.boundedElastic())
-                .map(ResponseEntity::ok)
-                .onErrorReturn(NoSuchElementException.class, ResponseEntity.notFound().build());
-    }
-
-    /**
-     * Updates a meal-plan shopping-list item, or returns 404 if not found.
-     *
-     * @param id  the UUID of the item to update
-     * @param req the update request body
-     * @return a Mono with 200 and the updated item DTO, or 404 if not found
-     */
-    @PutMapping("/shopping-items/{id}")
-    @Operation(
-            summary = "Update a meal-plan shopping-list item",
-            description = "Applies partial updates to an existing shopping-list item's name, brand, badge, "
-                    + "badge text and/or quantity.",
-            responses = {
-                @ApiResponse(
-                        responseCode = "200",
-                        description = "Shopping item updated",
-                        content = @Content(schema = @Schema(implementation = MealPlanShoppingItemDTO.class))
-                ),
-                @ApiResponse(responseCode = "400", description = "Validation failed"),
-                @ApiResponse(responseCode = "404", description = "Shopping item not found")
-            }
-    )
-    public Mono<ResponseEntity<MealPlanShoppingItemDTO>> updateShoppingItem(
-            @PathVariable @Parameter(description = "UUID of the shopping item to update") UUID id,
-            @Valid @RequestBody UpdateMealPlanShoppingItemRequest req) {
-        return Mono.fromCallable(() -> mealPlanWriteService.updateShoppingItem(id, req))
-                .subscribeOn(Schedulers.boundedElastic())
-                .map(ResponseEntity::ok)
+                .then(Mono.just(ResponseEntity.noContent().<Void>build()))
                 .onErrorReturn(NoSuchElementException.class, ResponseEntity.notFound().build());
     }
 
@@ -322,35 +315,5 @@ public class MealPlanController {
                 .subscribeOn(Schedulers.boundedElastic())
                 .then(Mono.just(ResponseEntity.noContent().<Void>build()))
                 .onErrorReturn(NoSuchElementException.class, ResponseEntity.notFound().build());
-    }
-
-    /**
-     * Appends a new entry to the meal plan's changelog and returns 201 Created with a Location header.
-     *
-     * @param req the create request body
-     * @return a Mono with 201 Created, Location header, and the created changelog entry DTO
-     */
-    @PostMapping("/changelog")
-    @Operation(
-            summary = "Append a meal-plan changelog entry",
-            description = "Appends a new entry to the meal plan's changelog. The changelog is an append-only "
-                    + "historical log; there is no update or delete operation for existing entries.",
-            responses = {
-                @ApiResponse(
-                        responseCode = "201",
-                        description = "Changelog entry created; Location header contains the URI",
-                        content = @Content(schema = @Schema(implementation = MealPlanChangelogEntryDTO.class))
-                ),
-                @ApiResponse(responseCode = "400", description = "Validation failed or missing required fields")
-            }
-    )
-    public Mono<ResponseEntity<MealPlanChangelogEntryDTO>> addChangelogEntry(
-            @Valid @RequestBody CreateMealPlanChangelogEntryRequest req) {
-        return Mono.fromCallable(() -> mealPlanWriteService.addChangelogEntry(req))
-                .subscribeOn(Schedulers.boundedElastic())
-                .map(created -> {
-                    final URI location = URI.create(CHANGELOG_LOCATION_PREFIX + created.id());
-                    return ResponseEntity.status(HttpStatus.CREATED).location(location).body(created);
-                });
     }
 }
