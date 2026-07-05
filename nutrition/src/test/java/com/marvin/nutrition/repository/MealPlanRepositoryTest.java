@@ -185,6 +185,28 @@ class MealPlanRepositoryTest {
     }
 
     @Test
+    void newSectionDefaultsDayCountToOne() {
+        final MealPlanSectionEntity section = saveSection("Section", "note", 0);
+
+        assertThat(section.getDayCount()).isEqualTo(1);
+    }
+
+    @Test
+    void savesAndFindsSectionWithExplicitDayCount() {
+        final MealPlanSectionEntity section = new MealPlanSectionEntity();
+        section.setMealPlanId(mealPlan.getId());
+        section.setTitle("2 · Wochentage");
+        section.setNote("note");
+        section.setSortOrder(0);
+        section.setDayCount(4);
+        final MealPlanSectionEntity saved = mealPlanSectionRepository.save(section);
+
+        final MealPlanSectionEntity found = mealPlanSectionRepository.findById(saved.getId()).orElseThrow();
+
+        assertThat(found.getDayCount()).isEqualTo(4);
+    }
+
+    @Test
     void countByFoodIdCountsRowsReferencingTheFood() {
         final MealPlanSectionEntity section = saveSection("Section", "note", 0);
         saveRow(section.getId(), MealType.BREAKFAST, BigDecimal.valueOf(90), 0);
