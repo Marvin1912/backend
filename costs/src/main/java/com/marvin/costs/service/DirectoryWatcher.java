@@ -78,7 +78,9 @@ public class DirectoryWatcher {
             for (WatchEvent<?> event : key.pollEvents()) {
                 final Path file = Paths.get(directoryIn.toString(),
                         event.context().toString());
-                if (!Files.isDirectory(file)) {
+                if (!Files.exists(file)) {
+                    LOGGER.debug("Skipping {}, already moved by a previous event for the same file", file.getFileName());
+                } else if (!Files.isDirectory(file)) {
                     try {
                         final Path moved = Files.move(file,
                                 directoryDone.resolve(file.getFileName()),
