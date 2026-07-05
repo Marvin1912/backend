@@ -69,7 +69,8 @@ public class DirectoryWatcher {
 
     private void watchDirectory() throws Exception {
         final WatchService watchService = FileSystems.getDefault().newWatchService();
-        directoryIn.register(watchService, StandardWatchEventKinds.ENTRY_CREATE);
+        directoryIn.register(watchService, StandardWatchEventKinds.ENTRY_CREATE,
+                StandardWatchEventKinds.ENTRY_MODIFY);
 
         WatchKey key;
         while (IS_RUNNING.get() && (key = watchService.take()) != null) {
@@ -77,10 +78,14 @@ public class DirectoryWatcher {
                 final Path file = Paths.get(directoryIn.toString(),
                         event.context().toString());
                 if (!Files.isDirectory(file)) {
-                    eventPublisher.publishEvent(new NewFileEvent(file));
-                    final Path moved = Files.move(file,
-                            directoryDone.resolve(file.getFileName()));
-                    LOGGER.info("Moved {} to {}!", file.getFileName(), moved);
+                    try {
+                        final Path moved = Files.move(file,
+                                directoryDone.resolve(file.getFileName()));
+                        LOGGER.info("Moved {} to {}!", file.getFileName(), moved);
+                        eventPublisher.publishEvent(new NewFileEvent(moved));
+                    } catch (Exception e) {
+                        LOGGER.error("Failed to move file {} to done directory", file.getFileName(), e);
+                    }
                 }
             }
             key.reset();

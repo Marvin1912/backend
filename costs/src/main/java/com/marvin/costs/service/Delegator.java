@@ -68,22 +68,23 @@ public class Delegator {
      */
     @EventListener(NewFileEvent.class)
     public void startUpWatchService(NewFileEvent newFileEvent) throws Exception {
+        LOGGER.info("Processing CAMT file: {}", newFileEvent.path().getFileName());
 
         final Flux<BookingEntryDTO> bookingEntryStream = getBookingEntries(
                 Files.newInputStream(newFileEvent.path()))
                 .publish().autoConnect(4);
 
         monthlyCostImportService.importMonthlyCost(bookingEntryStream)
-                .subscribe(LOGGER::info);
+                .subscribe(LOGGER::info, e -> LOGGER.error("Monthly cost import failed", e));
 
         specialCostImportService.importSpecialCost(bookingEntryStream)
-                .subscribe(LOGGER::info);
+                .subscribe(LOGGER::info, e -> LOGGER.error("Special cost import failed", e));
 
         salaryImportService.importSalary(bookingEntryStream)
-                .subscribe(LOGGER::info);
+                .subscribe(LOGGER::info, e -> LOGGER.error("Salary import failed", e));
 
         dailyCostImportService.importDailyCost(bookingEntryStream)
-                .subscribe(LOGGER::info);
+                .subscribe(LOGGER::info, e -> LOGGER.error("Daily cost import failed", e));
     }
 
     private Flux<BookingEntryDTO> getBookingEntries(InputStream inputStream) {
