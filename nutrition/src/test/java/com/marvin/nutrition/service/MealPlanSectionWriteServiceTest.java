@@ -36,7 +36,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
  * Unit tests for {@link MealPlanSectionWriteService} covering section updates and food-backed row
- * create/update/delete (issue #225 rewrite).
+ * create/update/delete (issue #225 rewrite), including the sort-order collision fix and batched
+ * food lookups found in code review of PR #226.
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("MealPlanSectionWriteService Tests")
@@ -66,6 +67,13 @@ class MealPlanSectionWriteServiceTest {
         food.setCarbsPer100(carbs);
         food.setFatPer100(fat);
         return food;
+    }
+
+    private MealPlanRowEntity rowWithSortOrder(int sortOrder) {
+        final MealPlanRowEntity row = new MealPlanRowEntity();
+        row.setId(UUID.randomUUID());
+        row.setSortOrder(sortOrder);
+        return row;
     }
 
     // -----------------------------------------------------------------------
@@ -135,8 +143,9 @@ class MealPlanSectionWriteServiceTest {
                 new CreateMealPlanRowRequest(MealType.BREAKFAST, food.getId(), new BigDecimal("90.00"));
 
         when(mealPlanSectionRepository.findById(sectionId)).thenReturn(Optional.of(section));
-        when(mealPlanRowRepository.findAllByMealPlanSectionIdOrderBySortOrderAsc(sectionId)).thenReturn(List.of());
         when(foodRepository.findById(food.getId())).thenReturn(Optional.of(food));
+        when(mealPlanRowRepository.findFirstByMealPlanSectionIdOrderBySortOrderDesc(sectionId))
+                .thenReturn(Optional.empty());
         when(mealPlanRowRepository.save(any(MealPlanRowEntity.class))).thenAnswer(inv -> inv.getArgument(0));
         when(mealPlanMapper.toRowDTO(any(MealPlanRowEntity.class))).thenAnswer(inv -> {
             final MealPlanRowEntity saved = inv.getArgument(0);
@@ -161,7 +170,7 @@ class MealPlanSectionWriteServiceTest {
     }
 
     @Test
-    @DisplayName("addRow assigns the next sort order after existing rows")
+    @DisplayName("addRow assigns the next sort order as max(existing) + 1")
     void addRow_AssignsNextSortOrder() {
         final UUID sectionId = UUID.randomUUID();
         final MealPlanSectionEntity section = new MealPlanSectionEntity();
@@ -173,9 +182,9 @@ class MealPlanSectionWriteServiceTest {
                 new CreateMealPlanRowRequest(MealType.SNACK, food.getId(), new BigDecimal("100.00"));
 
         when(mealPlanSectionRepository.findById(sectionId)).thenReturn(Optional.of(section));
-        when(mealPlanRowRepository.findAllByMealPlanSectionIdOrderBySortOrderAsc(sectionId))
-                .thenReturn(List.of(new MealPlanRowEntity(), new MealPlanRowEntity()));
         when(foodRepository.findById(food.getId())).thenReturn(Optional.of(food));
+        when(mealPlanRowRepository.findFirstByMealPlanSectionIdOrderBySortOrderDesc(sectionId))
+                .thenReturn(Optional.of(rowWithSortOrder(1)));
         when(mealPlanRowRepository.save(any(MealPlanRowEntity.class))).thenAnswer(inv -> inv.getArgument(0));
         when(mealPlanMapper.toRowDTO(any(MealPlanRowEntity.class))).thenReturn(null);
 
@@ -184,6 +193,34 @@ class MealPlanSectionWriteServiceTest {
         final ArgumentCaptor<MealPlanRowEntity> captor = ArgumentCaptor.forClass(MealPlanRowEntity.class);
         verify(mealPlanRowRepository).save(captor.capture());
         assertEquals(2, captor.getValue().getSortOrder());
+    }
+
+    @Test
+    @DisplayName("addRow after a middle row was deleted assigns a sort order past the remaining max, not a colliding count-based value")
+    void addRow_AfterMiddleRowDeleted_DoesNotCollideWithRemainingSortOrder() {
+        final UUID sectionId = UUID.randomUUID();
+        final MealPlanSectionEntity section = new MealPlanSectionEntity();
+        section.setId(sectionId);
+
+        final FoodEntity food = food(
+                new BigDecimal("100.00"), new BigDecimal("10.00"), new BigDecimal("10.00"), new BigDecimal("10.00"));
+        final CreateMealPlanRowRequest req =
+                new CreateMealPlanRowRequest(MealType.SNACK, food.getId(), new BigDecimal("100.00"));
+
+        // Section originally had rows at sort_order 0, 1, 2; the row at 1 was deleted, leaving 0 and 2.
+        // A count-based approach would compute size()=2 here and collide with the remaining row at 2.
+        when(mealPlanSectionRepository.findById(sectionId)).thenReturn(Optional.of(section));
+        when(foodRepository.findById(food.getId())).thenReturn(Optional.of(food));
+        when(mealPlanRowRepository.findFirstByMealPlanSectionIdOrderBySortOrderDesc(sectionId))
+                .thenReturn(Optional.of(rowWithSortOrder(2)));
+        when(mealPlanRowRepository.save(any(MealPlanRowEntity.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(mealPlanMapper.toRowDTO(any(MealPlanRowEntity.class))).thenReturn(null);
+
+        mealPlanSectionWriteService.addRow(sectionId, req);
+
+        final ArgumentCaptor<MealPlanRowEntity> captor = ArgumentCaptor.forClass(MealPlanRowEntity.class);
+        verify(mealPlanRowRepository).save(captor.capture());
+        assertEquals(3, captor.getValue().getSortOrder());
     }
 
     @Test
@@ -208,7 +245,6 @@ class MealPlanSectionWriteServiceTest {
         final UUID foodId = UUID.randomUUID();
 
         when(mealPlanSectionRepository.findById(sectionId)).thenReturn(Optional.of(section));
-        when(mealPlanRowRepository.findAllByMealPlanSectionIdOrderBySortOrderAsc(sectionId)).thenReturn(List.of());
         when(foodRepository.findById(foodId)).thenReturn(Optional.empty());
 
         final CreateMealPlanRowRequest req = new CreateMealPlanRowRequest(MealType.BREAKFAST, foodId, new BigDecimal("90.00"));
@@ -238,9 +274,9 @@ class MealPlanSectionWriteServiceTest {
                 new CreateMealPlanRowRequest(MealType.LUNCH, foodTwo.getId(), new BigDecimal("100.00")));
 
         when(mealPlanSectionRepository.findById(sectionId)).thenReturn(Optional.of(section));
-        when(mealPlanRowRepository.findAllByMealPlanSectionIdOrderBySortOrderAsc(sectionId)).thenReturn(List.of());
-        when(foodRepository.findById(foodOne.getId())).thenReturn(Optional.of(foodOne));
-        when(foodRepository.findById(foodTwo.getId())).thenReturn(Optional.of(foodTwo));
+        when(mealPlanRowRepository.findFirstByMealPlanSectionIdOrderBySortOrderDesc(sectionId))
+                .thenReturn(Optional.empty());
+        when(foodRepository.findAllById(any())).thenReturn(List.of(foodOne, foodTwo));
         when(mealPlanRowRepository.save(any(MealPlanRowEntity.class))).thenAnswer(inv -> inv.getArgument(0));
         when(mealPlanMapper.toRowDTO(any(MealPlanRowEntity.class))).thenReturn(null);
 
@@ -252,7 +288,36 @@ class MealPlanSectionWriteServiceTest {
     }
 
     @Test
-    @DisplayName("addRows throws NoSuchElementException and saves nothing when a later food is unknown")
+    @DisplayName("addRows looks up all referenced foods in a single batch call, not one findById per row")
+    void addRows_BatchesFoodLookupViaFindAllById() {
+        final UUID sectionId = UUID.randomUUID();
+        final MealPlanSectionEntity section = new MealPlanSectionEntity();
+        section.setId(sectionId);
+
+        final FoodEntity foodOne = food(
+                new BigDecimal("100.00"), new BigDecimal("10.00"), new BigDecimal("10.00"), new BigDecimal("10.00"));
+        final FoodEntity foodTwo = food(
+                new BigDecimal("200.00"), new BigDecimal("20.00"), new BigDecimal("20.00"), new BigDecimal("20.00"));
+
+        final List<CreateMealPlanRowRequest> requests = List.of(
+                new CreateMealPlanRowRequest(MealType.BREAKFAST, foodOne.getId(), new BigDecimal("100.00")),
+                new CreateMealPlanRowRequest(MealType.LUNCH, foodTwo.getId(), new BigDecimal("100.00")));
+
+        when(mealPlanSectionRepository.findById(sectionId)).thenReturn(Optional.of(section));
+        when(mealPlanRowRepository.findFirstByMealPlanSectionIdOrderBySortOrderDesc(sectionId))
+                .thenReturn(Optional.empty());
+        when(foodRepository.findAllById(any())).thenReturn(List.of(foodOne, foodTwo));
+        when(mealPlanRowRepository.save(any(MealPlanRowEntity.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(mealPlanMapper.toRowDTO(any(MealPlanRowEntity.class))).thenReturn(null);
+
+        mealPlanSectionWriteService.addRows(sectionId, requests);
+
+        verify(foodRepository, times(1)).findAllById(any());
+        verify(foodRepository, never()).findById(any());
+    }
+
+    @Test
+    @DisplayName("addRows throws NoSuchElementException and saves nothing further when a later food is unknown")
     void addRows_UnknownFoodPartwayThrough_ThrowsAndSavesNothingFurther() {
         final UUID sectionId = UUID.randomUUID();
         final MealPlanSectionEntity section = new MealPlanSectionEntity();
@@ -267,9 +332,10 @@ class MealPlanSectionWriteServiceTest {
                 new CreateMealPlanRowRequest(MealType.LUNCH, unknownFoodId, new BigDecimal("100.00")));
 
         when(mealPlanSectionRepository.findById(sectionId)).thenReturn(Optional.of(section));
-        when(mealPlanRowRepository.findAllByMealPlanSectionIdOrderBySortOrderAsc(sectionId)).thenReturn(List.of());
-        when(foodRepository.findById(foodOne.getId())).thenReturn(Optional.of(foodOne));
-        when(foodRepository.findById(unknownFoodId)).thenReturn(Optional.empty());
+        when(mealPlanRowRepository.findFirstByMealPlanSectionIdOrderBySortOrderDesc(sectionId))
+                .thenReturn(Optional.empty());
+        // unknownFoodId is simply absent from the batch result, as findAllById would return for it.
+        when(foodRepository.findAllById(any())).thenReturn(List.of(foodOne));
         when(mealPlanRowRepository.save(any(MealPlanRowEntity.class))).thenAnswer(inv -> inv.getArgument(0));
         when(mealPlanMapper.toRowDTO(any(MealPlanRowEntity.class))).thenReturn(null);
 

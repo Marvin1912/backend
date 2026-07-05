@@ -11,6 +11,7 @@ import com.marvin.nutrition.entity.MealPlanSourceEntity;
 import com.marvin.nutrition.entity.MealType;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -129,6 +130,58 @@ class MealPlanRepositoryTest {
                 .containsExactly(MealType.BREAKFAST, MealType.DINNER);
         assertThat(rows.getFirst().getFoodId()).isEqualTo(food.getId());
         assertThat(rows.getFirst().getFoodName()).isEqualTo("Haferflocken");
+    }
+
+    @Test
+    void findFirstByMealPlanSectionIdOrderBySortOrderDescReturnsHighestSortOrderRow() {
+        final MealPlanSectionEntity section = saveSection("Section", "note", 0);
+        saveRow(section.getId(), MealType.BREAKFAST, BigDecimal.valueOf(90), 0);
+        final MealPlanRowEntity highest = saveRow(section.getId(), MealType.DINNER, BigDecimal.valueOf(170), 2);
+        saveRow(section.getId(), MealType.SNACK, BigDecimal.valueOf(50), 1);
+
+        final Optional<MealPlanRowEntity> result =
+                mealPlanRowRepository.findFirstByMealPlanSectionIdOrderBySortOrderDesc(section.getId());
+
+        assertThat(result).isPresent();
+        assertThat(result.get().getId()).isEqualTo(highest.getId());
+        assertThat(result.get().getSortOrder()).isEqualTo(2);
+    }
+
+    @Test
+    void findFirstByMealPlanSectionIdOrderBySortOrderDescReturnsEmptyForSectionWithNoRows() {
+        final MealPlanSectionEntity section = saveSection("Empty section", "note", 0);
+
+        final Optional<MealPlanRowEntity> result =
+                mealPlanRowRepository.findFirstByMealPlanSectionIdOrderBySortOrderDesc(section.getId());
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void newRowAfterDeletingMiddleRowDoesNotCollideWithRemainingSortOrders() {
+        final MealPlanSectionEntity section = saveSection("Section", "note", 0);
+        final MealPlanRowEntity first = saveRow(section.getId(), MealType.BREAKFAST, BigDecimal.valueOf(90), 0);
+        final MealPlanRowEntity middle = saveRow(section.getId(), MealType.LUNCH, BigDecimal.valueOf(150), 1);
+        final MealPlanRowEntity last = saveRow(section.getId(), MealType.DINNER, BigDecimal.valueOf(170), 2);
+
+        mealPlanRowRepository.delete(middle);
+        mealPlanRowRepository.flush();
+
+        // Mirrors MealPlanSectionWriteService's next-sort-order derivation: max(existing) + 1, not count().
+        final int nextSortOrder = mealPlanRowRepository
+                .findFirstByMealPlanSectionIdOrderBySortOrderDesc(section.getId())
+                .map(row -> row.getSortOrder() + 1)
+                .orElse(0);
+        saveRow(section.getId(), MealType.SNACK, BigDecimal.valueOf(50), nextSortOrder);
+
+        final List<MealPlanRowEntity> remainingRows =
+                mealPlanRowRepository.findAllByMealPlanSectionIdOrderBySortOrderAsc(section.getId());
+
+        assertThat(remainingRows).extracting(MealPlanRowEntity::getSortOrder)
+                .doesNotHaveDuplicates()
+                .containsExactly(0, 2, 3);
+        assertThat(remainingRows).extracting(MealPlanRowEntity::getId)
+                .contains(first.getId(), last.getId());
     }
 
     @Test

@@ -16,8 +16,10 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -88,7 +90,10 @@ public class MealPlanSectionWriteService {
 
     /**
      * Creates a new food-backed row within the given section. Macros are derived server-side from
-     * the referenced food's per-100g values and the supplied quantity.
+     * the referenced food's per-100g values and the supplied quantity. The row's sort order is
+     * derived from the highest existing sort order in the section (not a count), so that a row
+     * deleted from the middle of the section never causes a new row to collide with a sort order
+     * still in use by a remaining row.
      * Throws {@link NoSuchElementException} if the section or the referenced food is not found.
      *
      * @param sectionId the UUID of the section to add the row to
@@ -99,15 +104,19 @@ public class MealPlanSectionWriteService {
     public MealPlanRowDTO addRow(UUID sectionId, CreateMealPlanRowRequest req) {
         final MealPlanSectionEntity section = mealPlanSectionRepository.findById(sectionId)
                 .orElseThrow(() -> new NoSuchElementException("Meal plan section not found: " + sectionId));
-        final int nextSortOrder = mealPlanRowRepository.findAllByMealPlanSectionIdOrderBySortOrderAsc(sectionId).size();
+        final FoodEntity food = foodRepository.findById(req.foodId())
+                .orElseThrow(() -> new NoSuchElementException("Food not found: " + req.foodId()));
 
-        final MealPlanRowEntity saved = buildAndSaveRow(section.getId(), req, nextSortOrder);
+        final MealPlanRowEntity saved = buildAndSaveRow(section.getId(), req, food, nextSortOrder(sectionId));
         return mealPlanMapper.toRowDTO(saved);
     }
 
     /**
      * Creates multiple food-backed rows within the given section in a single transaction.
+     * All referenced foods are loaded in a single batch query rather than one lookup per row.
      * If any referenced food is not found, the whole batch is rolled back.
+     * Sort orders are assigned sequentially starting from the section's highest existing sort
+     * order + 1 (see {@link #addRow(UUID, CreateMealPlanRowRequest)} for why this matters).
      * Throws {@link NoSuchElementException} if the section or any referenced food is not found.
      *
      * @param sectionId the UUID of the section to add the rows to
@@ -118,11 +127,16 @@ public class MealPlanSectionWriteService {
     public List<MealPlanRowDTO> addRows(UUID sectionId, List<CreateMealPlanRowRequest> requests) {
         final MealPlanSectionEntity section = mealPlanSectionRepository.findById(sectionId)
                 .orElseThrow(() -> new NoSuchElementException("Meal plan section not found: " + sectionId));
+        final Map<UUID, FoodEntity> foodsById = loadFoodsByIds(requests);
 
-        int nextSortOrder = mealPlanRowRepository.findAllByMealPlanSectionIdOrderBySortOrderAsc(sectionId).size();
+        int nextSortOrder = nextSortOrder(sectionId);
         final List<MealPlanRowDTO> created = new ArrayList<>();
         for (final CreateMealPlanRowRequest req : requests) {
-            final MealPlanRowEntity saved = buildAndSaveRow(section.getId(), req, nextSortOrder);
+            final FoodEntity food = foodsById.get(req.foodId());
+            if (food == null) {
+                throw new NoSuchElementException("Food not found: " + req.foodId());
+            }
+            final MealPlanRowEntity saved = buildAndSaveRow(section.getId(), req, food, nextSortOrder);
             created.add(mealPlanMapper.toRowDTO(saved));
             nextSortOrder++;
         }
@@ -149,13 +163,7 @@ public class MealPlanSectionWriteService {
         if (req.mealType() != null) {
             row.setMealType(req.mealType());
         }
-        row.setFoodId(food.getId());
-        row.setFoodName(food.getName());
-        row.setQuantityG(req.quantityG());
-        row.setKcal(snapshot(food.getKcalPer100(), req.quantityG()));
-        row.setProteinG(snapshot(food.getProteinPer100(), req.quantityG()));
-        row.setCarbsG(snapshot(food.getCarbsPer100(), req.quantityG()));
-        row.setFatG(snapshot(food.getFatPer100(), req.quantityG()));
+        applyFoodSnapshot(row, food, req.quantityG());
 
         final MealPlanRowEntity saved = mealPlanRowRepository.save(row);
         return mealPlanMapper.toRowDTO(saved);
@@ -175,31 +183,71 @@ public class MealPlanSectionWriteService {
     }
 
     /**
-     * Looks up the referenced food, builds a new row entity snapshotting its macros for the given
+     * Loads all foods referenced by the given create requests in a single query, keyed by id.
+     *
+     * @param requests the create requests whose referenced foods should be loaded
+     * @return a map of food id to food entity, containing only the foods that were found
+     */
+    private Map<UUID, FoodEntity> loadFoodsByIds(List<CreateMealPlanRowRequest> requests) {
+        final List<UUID> foodIds = requests.stream()
+                .map(CreateMealPlanRowRequest::foodId)
+                .distinct()
+                .collect(Collectors.toList());
+        return foodRepository.findAllById(foodIds).stream()
+                .collect(Collectors.toMap(FoodEntity::getId, food -> food));
+    }
+
+    /**
+     * Builds a new row entity for the given section, snapshotting the food's macros for the given
      * quantity, and saves it.
      *
      * @param sectionId the id of the owning section
      * @param req       the create request
+     * @param food      the already-resolved food entity referenced by the request
      * @param sortOrder the display position to assign to the new row
      * @return the saved row entity
      */
-    private MealPlanRowEntity buildAndSaveRow(UUID sectionId, CreateMealPlanRowRequest req, int sortOrder) {
-        final FoodEntity food = foodRepository.findById(req.foodId())
-                .orElseThrow(() -> new NoSuchElementException("Food not found: " + req.foodId()));
-
+    private MealPlanRowEntity buildAndSaveRow(UUID sectionId, CreateMealPlanRowRequest req, FoodEntity food, int sortOrder) {
         final MealPlanRowEntity row = new MealPlanRowEntity();
         row.setMealPlanSectionId(sectionId);
         row.setMealType(req.mealType());
-        row.setFoodId(food.getId());
-        row.setFoodName(food.getName());
-        row.setQuantityG(req.quantityG());
-        row.setKcal(snapshot(food.getKcalPer100(), req.quantityG()));
-        row.setProteinG(snapshot(food.getProteinPer100(), req.quantityG()));
-        row.setCarbsG(snapshot(food.getCarbsPer100(), req.quantityG()));
-        row.setFatG(snapshot(food.getFatPer100(), req.quantityG()));
+        applyFoodSnapshot(row, food, req.quantityG());
         row.setSortOrder(sortOrder);
 
         return mealPlanRowRepository.save(row);
+    }
+
+    /**
+     * Applies the food reference and its macro snapshot (for the given quantity) onto the row.
+     * Shared by row creation and row updates so the snapshot logic exists in exactly one place.
+     *
+     * @param row       the row entity to populate
+     * @param food      the referenced food entity
+     * @param quantityG the portion size in grams
+     */
+    private void applyFoodSnapshot(MealPlanRowEntity row, FoodEntity food, BigDecimal quantityG) {
+        row.setFoodId(food.getId());
+        row.setFoodName(food.getName());
+        row.setQuantityG(quantityG);
+        row.setKcal(snapshot(food.getKcalPer100(), quantityG));
+        row.setProteinG(snapshot(food.getProteinPer100(), quantityG));
+        row.setCarbsG(snapshot(food.getCarbsPer100(), quantityG));
+        row.setFatG(snapshot(food.getFatPer100(), quantityG));
+    }
+
+    /**
+     * Computes the next sort order for a new row in the given section, as the section's highest
+     * existing sort order + 1 (or 0 if the section has no rows yet). Deriving this from the max
+     * rather than a count means a row deleted from the middle of the section can never cause a new
+     * row's sort order to collide with a sort order still in use by a remaining row.
+     *
+     * @param sectionId the id of the section
+     * @return the next sort order to assign
+     */
+    private int nextSortOrder(UUID sectionId) {
+        return mealPlanRowRepository.findFirstByMealPlanSectionIdOrderBySortOrderDesc(sectionId)
+                .map(row -> row.getSortOrder() + 1)
+                .orElse(0);
     }
 
     /**
