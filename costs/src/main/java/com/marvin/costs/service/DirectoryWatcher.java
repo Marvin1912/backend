@@ -6,6 +6,7 @@ import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardWatchEventKinds;
 import java.nio.file.WatchEvent;
 import java.nio.file.WatchKey;
@@ -80,7 +81,8 @@ public class DirectoryWatcher {
                 if (!Files.isDirectory(file)) {
                     try {
                         final Path moved = Files.move(file,
-                                directoryDone.resolve(file.getFileName()));
+                                directoryDone.resolve(file.getFileName()),
+                                StandardCopyOption.REPLACE_EXISTING);
                         LOGGER.info("Moved {} to {}!", file.getFileName(), moved);
                         eventPublisher.publishEvent(new NewFileEvent(moved));
                     } catch (Exception e) {
