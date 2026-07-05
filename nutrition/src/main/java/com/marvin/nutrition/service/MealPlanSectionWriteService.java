@@ -60,7 +60,7 @@ public class MealPlanSectionWriteService {
     }
 
     /**
-     * Updates an existing meal-plan section's title, note and/or callout.
+     * Updates an existing meal-plan section's title, note, callout and/or day count.
      * Only non-null fields from the request are applied. The returned DTO
      * includes the section's current (unmodified) rows.
      * Throws {@link NoSuchElementException} if no section with the given id exists.
@@ -82,6 +82,9 @@ public class MealPlanSectionWriteService {
         }
         if (req.callout() != null) {
             section.setCallout(req.callout());
+        }
+        if (req.dayCount() != null) {
+            section.setDayCount(req.dayCount());
         }
 
         final MealPlanSectionEntity saved = mealPlanSectionRepository.save(section);

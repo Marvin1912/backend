@@ -88,4 +88,18 @@ class MealPlanMapperTest {
 
         assertEquals(null, dto.callout());
     }
+
+    @Test
+    @DisplayName("toSectionDTO carries over the section's dayCount")
+    void toSectionDTO_MapsDayCount() {
+        final MealPlanSectionEntity section = new MealPlanSectionEntity();
+        section.setId(UUID.randomUUID());
+        section.setTitle("2 · Wochentage (Montag – Donnerstag)");
+        section.setNote("note");
+        section.setDayCount(4);
+
+        final MealPlanSectionDTO dto = mealPlanMapper.toSectionDTO(section, List.of());
+
+        assertEquals(4, dto.dayCount());
+    }
 }

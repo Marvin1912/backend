@@ -39,6 +39,9 @@ public class MealPlanSectionEntity extends BasicEntity {
     @Column(name = "sort_order", nullable = false)
     private Integer sortOrder;
 
+    @Column(name = "day_count", nullable = false)
+    private Integer dayCount = 1;
+
     @Override
     public boolean equals(Object o) {
         if (o == null || getClass() != o.getClass()) {

@@ -107,6 +107,37 @@ public class MealPlanRequestValidationTest {
     }
 
     @Test
+    @DisplayName("UpdateMealPlanSectionRequest with a null dayCount (partial update) yields zero violations")
+    void updateMealPlanSectionRequest_nullDayCount_noViolations() {
+        final UpdateMealPlanSectionRequest req = new UpdateMealPlanSectionRequest(null, null, null, null);
+
+        final Set<ConstraintViolation<UpdateMealPlanSectionRequest>> violations = validator.validate(req);
+
+        assertTrue(violations.isEmpty(), "Expected zero violations when dayCount is omitted");
+    }
+
+    @Test
+    @DisplayName("UpdateMealPlanSectionRequest with a positive dayCount yields zero violations")
+    void updateMealPlanSectionRequest_positiveDayCount_noViolations() {
+        final UpdateMealPlanSectionRequest req = new UpdateMealPlanSectionRequest(null, null, null, 4);
+
+        final Set<ConstraintViolation<UpdateMealPlanSectionRequest>> violations = validator.validate(req);
+
+        assertTrue(violations.isEmpty(), "Expected zero violations for a positive dayCount");
+    }
+
+    @Test
+    @DisplayName("UpdateMealPlanSectionRequest with zero or negative dayCount yields a violation")
+    void updateMealPlanSectionRequest_nonPositiveDayCount_yieldsViolation() {
+        final UpdateMealPlanSectionRequest req = new UpdateMealPlanSectionRequest(null, null, null, 0);
+
+        final Set<ConstraintViolation<UpdateMealPlanSectionRequest>> violations = validator.validate(req);
+
+        assertFalse(violations.isEmpty(), "Expected a violation for non-positive dayCount");
+        assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("dayCount")));
+    }
+
+    @Test
     @DisplayName("UpdateMealPlanSourceRequest with valid-length fields yields zero violations")
     void updateMealPlanSourceRequest_valid_noViolations() {
         final UpdateMealPlanSourceRequest req = new UpdateMealPlanSourceRequest("label", "https://example.com");

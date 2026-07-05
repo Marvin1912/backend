@@ -126,6 +126,58 @@ class MealPlanSectionWriteServiceTest {
         assertThrows(NoSuchElementException.class, () -> mealPlanSectionWriteService.updateSection(sectionId, req));
     }
 
+    @Test
+    @DisplayName("updateSection applies a non-null dayCount")
+    void updateSection_AppliesDayCount() {
+        final UUID sectionId = UUID.randomUUID();
+        final MealPlanSectionEntity section = new MealPlanSectionEntity();
+        section.setId(sectionId);
+        section.setDayCount(1);
+
+        final MealPlanRowDTO rowDTO = new MealPlanRowDTO(
+                UUID.randomUUID(), MealType.BREAKFAST, UUID.randomUUID(), "Haferflocken",
+                new BigDecimal("90.00"), new BigDecimal("519.00"), new BigDecimal("28.00"),
+                new BigDecimal("60.00"), new BigDecimal("10.00"));
+        final MealPlanSectionDTO sectionDTO =
+                new MealPlanSectionDTO(sectionId, "title", "note", List.of(rowDTO), null, 4);
+
+        final UpdateMealPlanSectionRequest req = new UpdateMealPlanSectionRequest(null, null, null, 4);
+
+        when(mealPlanSectionRepository.findById(sectionId)).thenReturn(Optional.of(section));
+        when(mealPlanSectionRepository.save(section)).thenReturn(section);
+        when(mealPlanRowRepository.findAllByMealPlanSectionIdOrderBySortOrderAsc(sectionId))
+                .thenReturn(List.of());
+        when(mealPlanMapper.toRowDTOs(List.of())).thenReturn(List.of(rowDTO));
+        when(mealPlanMapper.toSectionDTO(section, List.of(rowDTO))).thenReturn(sectionDTO);
+
+        final MealPlanSectionDTO result = mealPlanSectionWriteService.updateSection(sectionId, req);
+
+        assertEquals(4, section.getDayCount());
+        assertEquals(sectionDTO, result);
+    }
+
+    @Test
+    @DisplayName("updateSection leaves dayCount unchanged when the request's dayCount is null")
+    void updateSection_NullDayCount_LeavesDayCountUnchanged() {
+        final UUID sectionId = UUID.randomUUID();
+        final MealPlanSectionEntity section = new MealPlanSectionEntity();
+        section.setId(sectionId);
+        section.setDayCount(4);
+
+        final UpdateMealPlanSectionRequest req = new UpdateMealPlanSectionRequest("new title", null, null);
+
+        when(mealPlanSectionRepository.findById(sectionId)).thenReturn(Optional.of(section));
+        when(mealPlanSectionRepository.save(section)).thenReturn(section);
+        when(mealPlanRowRepository.findAllByMealPlanSectionIdOrderBySortOrderAsc(sectionId))
+                .thenReturn(List.of());
+        when(mealPlanMapper.toRowDTOs(List.of())).thenReturn(List.of());
+        when(mealPlanMapper.toSectionDTO(section, List.of())).thenReturn(null);
+
+        mealPlanSectionWriteService.updateSection(sectionId, req);
+
+        assertEquals(4, section.getDayCount());
+    }
+
     // -----------------------------------------------------------------------
     // addRow
     // -----------------------------------------------------------------------
