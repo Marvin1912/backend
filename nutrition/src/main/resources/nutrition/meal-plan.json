@@ -21,16 +21,6 @@
   ],
   "sections": [
     {
-      "title": "1 · Tagesstruktur (täglich gleich)",
-      "note": "Frühstück & Nachmittag identisch an allen 7 Tagen",
-      "rows": [
-        {"meal": "Frühstück", "details": "Haferflocken, Haferdrink, Whey, TK-Himbeeren, Mandeln", "qty": "90g/200ml/20g/50g/10g", "kcal": "519", "protein": "28,0 g"},
-        {"meal": "Nachmittag", "details": "Whey, Magerquark, Banane", "qty": "20g/200g/1 Stk", "kcal": "314", "protein": "40,3 g"}
-      ],
-      "totals": null,
-      "callout": "Der Whey-Shake wird jetzt kleiner (20 g statt 40 g) und durch Magerquark ergänzt — pro 100 g liefert Magerquark 12 g Protein bei nur 66 kcal und 0,2 g Fett, macht das Cut-Ziel also nicht teurer. Ei und ein Teil des Magerquarks (100 g) sind aus dem Frühstück verschwunden und wandern ins Abendessen: das Frühstück besteht dadurch nur noch aus Haferflocken, Haferdrink, Whey, TK-Himbeeren und Mandeln. Magerquark ist damit auf Nachmittag (200 g) und Abendessen (100 g) verteilt, das Ei gibt es nur noch zu Mittag/Abendbrot am Wochenende bzw. zum Abendbrot an Wochentagen. Die Nachmittags-Portion Magerquark ist weiterhin bewusst größer als rechnerisch nötig (200 g statt 150 g) — das federt den Hähnchen-Engpass beim Abendessen ab."
-    },
-    {
       "title": "2 · Wochentage (Montag – Donnerstag)",
       "note": "Kantine am Mittag bleibt Richtwert",
       "rows": [
