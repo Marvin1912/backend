@@ -102,7 +102,6 @@ The `database/` and `importer/` directories exist but are not included as Gradle
 ## Agent Workflow
 
 - **All development tasks** must use the `java-developer` agent.
-- **After development is complete** and a PR has been created, use the `java-code-reviewer` agent to review the changes before merging.
 - **When a GitHub issue has been finished**, a PR must be created and merged into `master`.
 - **For every new feature**, use the `tdd-test-guardian` agent to verify that existing tests were
   not modified. If tests were changed, it must stop and ask the user before anything proceeds.
