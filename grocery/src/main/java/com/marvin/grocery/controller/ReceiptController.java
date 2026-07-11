@@ -1,10 +1,13 @@
 package com.marvin.grocery.controller;
 
 import com.marvin.grocery.dto.AddReceiptItemRequest;
+import com.marvin.grocery.dto.PriceHistoryPointDTO;
+import com.marvin.grocery.dto.ProductPriceSummaryDTO;
 import com.marvin.grocery.dto.ReceiptDTO;
 import com.marvin.grocery.dto.ReceiptItemDTO;
 import com.marvin.grocery.dto.UpdateReceiptItemRequest;
 import com.marvin.grocery.dto.UpdateSupermarketRequest;
+import com.marvin.grocery.service.PriceTrendService;
 import com.marvin.grocery.service.ReceiptService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -33,6 +36,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
@@ -51,14 +55,17 @@ public class ReceiptController {
     private static final String RECEIPTS_LOCATION_PREFIX = "/receipts/";
 
     private final ReceiptService receiptService;
+    private final PriceTrendService priceTrendService;
 
     /**
-     * Creates a new ReceiptController with the required service.
+     * Creates a new ReceiptController with the required services.
      *
-     * @param receiptService the service handling receipt processing and retrieval
+     * @param receiptService    the service handling receipt processing and retrieval
+     * @param priceTrendService the service handling price-history and price-trend aggregation
      */
-    public ReceiptController(ReceiptService receiptService) {
+    public ReceiptController(ReceiptService receiptService, PriceTrendService priceTrendService) {
         this.receiptService = receiptService;
+        this.priceTrendService = priceTrendService;
     }
 
     /**
@@ -247,6 +254,52 @@ public class ReceiptController {
         return receiptService.deleteReceipt(id)
                 .thenReturn(noContent)
                 .onErrorReturn(NoSuchElementException.class, notFound);
+    }
+
+    /**
+     * Lists price-trend summaries for every distinct product recorded across all receipts.
+     *
+     * @return a Flux emitting one price summary per distinct product
+     */
+    @GetMapping("/products")
+    @Operation(
+            summary = "List product price trends",
+            description = "Returns aggregated first/latest price, percent change, and purchase history for every "
+                    + "distinct product, matched by normalized (case-insensitive, trimmed) name.",
+            responses = {
+                @ApiResponse(
+                        responseCode = "200",
+                        description = "Product price summaries returned",
+                        content = @Content(array = @ArraySchema(schema = @Schema(implementation = ProductPriceSummaryDTO.class)))
+                )
+            }
+    )
+    public Flux<ProductPriceSummaryDTO> listProductSummaries() {
+        return priceTrendService.findAllProductSummaries();
+    }
+
+    /**
+     * Returns the chronologically ordered price history for a single product.
+     *
+     * @param name the product name; matched case-insensitively and whitespace-trimmed
+     * @return a Mono emitting the ordered list of price-history points, empty if the product was never purchased
+     */
+    @GetMapping("/products/history")
+    @Operation(
+            summary = "Get price history for a product",
+            description = "Returns the chronologically ordered price history for the given product name, "
+                    + "matched by normalized (case-insensitive, trimmed) name.",
+            responses = {
+                @ApiResponse(
+                        responseCode = "200",
+                        description = "Price history returned",
+                        content = @Content(array = @ArraySchema(schema = @Schema(implementation = PriceHistoryPointDTO.class)))
+                )
+            }
+    )
+    public Mono<List<PriceHistoryPointDTO>> getProductHistory(
+            @RequestParam @Parameter(description = "Product name (case-insensitive, whitespace-trimmed)") String name) {
+        return priceTrendService.findHistory(name);
     }
 
     /**
