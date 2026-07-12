@@ -31,22 +31,26 @@ public interface ReceiptItemRepository extends JpaRepository<ReceiptItemEntity, 
     Optional<ReceiptItemEntity> findByIdAndReceiptId(Long id, UUID receiptId);
 
     /**
-     * Returns all receipt items with their parent receipt eagerly fetched, for price-trend aggregation.
+     * Returns all receipt items whose article is assigned to an article group, with their parent receipt,
+     * article, and article group eagerly fetched, for article-group price-trend aggregation. Items without
+     * an article, or whose article has no group assignment, are excluded.
      *
-     * @return list of all receipt items with their receipt initialized
+     * @return list of grouped receipt items with receipt, article, and article group initialized
      */
-    @Query("SELECT i FROM ReceiptItemEntity i JOIN FETCH i.receipt")
-    List<ReceiptItemEntity> findAllWithReceipt();
+    @Query("SELECT i FROM ReceiptItemEntity i JOIN FETCH i.receipt JOIN FETCH i.article a JOIN FETCH a.articleGroup "
+            + "WHERE i.article IS NOT NULL AND i.article.articleGroup IS NOT NULL")
+    List<ReceiptItemEntity> findAllGroupedWithReceipt();
 
     /**
-     * Returns all receipt items whose name matches the given normalized (lower-cased, trimmed) name,
-     * with their parent receipt eagerly fetched.
+     * Returns all receipt items whose article belongs to the given article group, with their parent receipt,
+     * article, and article group eagerly fetched.
      *
-     * @param normalizedName the lower-cased, trimmed product name to match
-     * @return list of matching receipt items with their receipt initialized
+     * @param groupId the id of the article group to match
+     * @return list of matching receipt items with receipt, article, and article group initialized
      */
-    @Query("SELECT i FROM ReceiptItemEntity i JOIN FETCH i.receipt r WHERE LOWER(TRIM(i.name)) = :normalizedName")
-    List<ReceiptItemEntity> findAllByNormalizedNameWithReceipt(@Param("normalizedName") String normalizedName);
+    @Query("SELECT i FROM ReceiptItemEntity i JOIN FETCH i.receipt JOIN FETCH i.article a JOIN FETCH a.articleGroup "
+            + "WHERE i.article.articleGroup.id = :groupId")
+    List<ReceiptItemEntity> findAllByArticleGroupIdWithReceipt(@Param("groupId") Long groupId);
 
     /**
      * Returns the number of receipt items referencing the given article.

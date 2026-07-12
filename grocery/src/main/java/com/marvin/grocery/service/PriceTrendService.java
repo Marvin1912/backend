@@ -1,11 +1,11 @@
 package com.marvin.grocery.service;
 
+import com.marvin.grocery.dto.ArticleGroupPriceSummaryDTO;
 import com.marvin.grocery.dto.PriceHistoryPointDTO;
-import com.marvin.grocery.dto.ProductPriceSummaryDTO;
+import com.marvin.grocery.entity.ArticleGroupEntity;
 import com.marvin.grocery.entity.ReceiptEntity;
 import com.marvin.grocery.entity.ReceiptItemEntity;
 import com.marvin.grocery.repository.ReceiptItemRepository;
-import com.marvin.grocery.util.ArticleNameNormalizer;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
@@ -20,7 +20,9 @@ import reactor.core.scheduler.Schedulers;
 
 /**
  * Computes read-only price-trend aggregations over existing receipt and receipt item data.
- * Products are matched across receipts by exact name match, case-insensitive and whitespace-trimmed.
+ * Purchases are grouped by the {@link ArticleGroupEntity} that each receipt item's article is assigned to.
+ * Receipt items without an article, or whose article has no group assignment, are excluded entirely until
+ * the article is manually assigned to a group.
  * Aggregation happens in memory rather than via SQL {@code GROUP BY}, since chronological first/latest
  * price cannot be expressed safely with {@code MIN}/{@code MAX} alone.
  */
@@ -43,49 +45,57 @@ public class PriceTrendService {
     }
 
     /**
-     * Returns a price trend summary for every distinct product, grouped by normalized name.
+     * Returns a price trend summary for every article group with at least one recorded purchase.
+     * Receipt items without an article, or whose article has no group assignment, are excluded.
      *
-     * @return a Flux emitting one summary per distinct product, ordered by display name
+     * @return a Flux emitting one summary per article group, ordered by group name
      */
-    public Flux<ProductPriceSummaryDTO> findAllProductSummaries() {
+    public Flux<ArticleGroupPriceSummaryDTO> findAllProductSummaries() {
         return Mono.fromCallable(this::computeSummaries)
                 .subscribeOn(Schedulers.boundedElastic())
                 .flatMapIterable(summaries -> summaries);
     }
 
     /**
-     * Returns the chronologically ordered purchase history for a single product.
+     * Returns the chronologically ordered purchase history for a single article group, merged across
+     * every article currently assigned to that group.
      *
-     * @param name the product name; matched case-insensitively and whitespace-trimmed
-     * @return a Mono emitting the ordered list of history points, empty if the product was never purchased
+     * @param groupId the id of the article group
+     * @return a Mono emitting the ordered list of history points, empty if the group has no purchases
      */
-    public Mono<List<PriceHistoryPointDTO>> findHistory(String name) {
-        final String normalizedName = ArticleNameNormalizer.normalize(name);
-        return Mono.fromCallable(() -> receiptItemRepository.findAllByNormalizedNameWithReceipt(normalizedName).stream()
+    public Mono<List<PriceHistoryPointDTO>> findHistory(Long groupId) {
+        return Mono.fromCallable(() -> receiptItemRepository.findAllByArticleGroupIdWithReceipt(groupId).stream()
+                        .filter(PriceTrendService::hasArticleGroup)
                         .sorted(CHRONOLOGICAL_ORDER)
                         .map(PriceTrendService::toHistoryPoint)
                         .toList())
                 .subscribeOn(Schedulers.boundedElastic());
     }
 
-    private List<ProductPriceSummaryDTO> computeSummaries() {
-        final Map<String, List<ReceiptItemEntity>> itemsByNormalizedName = receiptItemRepository.findAllWithReceipt()
+    private List<ArticleGroupPriceSummaryDTO> computeSummaries() {
+        final Map<Long, List<ReceiptItemEntity>> itemsByGroupId = receiptItemRepository.findAllGroupedWithReceipt()
                 .stream()
-                .collect(Collectors.groupingBy(item -> ArticleNameNormalizer.normalize(item.getName())));
-        return itemsByNormalizedName.values().stream()
+                .filter(PriceTrendService::hasArticleGroup)
+                .collect(Collectors.groupingBy(item -> item.getArticle().getArticleGroup().getId()));
+        return itemsByGroupId.values().stream()
                 .map(PriceTrendService::toSummary)
-                .sorted(Comparator.comparing(ProductPriceSummaryDTO::name, String.CASE_INSENSITIVE_ORDER))
+                .sorted(Comparator.comparing(ArticleGroupPriceSummaryDTO::groupName, String.CASE_INSENSITIVE_ORDER))
                 .toList();
     }
 
-    private static ProductPriceSummaryDTO toSummary(List<ReceiptItemEntity> productItems) {
-        final List<ReceiptItemEntity> chronological = productItems.stream().sorted(CHRONOLOGICAL_ORDER).toList();
+    private static boolean hasArticleGroup(ReceiptItemEntity item) {
+        return item.getArticle() != null && item.getArticle().getArticleGroup() != null;
+    }
+
+    private static ArticleGroupPriceSummaryDTO toSummary(List<ReceiptItemEntity> groupItems) {
+        final List<ReceiptItemEntity> chronological = groupItems.stream().sorted(CHRONOLOGICAL_ORDER).toList();
         final ReceiptItemEntity first = chronological.get(0);
         final ReceiptItemEntity latest = chronological.get(chronological.size() - 1);
+        final ArticleGroupEntity group = latest.getArticle().getArticleGroup();
         final List<BigDecimal> sparklinePrices = chronological.stream().map(ReceiptItemEntity::getSinglePrice).toList();
-        return new ProductPriceSummaryDTO(
-                latest.getName().trim(),
-                ArticleNameNormalizer.normalize(latest.getName()),
+        return new ArticleGroupPriceSummaryDTO(
+                group.getId(),
+                group.getName(),
                 first.getSinglePrice(),
                 effectiveDate(first),
                 latest.getSinglePrice(),
