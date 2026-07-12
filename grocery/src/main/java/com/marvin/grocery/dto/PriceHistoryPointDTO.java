@@ -14,6 +14,8 @@ import java.util.UUID;
  * @param quantity    number of units purchased
  * @param supermarket supermarket where this purchase was made; null if not set
  * @param receiptId   id of the receipt this purchase belongs to
+ * @param articleName display name of the {@code Article} that contributed this purchase; lets a
+ *                    merged group's history be traced back to the specific name variant it came from
  */
 @Schema(description = "A single historical price data point for a product")
 public record PriceHistoryPointDTO(
@@ -30,6 +32,9 @@ public record PriceHistoryPointDTO(
         Supermarket supermarket,
 
         @Schema(description = "Id of the receipt this purchase belongs to")
-        UUID receiptId
+        UUID receiptId,
+
+        @Schema(description = "Display name of the Article that contributed this purchase", example = "Vollmilch")
+        String articleName
 ) {
 }
