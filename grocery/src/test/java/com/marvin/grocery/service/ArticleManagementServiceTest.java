@@ -80,6 +80,7 @@ class ArticleManagementServiceTest {
 
         StepVerifier.create(result)
                 .assertNext(dto -> {
+                    assertEquals(1L, dto.id());
                     assertEquals("vollmilch", dto.normalizedName());
                     assertEquals("Vollmilch", dto.name());
                     assertEquals(3L, dto.groupId());
@@ -99,6 +100,7 @@ class ArticleManagementServiceTest {
 
         StepVerifier.create(result)
                 .assertNext(dto -> {
+                    assertEquals(1L, dto.id());
                     assertEquals(0L, dto.purchaseCount());
                     assertNull(dto.groupId());
                     assertNull(dto.groupName());
@@ -118,6 +120,7 @@ class ArticleManagementServiceTest {
 
         StepVerifier.create(result)
                 .assertNext(dto -> {
+                    assertEquals(1L, dto.id());
                     assertEquals(3L, dto.groupId());
                     assertEquals("Dairy", dto.groupName());
                     assertEquals(2L, dto.purchaseCount());
