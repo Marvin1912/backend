@@ -5,11 +5,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.marvin.grocery.entity.ArticleEntity;
 import com.marvin.grocery.entity.ArticleGroupEntity;
+import java.util.List;
 import java.util.Optional;
+import org.hibernate.Hibernate;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -31,6 +34,37 @@ class ArticleRepositoryTest {
 
     @Autowired
     private ArticleGroupRepository articleGroupRepository;
+
+    @Autowired
+    private TestEntityManager entityManager;
+
+    @Test
+    void findAllWithGroupEagerlyInitializesTheArticleGroupProxy() {
+        final ArticleGroupEntity group = articleGroupRepository.save(newGroup("Dairy"));
+        final ArticleEntity article = newArticle("Milch", "milch");
+        article.setArticleGroup(group);
+        articleRepository.save(article);
+        entityManager.flush();
+        entityManager.clear();
+
+        final List<ArticleEntity> found = articleRepository.findAllWithGroup();
+
+        assertThat(found).hasSize(1);
+        assertThat(Hibernate.isInitialized(found.get(0).getArticleGroup())).isTrue();
+        assertThat(found.get(0).getArticleGroup().getName()).isEqualTo("Dairy");
+    }
+
+    @Test
+    void findAllWithGroupIncludesArticlesWithoutAGroupAssignment() {
+        articleRepository.save(newArticle("Brot", "brot"));
+        entityManager.flush();
+        entityManager.clear();
+
+        final List<ArticleEntity> found = articleRepository.findAllWithGroup();
+
+        assertThat(found).hasSize(1);
+        assertThat(found.get(0).getArticleGroup()).isNull();
+    }
 
     @Test
     void findByNormalizedNameReturnsMatchingArticle() {

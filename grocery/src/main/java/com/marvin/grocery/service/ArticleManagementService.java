@@ -62,7 +62,7 @@ public class ArticleManagementService {
         return Mono.fromCallable(() -> {
             final Map<Long, Long> purchaseCounts = receiptItemRepository.countPurchasesGroupedByArticle().stream()
                     .collect(Collectors.toMap(ArticlePurchaseCount::getArticleId, ArticlePurchaseCount::getPurchaseCount));
-            return articleRepository.findAll().stream()
+            return articleRepository.findAllWithGroup().stream()
                     .map(article -> toArticleDTO(article, purchaseCounts.getOrDefault(article.getId(), 0L)))
                     .toList();
         }).subscribeOn(Schedulers.boundedElastic()).flatMapIterable(Function.identity());

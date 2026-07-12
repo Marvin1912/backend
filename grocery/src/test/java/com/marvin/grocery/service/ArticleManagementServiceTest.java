@@ -72,7 +72,7 @@ class ArticleManagementServiceTest {
     @DisplayName("Should list all articles with group info and purchase count")
     void findAllArticles_ReturnsArticlesWithGroupAndPurchaseCount() {
         article.setArticleGroup(group);
-        when(articleRepository.findAll()).thenReturn(List.of(article));
+        when(articleRepository.findAllWithGroup()).thenReturn(List.of(article));
         when(receiptItemRepository.countPurchasesGroupedByArticle())
                 .thenReturn(List.of(countOf(1L, 5L)));
 
@@ -93,7 +93,7 @@ class ArticleManagementServiceTest {
     @Test
     @DisplayName("Should default purchase count to zero and group fields to null when unassigned")
     void findAllArticles_NoGroupNoPurchases_DefaultsToZeroAndNull() {
-        when(articleRepository.findAll()).thenReturn(List.of(article));
+        when(articleRepository.findAllWithGroup()).thenReturn(List.of(article));
         when(receiptItemRepository.countPurchasesGroupedByArticle()).thenReturn(List.of());
 
         final Flux<ArticleDTO> result = articleManagementService.findAllArticles();
