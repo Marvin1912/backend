@@ -5,8 +5,8 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.marvin.common.configuration.jackson.JacksonMapper;
+import com.marvin.grocery.dto.ArticleGroupPriceSummaryDTO;
 import com.marvin.grocery.dto.PriceHistoryPointDTO;
-import com.marvin.grocery.dto.ProductPriceSummaryDTO;
 import com.marvin.grocery.entity.Supermarket;
 import com.marvin.grocery.service.PriceTrendService;
 import com.marvin.grocery.service.ReceiptService;
@@ -54,11 +54,11 @@ class ReceiptControllerPriceHistoryTest {
     }
 
     @Test
-    @DisplayName("GET /receipts/products returns product price summaries")
-    void listProductSummaries_ReturnsSummaries() {
-        final ProductPriceSummaryDTO summary = new ProductPriceSummaryDTO(
-                "Vollmilch",
-                "vollmilch",
+    @DisplayName("GET /receipts/groups returns article group price summaries")
+    void listArticleGroupSummaries_ReturnsSummaries() {
+        final ArticleGroupPriceSummaryDTO summary = new ArticleGroupPriceSummaryDTO(
+                1L,
+                "Milch",
                 new BigDecimal("1.09"),
                 LocalDate.of(2026, 1, 1),
                 new BigDecimal("1.29"),
@@ -70,12 +70,12 @@ class ReceiptControllerPriceHistoryTest {
         when(priceTrendService.findAllProductSummaries()).thenReturn(Flux.just(summary));
 
         webTestClient.get()
-                .uri("/receipts/products")
+                .uri("/receipts/groups")
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody()
-                .jsonPath("$[0].name").isEqualTo("Vollmilch")
-                .jsonPath("$[0].normalizedName").isEqualTo("vollmilch")
+                .jsonPath("$[0].groupId").isEqualTo(1)
+                .jsonPath("$[0].groupName").isEqualTo("Milch")
                 .jsonPath("$[0].firstPrice").isEqualTo(1.09)
                 .jsonPath("$[0].latestPrice").isEqualTo(1.29)
                 .jsonPath("$[0].percentChange").isEqualTo(18.35)
@@ -83,12 +83,12 @@ class ReceiptControllerPriceHistoryTest {
     }
 
     @Test
-    @DisplayName("GET /receipts/products returns an empty array when there are no products")
-    void listProductSummaries_NoProducts_ReturnsEmptyArray() {
+    @DisplayName("GET /receipts/groups returns an empty array when there are no article groups")
+    void listArticleGroupSummaries_NoGroups_ReturnsEmptyArray() {
         when(priceTrendService.findAllProductSummaries()).thenReturn(Flux.empty());
 
         webTestClient.get()
-                .uri("/receipts/products")
+                .uri("/receipts/groups")
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody()
@@ -97,18 +97,15 @@ class ReceiptControllerPriceHistoryTest {
     }
 
     @Test
-    @DisplayName("GET /receipts/products/history returns the price history for the given product name")
-    void getProductHistory_ReturnsHistory() {
+    @DisplayName("GET /receipts/groups/{groupId}/history returns the price history for the given group")
+    void getArticleGroupHistory_ReturnsHistory() {
         final UUID receiptId = UUID.randomUUID();
         final PriceHistoryPointDTO point = new PriceHistoryPointDTO(
                 LocalDate.of(2026, 1, 1), new BigDecimal("1.09"), 1, Supermarket.LIDL, receiptId);
-        when(priceTrendService.findHistory(eq("Vollmilch"))).thenReturn(Mono.just(List.of(point)));
+        when(priceTrendService.findHistory(eq(1L))).thenReturn(Mono.just(List.of(point)));
 
         webTestClient.get()
-                .uri(uriBuilder -> uriBuilder
-                        .path("/receipts/products/history")
-                        .queryParam("name", "Vollmilch")
-                        .build())
+                .uri("/receipts/groups/{groupId}/history", 1L)
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody()
@@ -120,16 +117,12 @@ class ReceiptControllerPriceHistoryTest {
     }
 
     @Test
-    @DisplayName("GET /receipts/products/history handles free-text names with spaces and slashes")
-    void getProductHistory_NameWithSpacesAndSlashes_IsPassedThrough() {
-        final String freeTextName = "Käse / Gouda 45%";
-        when(priceTrendService.findHistory(eq(freeTextName))).thenReturn(Mono.just(List.of()));
+    @DisplayName("GET /receipts/groups/{groupId}/history returns an empty array when there is no history")
+    void getArticleGroupHistory_NoHistory_ReturnsEmptyArray() {
+        when(priceTrendService.findHistory(eq(2L))).thenReturn(Mono.just(List.of()));
 
         webTestClient.get()
-                .uri(uriBuilder -> uriBuilder
-                        .path("/receipts/products/history")
-                        .queryParam("name", freeTextName)
-                        .build())
+                .uri("/receipts/groups/{groupId}/history", 2L)
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody()

@@ -1,8 +1,8 @@
 package com.marvin.grocery.controller;
 
 import com.marvin.grocery.dto.AddReceiptItemRequest;
+import com.marvin.grocery.dto.ArticleGroupPriceSummaryDTO;
 import com.marvin.grocery.dto.PriceHistoryPointDTO;
-import com.marvin.grocery.dto.ProductPriceSummaryDTO;
 import com.marvin.grocery.dto.ReceiptDTO;
 import com.marvin.grocery.dto.ReceiptItemDTO;
 import com.marvin.grocery.dto.UpdateReceiptItemRequest;
@@ -36,7 +36,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
@@ -257,38 +256,41 @@ public class ReceiptController {
     }
 
     /**
-     * Lists price-trend summaries for every distinct product recorded across all receipts.
+     * Lists price-trend summaries for every article group with at least one recorded purchase.
+     * Articles without a group assignment (and receipt items without an article) are excluded.
      *
-     * @return a Flux emitting one price summary per distinct product
+     * @return a Flux emitting one price summary per article group
      */
-    @GetMapping("/products")
+    @GetMapping("/groups")
     @Operation(
-            summary = "List product price trends",
-            description = "Returns aggregated first/latest price, percent change, and purchase history for every "
-                    + "distinct product, matched by normalized (case-insensitive, trimmed) name.",
+            summary = "List article group price trends",
+            description = "Returns aggregated first/latest price, percent change, and purchase count for every "
+                    + "article group with at least one recorded purchase. Articles without a group assignment "
+                    + "(and receipt items without an article) are excluded until manually assigned to a group.",
             responses = {
                 @ApiResponse(
                         responseCode = "200",
-                        description = "Product price summaries returned",
-                        content = @Content(array = @ArraySchema(schema = @Schema(implementation = ProductPriceSummaryDTO.class)))
+                        description = "Article group price summaries returned",
+                        content = @Content(array = @ArraySchema(schema = @Schema(implementation = ArticleGroupPriceSummaryDTO.class)))
                 )
             }
     )
-    public Flux<ProductPriceSummaryDTO> listProductSummaries() {
+    public Flux<ArticleGroupPriceSummaryDTO> listArticleGroupSummaries() {
         return priceTrendService.findAllProductSummaries();
     }
 
     /**
-     * Returns the chronologically ordered price history for a single product.
+     * Returns the chronologically ordered price history for a single article group, merged across every
+     * article currently assigned to that group.
      *
-     * @param name the product name; matched case-insensitively and whitespace-trimmed
-     * @return a Mono emitting the ordered list of price-history points, empty if the product was never purchased
+     * @param groupId the id of the article group
+     * @return a Mono emitting the ordered list of price-history points, empty if the group has no purchases
      */
-    @GetMapping("/products/history")
+    @GetMapping("/groups/{groupId}/history")
     @Operation(
-            summary = "Get price history for a product",
-            description = "Returns the chronologically ordered price history for the given product name, "
-                    + "matched by normalized (case-insensitive, trimmed) name.",
+            summary = "Get price history for an article group",
+            description = "Returns the chronologically ordered price history for the given article group, merged "
+                    + "across every article currently assigned to that group.",
             responses = {
                 @ApiResponse(
                         responseCode = "200",
@@ -297,9 +299,9 @@ public class ReceiptController {
                 )
             }
     )
-    public Mono<List<PriceHistoryPointDTO>> getProductHistory(
-            @RequestParam @Parameter(description = "Product name (case-insensitive, whitespace-trimmed)") String name) {
-        return priceTrendService.findHistory(name);
+    public Mono<List<PriceHistoryPointDTO>> getArticleGroupHistory(
+            @PathVariable @Parameter(description = "Id of the article group") Long groupId) {
+        return priceTrendService.findHistory(groupId);
     }
 
     /**
