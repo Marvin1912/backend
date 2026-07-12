@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 /**
  * Data Transfer Object representing a normalized grocery article and its group assignment.
  *
+ * @param id             database identifier of the article
  * @param normalizedName the normalized (lower-cased, trimmed) name used for de-duplication
  * @param name           the display name of the article
  * @param groupId        the id of the assigned article group, or null if unassigned
@@ -13,6 +14,9 @@ import io.swagger.v3.oas.annotations.media.Schema;
  */
 @Schema(description = "A normalized grocery article with its optional group assignment and purchase count")
 public record ArticleDTO(
+        @Schema(description = "Database identifier of the article", example = "1")
+        Long id,
+
         @Schema(description = "Normalized (lower-cased, trimmed) article name", example = "vollmilch 3,5%")
         String normalizedName,
 

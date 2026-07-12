@@ -36,7 +36,7 @@ class ArticleControllerTest {
     @Test
     @DisplayName("Should return all articles as a Flux")
     void listArticles_ReturnsFluxOfArticles() {
-        final ArticleDTO dto = new ArticleDTO("vollmilch", "Vollmilch", 3L, "Dairy", 5L);
+        final ArticleDTO dto = new ArticleDTO(1L, "vollmilch", "Vollmilch", 3L, "Dairy", 5L);
         when(articleManagementService.findAllArticles()).thenReturn(Flux.just(dto));
 
         final Flux<ArticleDTO> result = articleController.listArticles();
@@ -49,7 +49,7 @@ class ArticleControllerTest {
     @Test
     @DisplayName("Should return 200 with the updated article after assigning a group")
     void assignGroup_ArticleAndGroupExist_Returns200() {
-        final ArticleDTO dto = new ArticleDTO("vollmilch", "Vollmilch", 3L, "Dairy", 5L);
+        final ArticleDTO dto = new ArticleDTO(1L, "vollmilch", "Vollmilch", 3L, "Dairy", 5L);
         when(articleManagementService.assignGroup(1L, 3L)).thenReturn(Mono.just(dto));
 
         final Mono<ResponseEntity<ArticleDTO>> result =
@@ -59,6 +59,7 @@ class ArticleControllerTest {
                 .assertNext(response -> {
                     assertEquals(200, response.getStatusCode().value());
                     assertNotNull(response.getBody());
+                    assertEquals(1L, response.getBody().id());
                     assertEquals(3L, response.getBody().groupId());
                 })
                 .verifyComplete();

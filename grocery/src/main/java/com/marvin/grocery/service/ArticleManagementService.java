@@ -145,6 +145,7 @@ public class ArticleManagementService {
     private ArticleDTO toArticleDTO(ArticleEntity article, long purchaseCount) {
         final ArticleGroupEntity group = article.getArticleGroup();
         return new ArticleDTO(
+                article.getId(),
                 article.getNormalizedName(),
                 article.getName(),
                 group == null ? null : group.getId(),
