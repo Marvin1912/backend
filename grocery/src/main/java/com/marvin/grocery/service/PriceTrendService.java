@@ -112,7 +112,8 @@ public class PriceTrendService {
                 item.getSinglePrice(),
                 item.getQuantity(),
                 item.getReceipt().getSupermarket(),
-                item.getReceipt().getId()
+                item.getReceipt().getId(),
+                item.getArticle().getName()
         );
     }
 

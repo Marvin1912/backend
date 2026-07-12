@@ -233,8 +233,10 @@ class PriceTrendServiceTest {
                     assertEquals(2, earliest.quantity());
                     assertEquals(Supermarket.LIDL, earliest.supermarket());
                     assertEquals(secondReceipt.getId(), earliest.receiptId());
+                    assertEquals("Apfel", earliest.articleName());
                     assertEquals(LocalDate.of(2026, 2, 1), latest.date());
                     assertEquals(new BigDecimal("0.59"), latest.singlePrice());
+                    assertEquals("Apfel", latest.articleName());
                 })
                 .verifyComplete();
     }
@@ -253,7 +255,43 @@ class PriceTrendServiceTest {
                 .thenReturn(List.of(firstItem, secondItem));
 
         StepVerifier.create(priceTrendService.findHistory(1L))
-                .assertNext(history -> assertEquals(2, history.size()))
+                .assertNext(history -> {
+                    assertEquals(2, history.size());
+                    assertEquals("Vollmilch", history.get(0).articleName());
+                    assertEquals("H-Milch", history.get(1).articleName());
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should attribute supermarket and articleName per-point across multiple supermarkets and article variants")
+    void findHistory_MultipleSupermarketsAndArticleVariants_AttributesPerPointCorrectly() {
+        final ArticleGroupEntity group = buildGroup(1L, "Milch");
+        final ArticleEntity vollmilch = buildArticle(10L, "Vollmilch", group);
+        final ArticleEntity hMilch = buildArticle(11L, "H-Milch", group);
+        final ArticleEntity biomilch = buildArticle(12L, "Bio-Milch", group);
+        final ReceiptEntity firstReceipt = buildReceipt(LocalDate.of(2026, 1, 1), null, Supermarket.LIDL);
+        final ReceiptEntity secondReceipt = buildReceipt(LocalDate.of(2026, 2, 1), null, Supermarket.REWE);
+        final ReceiptEntity thirdReceipt = buildReceipt(LocalDate.of(2026, 3, 1), null, Supermarket.EDEKA);
+        final ReceiptItemEntity firstItem = buildItem(1L, firstReceipt, vollmilch, "Vollmilch", new BigDecimal("1.09"), 1);
+        final ReceiptItemEntity secondItem = buildItem(2L, secondReceipt, hMilch, "H-Milch", new BigDecimal("1.19"), 1);
+        final ReceiptItemEntity thirdItem = buildItem(3L, thirdReceipt, biomilch, "Bio-Milch", new BigDecimal("1.49"), 1);
+        when(receiptItemRepository.findAllByArticleGroupIdWithReceipt(eq(1L)))
+                .thenReturn(List.of(firstItem, secondItem, thirdItem));
+
+        StepVerifier.create(priceTrendService.findHistory(1L))
+                .assertNext(history -> {
+                    assertEquals(3, history.size());
+                    final PriceHistoryPointDTO first = history.get(0);
+                    final PriceHistoryPointDTO second = history.get(1);
+                    final PriceHistoryPointDTO third = history.get(2);
+                    assertEquals(Supermarket.LIDL, first.supermarket());
+                    assertEquals("Vollmilch", first.articleName());
+                    assertEquals(Supermarket.REWE, second.supermarket());
+                    assertEquals("H-Milch", second.articleName());
+                    assertEquals(Supermarket.EDEKA, third.supermarket());
+                    assertEquals("Bio-Milch", third.articleName());
+                })
                 .verifyComplete();
     }
 
