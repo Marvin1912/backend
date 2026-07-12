@@ -34,27 +34,31 @@ public class ReceiptService {
     private final ReceiptRepository receiptRepository;
     private final ReceiptItemRepository receiptItemRepository;
     private final ReceiptMapper receiptMapper;
+    private final ArticleService articleService;
 
     /**
      * Creates a new ReceiptService with all required dependencies.
      *
-     * @param ocrProvider        the OCR provider to use for text extraction
-     * @param persistenceService the service responsible for transactional receipt persistence
-     * @param receiptRepository  the JPA repository for receipts
+     * @param ocrProvider           the OCR provider to use for text extraction
+     * @param persistenceService    the service responsible for transactional receipt persistence
+     * @param receiptRepository     the JPA repository for receipts
      * @param receiptItemRepository the JPA repository for receipt items
-     * @param receiptMapper      the MapStruct mapper for DTO conversion
+     * @param receiptMapper         the MapStruct mapper for DTO conversion
+     * @param articleService        the service used to find or create the article for an item name
      */
     public ReceiptService(
             OcrProvider ocrProvider,
             ReceiptPersistenceService persistenceService,
             ReceiptRepository receiptRepository,
             ReceiptItemRepository receiptItemRepository,
-            ReceiptMapper receiptMapper) {
+            ReceiptMapper receiptMapper,
+            ArticleService articleService) {
         this.ocrProvider = ocrProvider;
         this.persistenceService = persistenceService;
         this.receiptRepository = receiptRepository;
         this.receiptItemRepository = receiptItemRepository;
         this.receiptMapper = receiptMapper;
+        this.articleService = articleService;
     }
 
     /**
@@ -114,6 +118,7 @@ public class ReceiptService {
                     .orElseThrow(() -> new NoSuchElementException("Receipt not found: " + receiptId));
             final ReceiptItemEntity item = new ReceiptItemEntity();
             item.setReceipt(receipt);
+            item.setArticle(articleService.findOrCreate(request.name()));
             item.setName(request.name());
             item.setQuantity(request.quantity());
             item.setSinglePrice(request.singlePrice());
@@ -135,6 +140,7 @@ public class ReceiptService {
         return Mono.fromCallable(() -> {
             final ReceiptItemEntity item = receiptItemRepository.findByIdAndReceiptId(itemId, receiptId)
                     .orElseThrow(() -> new NoSuchElementException("Item not found: " + itemId));
+            item.setArticle(articleService.findOrCreate(request.name()));
             item.setName(request.name());
             item.setQuantity(request.quantity());
             item.setSinglePrice(request.singlePrice());

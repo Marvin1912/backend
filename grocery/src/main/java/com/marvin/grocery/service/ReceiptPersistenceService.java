@@ -22,6 +22,7 @@ public class ReceiptPersistenceService {
     private final ReceiptParserService parserService;
     private final ReceiptRepository receiptRepository;
     private final ReceiptItemRepository receiptItemRepository;
+    private final ArticleService articleService;
 
     /**
      * Creates a new ReceiptPersistenceService with all required dependencies.
@@ -29,14 +30,17 @@ public class ReceiptPersistenceService {
      * @param parserService         the parser for structured item extraction
      * @param receiptRepository     the JPA repository for receipts
      * @param receiptItemRepository the JPA repository for receipt items
+     * @param articleService        the service used to find or create the article per item
      */
     public ReceiptPersistenceService(
             ReceiptParserService parserService,
             ReceiptRepository receiptRepository,
-            ReceiptItemRepository receiptItemRepository) {
+            ReceiptItemRepository receiptItemRepository,
+            ArticleService articleService) {
         this.parserService = parserService;
         this.receiptRepository = receiptRepository;
         this.receiptItemRepository = receiptItemRepository;
+        this.articleService = articleService;
     }
 
     /**
@@ -62,6 +66,7 @@ public class ReceiptPersistenceService {
         for (final ParsedItem item : parsed.items()) {
             final ReceiptItemEntity itemEntity = new ReceiptItemEntity();
             itemEntity.setReceipt(saved);
+            itemEntity.setArticle(articleService.findOrCreate(item.name()));
             itemEntity.setName(item.name());
             itemEntity.setSinglePrice(item.singlePrice());
             itemEntity.setQuantity(item.quantity());
