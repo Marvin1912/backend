@@ -10,7 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
  * Finds or creates {@link ArticleEntity} rows by normalized name, so receipt items imported from
  * OCR or added manually can be linked to a stable article identity instead of only free-text names.
  */
-@Service
+@Service("groceryArticleService")
 public class ArticleService {
 
     private final ArticleRepository articleRepository;

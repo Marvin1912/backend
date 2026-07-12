@@ -31,7 +31,7 @@ import reactor.core.publisher.Mono;
  * REST controller for managing grocery articles and article groups, as groundwork for a future
  * frontend management GUI.
  */
-@RestController
+@RestController("groceryArticleController")
 @Tag(name = "Grocery Articles", description = "Manage grocery articles and their group assignments")
 public class ArticleController {
 

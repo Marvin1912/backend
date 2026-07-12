@@ -9,7 +9,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 /** Spring Data JPA repository for {@link ArticleEntity}. */
-@Repository
+@Repository("groceryArticleRepository")
 public interface ArticleRepository extends JpaRepository<ArticleEntity, Long> {
 
     /**
