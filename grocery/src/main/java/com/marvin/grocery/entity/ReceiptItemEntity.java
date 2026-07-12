@@ -32,6 +32,10 @@ public class ReceiptItemEntity {
     @JoinColumn(name = "receipt_id", nullable = false)
     private ReceiptEntity receipt;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "article_id")
+    private ArticleEntity article;
+
     @Column(name = "name", nullable = false)
     private String name;
 
