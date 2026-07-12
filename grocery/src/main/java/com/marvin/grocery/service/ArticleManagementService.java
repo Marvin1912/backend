@@ -81,10 +81,11 @@ public class ArticleManagementService {
         return Mono.fromCallable(() -> {
             final ArticleEntity article = articleRepository.findById(articleId)
                     .orElseThrow(() -> new NoSuchElementException("Article not found: " + articleId));
-            article.setArticleGroup(resolveGroup(groupId));
+            final ArticleGroupEntity group = resolveGroup(groupId);
+            article.setArticleGroup(group);
             final ArticleEntity saved = articleRepository.save(article);
             final long purchaseCount = receiptItemRepository.countByArticleId(saved.getId());
-            return toArticleDTO(saved, purchaseCount);
+            return toArticleDTO(saved, group, purchaseCount);
         }).subscribeOn(Schedulers.boundedElastic());
     }
 
@@ -143,7 +144,10 @@ public class ArticleManagementService {
     }
 
     private ArticleDTO toArticleDTO(ArticleEntity article, long purchaseCount) {
-        final ArticleGroupEntity group = article.getArticleGroup();
+        return toArticleDTO(article, article.getArticleGroup(), purchaseCount);
+    }
+
+    private ArticleDTO toArticleDTO(ArticleEntity article, ArticleGroupEntity group, long purchaseCount) {
         return new ArticleDTO(
                 article.getId(),
                 article.getNormalizedName(),
