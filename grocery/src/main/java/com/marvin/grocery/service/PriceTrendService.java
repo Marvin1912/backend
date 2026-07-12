@@ -5,12 +5,12 @@ import com.marvin.grocery.dto.ProductPriceSummaryDTO;
 import com.marvin.grocery.entity.ReceiptEntity;
 import com.marvin.grocery.entity.ReceiptItemEntity;
 import com.marvin.grocery.repository.ReceiptItemRepository;
+import com.marvin.grocery.util.ArticleNameNormalizer;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
@@ -60,7 +60,7 @@ public class PriceTrendService {
      * @return a Mono emitting the ordered list of history points, empty if the product was never purchased
      */
     public Mono<List<PriceHistoryPointDTO>> findHistory(String name) {
-        final String normalizedName = normalize(name);
+        final String normalizedName = ArticleNameNormalizer.normalize(name);
         return Mono.fromCallable(() -> receiptItemRepository.findAllByNormalizedNameWithReceipt(normalizedName).stream()
                         .sorted(CHRONOLOGICAL_ORDER)
                         .map(PriceTrendService::toHistoryPoint)
@@ -71,7 +71,7 @@ public class PriceTrendService {
     private List<ProductPriceSummaryDTO> computeSummaries() {
         final Map<String, List<ReceiptItemEntity>> itemsByNormalizedName = receiptItemRepository.findAllWithReceipt()
                 .stream()
-                .collect(Collectors.groupingBy(item -> normalize(item.getName())));
+                .collect(Collectors.groupingBy(item -> ArticleNameNormalizer.normalize(item.getName())));
         return itemsByNormalizedName.values().stream()
                 .map(PriceTrendService::toSummary)
                 .sorted(Comparator.comparing(ProductPriceSummaryDTO::name, String.CASE_INSENSITIVE_ORDER))
@@ -85,7 +85,7 @@ public class PriceTrendService {
         final List<BigDecimal> sparklinePrices = chronological.stream().map(ReceiptItemEntity::getSinglePrice).toList();
         return new ProductPriceSummaryDTO(
                 latest.getName().trim(),
-                normalize(latest.getName()),
+                ArticleNameNormalizer.normalize(latest.getName()),
                 first.getSinglePrice(),
                 effectiveDate(first),
                 latest.getSinglePrice(),
@@ -119,9 +119,5 @@ public class PriceTrendService {
     private static LocalDate effectiveDate(ReceiptItemEntity item) {
         final ReceiptEntity receipt = item.getReceipt();
         return receipt.getReceiptDate() != null ? receipt.getReceiptDate() : receipt.getCreationDate().toLocalDate();
-    }
-
-    private static String normalize(String name) {
-        return name.trim().toLowerCase(Locale.ROOT);
     }
 }
