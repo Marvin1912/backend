@@ -47,4 +47,22 @@ public interface ReceiptItemRepository extends JpaRepository<ReceiptItemEntity, 
      */
     @Query("SELECT i FROM ReceiptItemEntity i JOIN FETCH i.receipt r WHERE LOWER(TRIM(i.name)) = :normalizedName")
     List<ReceiptItemEntity> findAllByNormalizedNameWithReceipt(@Param("normalizedName") String normalizedName);
+
+    /**
+     * Returns the number of receipt items referencing the given article.
+     *
+     * @param articleId the id of the article to count receipt items for
+     * @return the number of matching receipt items
+     */
+    long countByArticleId(Long articleId);
+
+    /**
+     * Returns the number of receipt items referencing each article that has at least one, grouped
+     * by article id, so the full article list can be built without an N+1 query per article.
+     *
+     * @return one projection per article id that has at least one referencing receipt item
+     */
+    @Query("SELECT i.article.id AS articleId, COUNT(i) AS purchaseCount FROM ReceiptItemEntity i "
+            + "WHERE i.article IS NOT NULL GROUP BY i.article.id")
+    List<ArticlePurchaseCount> countPurchasesGroupedByArticle();
 }
