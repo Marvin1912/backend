@@ -3,6 +3,7 @@ package com.marvin.nutrition.repository;
 import com.marvin.nutrition.entity.MealEntryEntity;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
@@ -28,4 +29,12 @@ public interface MealEntryRepository extends JpaRepository<MealEntryEntity, UUID
      * @return list of meal entries within the range in date and creation order
      */
     List<MealEntryEntity> findByEntryDateBetweenOrderByEntryDateAscCreationDateAsc(LocalDate from, LocalDate to);
+
+    /**
+     * Returns the earliest ever recorded meal entry, ordered by entry date ascending.
+     * Used to determine the start date of the entire tracked period.
+     *
+     * @return an Optional containing the earliest entry, or empty if no entries exist
+     */
+    Optional<MealEntryEntity> findTopByOrderByEntryDateAsc();
 }
