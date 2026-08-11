@@ -5,7 +5,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.marvin.nutrition.dto.WeightNutrientRatioDTO;
+import com.marvin.nutrition.dto.WeightNutrientRatioSummaryDTO;
+import com.marvin.nutrition.dto.WeightNutrientRatioSummaryResponse;
 import com.marvin.nutrition.service.WeightNutrientRatioService;
+import com.marvin.nutrition.service.WeightNutrientRatioSummaryService;
 import com.marvin.nutrition.service.WeightService;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -20,7 +23,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
-/** Unit tests for {@link WeightController}, covering the weight/nutrient ratio endpoint. */
+/** Unit tests for {@link WeightController}, covering the weight/nutrient ratio endpoints. */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("WeightController Tests")
 class WeightControllerTest {
@@ -30,6 +33,9 @@ class WeightControllerTest {
 
     @Mock
     private WeightNutrientRatioService weightNutrientRatioService;
+
+    @Mock
+    private WeightNutrientRatioSummaryService weightNutrientRatioSummaryService;
 
     @InjectMocks
     private WeightController weightController;
@@ -75,5 +81,33 @@ class WeightControllerTest {
                 .verifyComplete();
 
         verify(weightNutrientRatioService).getRatios(from, to);
+    }
+
+    // -----------------------------------------------------------------------
+    // GET /nutrition/weight/ratios/summary
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("getRatioSummary returns 200 with the last-30-days and total-period summaries")
+    void getRatioSummary_ReturnsSummary_Returns200WithBothPeriods() {
+        final WeightNutrientRatioSummaryDTO last30Days = new WeightNutrientRatioSummaryDTO(
+                from, to, 2, 2, new BigDecimal("2.00"), new BigDecimal("3.00"), new BigDecimal("1.00"));
+        final WeightNutrientRatioSummaryDTO totalPeriod = new WeightNutrientRatioSummaryDTO(
+                from, to, 2, 2, new BigDecimal("2.00"), new BigDecimal("3.00"), new BigDecimal("1.00"));
+        final WeightNutrientRatioSummaryResponse response =
+                new WeightNutrientRatioSummaryResponse(last30Days, totalPeriod);
+
+        when(weightNutrientRatioSummaryService.getSummary()).thenReturn(Mono.just(response));
+
+        final Mono<WeightNutrientRatioSummaryResponse> result = weightController.getRatioSummary();
+
+        StepVerifier.create(result)
+                .assertNext(actual -> {
+                    assertEquals(last30Days, actual.last30Days());
+                    assertEquals(totalPeriod, actual.totalPeriod());
+                })
+                .verifyComplete();
+
+        verify(weightNutrientRatioSummaryService).getSummary();
     }
 }

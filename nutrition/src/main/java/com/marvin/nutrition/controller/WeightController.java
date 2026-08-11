@@ -3,7 +3,9 @@ package com.marvin.nutrition.controller;
 import com.marvin.nutrition.dto.CreateWeightEntryRequest;
 import com.marvin.nutrition.dto.WeightEntryDTO;
 import com.marvin.nutrition.dto.WeightNutrientRatioDTO;
+import com.marvin.nutrition.dto.WeightNutrientRatioSummaryResponse;
 import com.marvin.nutrition.service.WeightNutrientRatioService;
+import com.marvin.nutrition.service.WeightNutrientRatioSummaryService;
 import com.marvin.nutrition.service.WeightService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -44,16 +46,22 @@ public class WeightController {
 
     private final WeightService weightService;
     private final WeightNutrientRatioService weightNutrientRatioService;
+    private final WeightNutrientRatioSummaryService weightNutrientRatioSummaryService;
 
     /**
      * Creates a new WeightController.
      *
-     * @param weightService               the service handling weight entry operations
-     * @param weightNutrientRatioService  the service computing weight/nutrient-intake ratios
+     * @param weightService                      the service handling weight entry operations
+     * @param weightNutrientRatioService         the service computing weight/nutrient-intake ratios
+     * @param weightNutrientRatioSummaryService  the service computing weight/nutrient-ratio period summaries
      */
-    public WeightController(WeightService weightService, WeightNutrientRatioService weightNutrientRatioService) {
+    public WeightController(
+            WeightService weightService,
+            WeightNutrientRatioService weightNutrientRatioService,
+            WeightNutrientRatioSummaryService weightNutrientRatioSummaryService) {
         this.weightService = weightService;
         this.weightNutrientRatioService = weightNutrientRatioService;
+        this.weightNutrientRatioSummaryService = weightNutrientRatioSummaryService;
     }
 
     /**
@@ -185,5 +193,28 @@ public class WeightController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
             @Parameter(description = "Last date to include (inclusive)") LocalDate to) {
         return weightNutrientRatioService.getRatios(from, to);
+    }
+
+    /**
+     * Returns the average macro-to-body-weight ratios for the last 30 days and for the entire
+     * tracked period, each averaged over the days that have at least one logged meal entry.
+     *
+     * @return a Mono emitting both period summaries
+     */
+    @GetMapping("/ratios/summary")
+    @Operation(
+            summary = "Get weight/nutrient-intake ratio summary",
+            description = "Returns the average macro-nutrient-to-body-weight ratios (protein, carbs, fat) for the "
+                    + "last 30 days and for the entire tracked period, averaged over days with logged meals.",
+            responses = {
+                @ApiResponse(
+                        responseCode = "200",
+                        description = "Summary returned",
+                        content = @Content(schema = @Schema(implementation = WeightNutrientRatioSummaryResponse.class))
+                )
+            }
+    )
+    public Mono<WeightNutrientRatioSummaryResponse> getRatioSummary() {
+        return weightNutrientRatioSummaryService.getSummary();
     }
 }
