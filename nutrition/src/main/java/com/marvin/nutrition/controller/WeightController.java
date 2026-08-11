@@ -2,6 +2,8 @@ package com.marvin.nutrition.controller;
 
 import com.marvin.nutrition.dto.CreateWeightEntryRequest;
 import com.marvin.nutrition.dto.WeightEntryDTO;
+import com.marvin.nutrition.dto.WeightNutrientRatioDTO;
+import com.marvin.nutrition.service.WeightNutrientRatioService;
 import com.marvin.nutrition.service.WeightService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -12,7 +14,10 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.net.URI;
+import java.time.LocalDate;
+import java.util.List;
 import java.util.NoSuchElementException;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,6 +26,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -37,14 +43,17 @@ public class WeightController {
     private static final String WEIGHT_LOCATION_PREFIX = "/nutrition/weight/";
 
     private final WeightService weightService;
+    private final WeightNutrientRatioService weightNutrientRatioService;
 
     /**
      * Creates a new WeightController.
      *
-     * @param weightService the service handling weight entry operations
+     * @param weightService               the service handling weight entry operations
+     * @param weightNutrientRatioService  the service computing weight/nutrient-intake ratios
      */
-    public WeightController(WeightService weightService) {
+    public WeightController(WeightService weightService, WeightNutrientRatioService weightNutrientRatioService) {
         this.weightService = weightService;
+        this.weightNutrientRatioService = weightNutrientRatioService;
     }
 
     /**
@@ -146,5 +155,35 @@ public class WeightController {
         return weightService.delete(id)
                 .thenReturn(noContent)
                 .onErrorReturn(NoSuchElementException.class, notFound);
+    }
+
+    /**
+     * Returns, for each date in the given range, the applicable historical body weight paired with
+     * that day's total nutrient intake and the resulting per-kilogram ratios.
+     *
+     * @param from the first date to include (inclusive)
+     * @param to   the last date to include (inclusive)
+     * @return a Mono emitting one ratio entry per date in the range, ordered ascending by date
+     */
+    @GetMapping("/ratios")
+    @Operation(
+            summary = "Get weight/nutrient-intake ratios",
+            description = "Returns, for each day in the given date range, the applicable historical body weight "
+                    + "paired with that day's total nutrient intake (kcal, protein, carbs, fat) and the "
+                    + "computed per-kilogram ratios.",
+            responses = {
+                @ApiResponse(
+                        responseCode = "200",
+                        description = "Ratios returned",
+                        content = @Content(array = @ArraySchema(schema = @Schema(implementation = WeightNutrientRatioDTO.class)))
+                )
+            }
+    )
+    public Mono<List<WeightNutrientRatioDTO>> getRatios(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            @Parameter(description = "First date to include (inclusive)") LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            @Parameter(description = "Last date to include (inclusive)") LocalDate to) {
+        return weightNutrientRatioService.getRatios(from, to);
     }
 }
