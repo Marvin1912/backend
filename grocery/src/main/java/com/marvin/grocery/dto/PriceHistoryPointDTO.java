@@ -16,6 +16,8 @@ import java.util.UUID;
  * @param receiptId   id of the receipt this purchase belongs to
  * @param articleName display name of the {@code Article} that contributed this purchase; lets a
  *                    merged group's history be traced back to the specific name variant it came from
+ * @param articleId   id of the {@code Article} that contributed this purchase; lets a client act on the
+ *                    specific article (e.g. reassign or unassign it) without matching by name
  */
 @Schema(description = "A single historical price data point for a product")
 public record PriceHistoryPointDTO(
@@ -35,6 +37,9 @@ public record PriceHistoryPointDTO(
         UUID receiptId,
 
         @Schema(description = "Display name of the Article that contributed this purchase", example = "Vollmilch")
-        String articleName
+        String articleName,
+
+        @Schema(description = "Id of the Article that contributed this purchase", example = "42")
+        Long articleId
 ) {
 }
