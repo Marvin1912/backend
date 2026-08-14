@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.marvin.grocery.entity.ArticleEntity;
+import com.marvin.grocery.matching.ArticleGroupSuggestionService;
 import com.marvin.grocery.repository.ArticleRepository;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
@@ -24,6 +25,9 @@ class ArticleServiceTest {
 
     @Mock
     private ArticleRepository articleRepository;
+
+    @Mock
+    private ArticleGroupSuggestionService articleGroupSuggestionService;
 
     @InjectMocks
     private ArticleService articleService;
@@ -41,6 +45,7 @@ class ArticleServiceTest {
 
         assertSame(existing, result);
         verify(articleRepository, never()).save(any());
+        verify(articleGroupSuggestionService, never()).matchNewArticle(any());
     }
 
     @Test
@@ -54,6 +59,17 @@ class ArticleServiceTest {
         assertEquals("Kaffee", result.getName());
         assertEquals("kaffee", result.getNormalizedName());
         verify(articleRepository).save(any(ArticleEntity.class));
+    }
+
+    @Test
+    @DisplayName("Should trigger group matching for a newly created article")
+    void findOrCreate_NoMatch_TriggersGroupMatchingForNewArticle() {
+        when(articleRepository.findByNormalizedName("kaffee")).thenReturn(Optional.empty());
+        when(articleRepository.save(any(ArticleEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        final ArticleEntity result = articleService.findOrCreate("Kaffee");
+
+        verify(articleGroupSuggestionService).matchNewArticle(result);
     }
 
     @Test
