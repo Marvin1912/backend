@@ -234,9 +234,11 @@ class PriceTrendServiceTest {
                     assertEquals(Supermarket.LIDL, earliest.supermarket());
                     assertEquals(secondReceipt.getId(), earliest.receiptId());
                     assertEquals("Apfel", earliest.articleName());
+                    assertEquals(article.getId(), earliest.articleId());
                     assertEquals(LocalDate.of(2026, 2, 1), latest.date());
                     assertEquals(new BigDecimal("0.59"), latest.singlePrice());
                     assertEquals("Apfel", latest.articleName());
+                    assertEquals(article.getId(), latest.articleId());
                 })
                 .verifyComplete();
     }
@@ -258,7 +260,9 @@ class PriceTrendServiceTest {
                 .assertNext(history -> {
                     assertEquals(2, history.size());
                     assertEquals("Vollmilch", history.get(0).articleName());
+                    assertEquals(vollmilch.getId(), history.get(0).articleId());
                     assertEquals("H-Milch", history.get(1).articleName());
+                    assertEquals(hMilch.getId(), history.get(1).articleId());
                 })
                 .verifyComplete();
     }
@@ -287,10 +291,13 @@ class PriceTrendServiceTest {
                     final PriceHistoryPointDTO third = history.get(2);
                     assertEquals(Supermarket.LIDL, first.supermarket());
                     assertEquals("Vollmilch", first.articleName());
+                    assertEquals(vollmilch.getId(), first.articleId());
                     assertEquals(Supermarket.REWE, second.supermarket());
                     assertEquals("H-Milch", second.articleName());
+                    assertEquals(hMilch.getId(), second.articleId());
                     assertEquals(Supermarket.EDEKA, third.supermarket());
                     assertEquals("Bio-Milch", third.articleName());
+                    assertEquals(biomilch.getId(), third.articleId());
                 })
                 .verifyComplete();
     }

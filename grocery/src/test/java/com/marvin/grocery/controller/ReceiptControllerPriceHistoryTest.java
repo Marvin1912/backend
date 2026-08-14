@@ -101,7 +101,7 @@ class ReceiptControllerPriceHistoryTest {
     void getArticleGroupHistory_ReturnsHistory() {
         final UUID receiptId = UUID.randomUUID();
         final PriceHistoryPointDTO point = new PriceHistoryPointDTO(
-                LocalDate.of(2026, 1, 1), new BigDecimal("1.09"), 1, Supermarket.LIDL, receiptId, "Vollmilch");
+                LocalDate.of(2026, 1, 1), new BigDecimal("1.09"), 1, Supermarket.LIDL, receiptId, "Vollmilch", 5L);
         when(priceTrendService.findHistory(eq(1L))).thenReturn(Mono.just(List.of(point)));
 
         webTestClient.get()
@@ -114,7 +114,8 @@ class ReceiptControllerPriceHistoryTest {
                 .jsonPath("$[0].quantity").isEqualTo(1)
                 .jsonPath("$[0].supermarket").isEqualTo("LIDL")
                 .jsonPath("$[0].receiptId").isEqualTo(receiptId.toString())
-                .jsonPath("$[0].articleName").isEqualTo("Vollmilch");
+                .jsonPath("$[0].articleName").isEqualTo("Vollmilch")
+                .jsonPath("$[0].articleId").isEqualTo(5);
     }
 
     @Test
