@@ -204,6 +204,32 @@ public class ReceiptController {
     }
 
     /**
+     * Deletes a single item from the given receipt.
+     *
+     * @param receiptId the UUID of the parent receipt
+     * @param itemId    the id of the item to delete
+     * @return a Mono with 204 No Content on success, or 404 Not Found if the receipt or item does not exist
+     */
+    @DeleteMapping("/{receiptId}/items/{itemId}")
+    @Operation(
+            summary = "Delete a receipt item",
+            description = "Permanently removes a single line item from the specified receipt.",
+            responses = {
+                @ApiResponse(responseCode = "204", description = "Item deleted"),
+                @ApiResponse(responseCode = "404", description = "Receipt or item not found")
+            }
+    )
+    public Mono<ResponseEntity<Void>> deleteItem(
+            @PathVariable @Parameter(description = "UUID of the receipt") UUID receiptId,
+            @PathVariable @Parameter(description = "Id of the item") Long itemId) {
+        final ResponseEntity<Void> noContent = ResponseEntity.<Void>noContent().build();
+        final ResponseEntity<Void> notFound = ResponseEntity.<Void>notFound().build();
+        return receiptService.deleteItem(receiptId, itemId)
+                .thenReturn(noContent)
+                .onErrorReturn(NoSuchElementException.class, notFound);
+    }
+
+    /**
      * Updates the supermarket field of the given receipt.
      *
      * @param id      the UUID of the receipt to update

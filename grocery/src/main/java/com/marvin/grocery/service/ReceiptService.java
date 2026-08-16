@@ -168,6 +168,23 @@ public class ReceiptService {
     }
 
     /**
+     * Deletes a single item from the given receipt.
+     * Emits {@link NoSuchElementException} if the item does not exist or does not belong to the receipt.
+     *
+     * @param receiptId the UUID of the parent receipt
+     * @param itemId    the id of the item to delete
+     * @return an empty Mono on success, or an error Mono if the item is not found
+     */
+    public Mono<Void> deleteItem(UUID receiptId, Long itemId) {
+        return Mono.fromCallable(() -> {
+            final ReceiptItemEntity item = receiptItemRepository.findByIdAndReceiptId(itemId, receiptId)
+                    .orElseThrow(() -> new NoSuchElementException("Item not found: " + itemId));
+            receiptItemRepository.delete(item);
+            return null;
+        }).subscribeOn(Schedulers.boundedElastic()).then();
+    }
+
+    /**
      * Deletes the receipt with the given id and all its associated items.
      * Emits {@link NoSuchElementException} if no receipt with that id exists.
      *
