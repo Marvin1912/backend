@@ -2,6 +2,7 @@ package com.marvin.grocery.service;
 
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -16,6 +17,7 @@ import com.marvin.grocery.ocr.OcrProvider;
 import com.marvin.grocery.repository.ReceiptItemRepository;
 import com.marvin.grocery.repository.ReceiptRepository;
 import java.math.BigDecimal;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -101,5 +103,34 @@ class ReceiptServiceTest {
                 .verifyComplete();
 
         assertSame(resolvedArticle, existingItem.getArticle());
+    }
+
+    @Test
+    @DisplayName("deleteItem should delete the item when it exists on the given receipt")
+    void deleteItem_Exists_DeletesItem() {
+        final UUID receiptId = UUID.randomUUID();
+        final Long itemId = 5L;
+        final ReceiptItemEntity existingItem = new ReceiptItemEntity();
+        existingItem.setId(itemId);
+        when(receiptItemRepository.findByIdAndReceiptId(itemId, receiptId)).thenReturn(Optional.of(existingItem));
+
+        StepVerifier.create(receiptService.deleteItem(receiptId, itemId))
+                .verifyComplete();
+
+        verify(receiptItemRepository).delete(existingItem);
+    }
+
+    @Test
+    @DisplayName("deleteItem should emit NoSuchElementException when the item does not belong to the receipt")
+    void deleteItem_NotFound_EmitsError() {
+        final UUID receiptId = UUID.randomUUID();
+        final Long itemId = 5L;
+        when(receiptItemRepository.findByIdAndReceiptId(itemId, receiptId)).thenReturn(Optional.empty());
+
+        StepVerifier.create(receiptService.deleteItem(receiptId, itemId))
+                .expectError(NoSuchElementException.class)
+                .verify();
+
+        verify(receiptItemRepository, never()).delete(any(ReceiptItemEntity.class));
     }
 }

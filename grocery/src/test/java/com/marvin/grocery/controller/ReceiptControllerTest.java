@@ -183,6 +183,37 @@ class ReceiptControllerTest {
     }
 
     @Test
+    @DisplayName("Should return 204 No Content after successful item deletion")
+    void deleteItem_Exists_Returns204() {
+        final Long itemId = 1L;
+        when(receiptService.deleteItem(testReceiptId, itemId)).thenReturn(Mono.empty());
+
+        final Mono<ResponseEntity<Void>> result = receiptController.deleteItem(testReceiptId, itemId);
+
+        StepVerifier.create(result)
+                .assertNext(response -> assertEquals(204, response.getStatusCode().value()))
+                .verifyComplete();
+
+        verify(receiptService).deleteItem(testReceiptId, itemId);
+    }
+
+    @Test
+    @DisplayName("Should return 404 Not Found when receipt or item does not exist for item deletion")
+    void deleteItem_NotFound_Returns404() {
+        final Long itemId = 99L;
+        when(receiptService.deleteItem(testReceiptId, itemId))
+                .thenReturn(Mono.error(new NoSuchElementException("Item not found: " + itemId)));
+
+        final Mono<ResponseEntity<Void>> result = receiptController.deleteItem(testReceiptId, itemId);
+
+        StepVerifier.create(result)
+                .assertNext(response -> assertEquals(404, response.getStatusCode().value()))
+                .verifyComplete();
+
+        verify(receiptService).deleteItem(testReceiptId, itemId);
+    }
+
+    @Test
     @DisplayName("Should return 200 with updated DTO after supermarket update")
     void updateSupermarket_Exists_Returns200() {
         final ReceiptDTO updated = new ReceiptDTO(
