@@ -79,3 +79,7 @@ climate:
   outdoor:
     entity-id: ${CLIMATE_OUTDOOR_ENTITY_ID:draussen_temperature}
     humidity-entity-id: ${CLIMATE_OUTDOOR_HUMIDITY_ENTITY_ID:draussen_humidity}
+  openweathermap:
+    api-key: ${OPENWEATHERMAP_API_KEY:}
+    lat: ${OPENWEATHERMAP_LAT:52.5200}
+    lon: ${OPENWEATHERMAP_LON:13.4050}
