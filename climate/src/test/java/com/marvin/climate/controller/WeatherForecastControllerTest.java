@@ -39,7 +39,9 @@ class WeatherForecastControllerTest {
                 "light rain",
                 21.5,
                 60.0,
-                3.5
+                3.5,
+                52.52,
+                13.405
         );
         when(openWeatherMapClient.getForecast()).thenReturn(Flux.just(forecast));
 
@@ -57,7 +59,9 @@ class WeatherForecastControllerTest {
                 .jsonPath("$[0].description").isEqualTo("light rain")
                 .jsonPath("$[0].temperatureC").isEqualTo(21.5)
                 .jsonPath("$[0].humidityPct").isEqualTo(60.0)
-                .jsonPath("$[0].windSpeedMs").isEqualTo(3.5);
+                .jsonPath("$[0].windSpeedMs").isEqualTo(3.5)
+                .jsonPath("$[0].latitude").isEqualTo(52.52)
+                .jsonPath("$[0].longitude").isEqualTo(13.405);
     }
 
     @Test

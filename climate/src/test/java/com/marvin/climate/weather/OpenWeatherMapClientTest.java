@@ -103,6 +103,8 @@ class OpenWeatherMapClientTest {
                     assertEquals(22.5, forecast.temperatureC());
                     assertEquals(60.0, forecast.humidityPct());
                     assertEquals(3.5, forecast.windSpeedMs());
+                    assertEquals(LAT, forecast.latitude());
+                    assertEquals(LON, forecast.longitude());
                 })
                 .verifyComplete();
     }
