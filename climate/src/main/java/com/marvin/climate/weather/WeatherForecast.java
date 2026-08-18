@@ -15,6 +15,8 @@ import java.time.LocalDate;
  * @param temperatureC the forecast temperature in degrees Celsius
  * @param humidityPct  the forecast relative humidity in percent, or {@code null} when unavailable
  * @param windSpeedMs  the forecast wind speed in meters per second, or {@code null} when unavailable
+ * @param latitude     the latitude of the location this forecast was requested for
+ * @param longitude    the longitude of the location this forecast was requested for
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record WeatherForecast(
@@ -24,6 +26,8 @@ public record WeatherForecast(
         String description,
         double temperatureC,
         Double humidityPct,
-        Double windSpeedMs
+        Double windSpeedMs,
+        double latitude,
+        double longitude
 ) {
 }

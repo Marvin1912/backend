@@ -119,7 +119,7 @@ public class OpenWeatherMapClient {
         final double temperatureC = entry.main() == null ? 0 : entry.main().temp();
         final Double humidityPct = entry.main() == null ? null : (double) entry.main().humidity();
         final Double windSpeedMs = entry.wind() == null ? null : entry.wind().speed();
-        return new WeatherForecast(date, iconCode, weatherId, description, temperatureC, humidityPct, windSpeedMs);
+        return new WeatherForecast(date, iconCode, weatherId, description, temperatureC, humidityPct, windSpeedMs, lat, lon);
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
