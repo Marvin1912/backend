@@ -5,7 +5,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -144,6 +147,122 @@ class OpenWeatherMapClientTest {
 
         // When / Then
         StepVerifier.create(openWeatherMapClient.getForecast())
+                .verifyComplete();
+    }
+
+    private Clock fixedClockAt(LocalDateTime dateTime) {
+        return Clock.fixed(dateTime.toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
+    }
+
+    @Test
+    @DisplayName("Should return the next three upcoming entries relative to now")
+    void getHourlyForecast_ShouldReturnNextThreeEntries_RelativeToNow() {
+        // Given
+        final OpenWeatherMapClient client = new OpenWeatherMapClient(
+                webClientBuilder, API_KEY, LAT, LON, fixedClockAt(LocalDateTime.of(2026, 8, 16, 7, 0, 0)));
+        final OpenWeatherMapClient.ForecastResponse response = new OpenWeatherMapClient.ForecastResponse(List.of(
+                entry("2026-08-16 00:00:00", 15.0, 80, 1.0, 800, "clear sky", "01n"),
+                entry("2026-08-16 03:00:00", 14.0, 82, 1.2, 800, "clear sky", "01n"),
+                entry("2026-08-16 06:00:00", 16.0, 78, 1.5, 800, "clear sky", "01d"),
+                entry("2026-08-16 09:00:00", 18.0, 70, 2.0, 800, "clear sky", "01d"),
+                entry("2026-08-16 12:00:00", 22.5, 60, 3.5, 500, "light rain", "10d"),
+                entry("2026-08-16 15:00:00", 21.0, 65, 3.0, 500, "light rain", "10d"),
+                entry("2026-08-16 18:00:00", 19.0, 68, 2.5, 800, "clear sky", "01n"),
+                entry("2026-08-16 21:00:00", 17.0, 75, 2.0, 800, "clear sky", "01n")
+        ));
+        stubWebClientChain(Mono.just(response));
+
+        // When / Then
+        StepVerifier.create(client.getHourlyForecast())
+                .assertNext(forecast -> {
+                    assertEquals(LocalDateTime.of(2026, 8, 16, 9, 0, 0), forecast.dateTime());
+                    assertEquals("01d", forecast.iconCode());
+                    assertEquals(800, forecast.weatherId());
+                    assertEquals("clear sky", forecast.description());
+                    assertEquals(18.0, forecast.temperatureC());
+                    assertEquals(70.0, forecast.humidityPct());
+                    assertEquals(2.0, forecast.windSpeedMs());
+                    assertEquals(LAT, forecast.latitude());
+                    assertEquals(LON, forecast.longitude());
+                })
+                .assertNext(forecast -> assertEquals(LocalDateTime.of(2026, 8, 16, 12, 0, 0), forecast.dateTime()))
+                .assertNext(forecast -> assertEquals(LocalDateTime.of(2026, 8, 16, 15, 0, 0), forecast.dateTime()))
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should wrap into the next day when fewer than three entries remain today")
+    void getHourlyForecast_ShouldWrapIntoNextDay_WhenFewerThanThreeEntriesRemainToday() {
+        // Given
+        final OpenWeatherMapClient client = new OpenWeatherMapClient(
+                webClientBuilder, API_KEY, LAT, LON, fixedClockAt(LocalDateTime.of(2026, 8, 16, 16, 0, 0)));
+        final OpenWeatherMapClient.ForecastResponse response = new OpenWeatherMapClient.ForecastResponse(List.of(
+                entry("2026-08-16 18:00:00", 19.0, 68, 2.5, 800, "clear sky", "01n"),
+                entry("2026-08-16 21:00:00", 17.0, 75, 2.0, 800, "clear sky", "01n"),
+                entry("2026-08-17 00:00:00", 15.0, 80, 1.5, 800, "clear sky", "01n")
+        ));
+        stubWebClientChain(Mono.just(response));
+
+        // When / Then
+        StepVerifier.create(client.getHourlyForecast())
+                .assertNext(forecast -> assertEquals(LocalDateTime.of(2026, 8, 16, 18, 0, 0), forecast.dateTime()))
+                .assertNext(forecast -> assertEquals(LocalDateTime.of(2026, 8, 16, 21, 0, 0), forecast.dateTime()))
+                .assertNext(forecast -> assertEquals(LocalDateTime.of(2026, 8, 17, 0, 0, 0), forecast.dateTime()))
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should exclude an entry exactly at now and return the following three entries")
+    void getHourlyForecast_ShouldExcludeEntryExactlyAtNow() {
+        // Given
+        final OpenWeatherMapClient client = new OpenWeatherMapClient(
+                webClientBuilder, API_KEY, LAT, LON, fixedClockAt(LocalDateTime.of(2026, 8, 16, 12, 0, 0)));
+        final OpenWeatherMapClient.ForecastResponse response = new OpenWeatherMapClient.ForecastResponse(List.of(
+                entry("2026-08-16 09:00:00", 18.0, 70, 2.0, 800, "clear sky", "01d"),
+                entry("2026-08-16 12:00:00", 22.5, 60, 3.5, 500, "light rain", "10d"),
+                entry("2026-08-16 15:00:00", 21.0, 65, 3.0, 500, "light rain", "10d"),
+                entry("2026-08-16 18:00:00", 19.0, 68, 2.5, 800, "clear sky", "01n"),
+                entry("2026-08-16 21:00:00", 17.0, 75, 2.0, 800, "clear sky", "01n")
+        ));
+        stubWebClientChain(Mono.just(response));
+
+        // When / Then
+        StepVerifier.create(client.getHourlyForecast())
+                .assertNext(forecast -> assertEquals(LocalDateTime.of(2026, 8, 16, 15, 0, 0), forecast.dateTime()))
+                .assertNext(forecast -> assertEquals(LocalDateTime.of(2026, 8, 16, 18, 0, 0), forecast.dateTime()))
+                .assertNext(forecast -> assertEquals(LocalDateTime.of(2026, 8, 16, 21, 0, 0), forecast.dateTime()))
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should return fewer than three entries when fewer future entries remain")
+    void getHourlyForecast_ShouldReturnFewerThanThree_WhenFewerFutureEntriesRemain() {
+        // Given
+        final OpenWeatherMapClient client = new OpenWeatherMapClient(
+                webClientBuilder, API_KEY, LAT, LON, fixedClockAt(LocalDateTime.of(2026, 8, 16, 20, 0, 0)));
+        final OpenWeatherMapClient.ForecastResponse response = new OpenWeatherMapClient.ForecastResponse(List.of(
+                entry("2026-08-16 09:00:00", 18.0, 70, 2.0, 800, "clear sky", "01d"),
+                entry("2026-08-16 12:00:00", 22.5, 60, 3.5, 500, "light rain", "10d"),
+                entry("2026-08-16 15:00:00", 21.0, 65, 3.0, 500, "light rain", "10d"),
+                entry("2026-08-16 18:00:00", 19.0, 68, 2.5, 800, "clear sky", "01n"),
+                entry("2026-08-16 21:00:00", 17.0, 75, 2.0, 800, "clear sky", "01n")
+        ));
+        stubWebClientChain(Mono.just(response));
+
+        // When / Then
+        StepVerifier.create(client.getHourlyForecast())
+                .assertNext(forecast -> assertEquals(LocalDateTime.of(2026, 8, 16, 21, 0, 0), forecast.dateTime()))
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should emit an empty Flux when the API returns no hourly forecast entries")
+    void getHourlyForecast_ShouldReturnEmpty_WhenListIsEmpty() {
+        // Given
+        stubWebClientChain(Mono.just(new OpenWeatherMapClient.ForecastResponse(List.of())));
+
+        // When / Then
+        StepVerifier.create(openWeatherMapClient.getHourlyForecast())
                 .verifyComplete();
     }
 }
