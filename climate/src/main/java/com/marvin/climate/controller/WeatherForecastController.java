@@ -1,5 +1,6 @@
 package com.marvin.climate.controller;
 
+import com.marvin.climate.weather.HourlyWeatherForecast;
 import com.marvin.climate.weather.OpenWeatherMapClient;
 import com.marvin.climate.weather.WeatherForecast;
 import io.swagger.v3.oas.annotations.Operation;
@@ -54,5 +55,29 @@ public class WeatherForecastController {
     )
     public Flux<WeatherForecast> getForecast() {
         return openWeatherMapClient.getForecast();
+    }
+
+    /**
+     * Returns the weather forecast for the next three upcoming 3-hour interval data points
+     * relative to the current time, unaggregated.
+     *
+     * @return a Flux of {@link HourlyWeatherForecast} objects, potentially empty when no data is available
+     */
+    @GetMapping("/forecast/hourly")
+    @Operation(
+            summary = "Get hourly weather forecast",
+            description = "Retrieves the weather forecast for the next three upcoming 3-hour interval "
+                    + "data points relative to the current time, including icon code, weather condition "
+                    + "id, description, temperature, humidity and wind speed.",
+            responses = {
+                @ApiResponse(
+                        responseCode = "200",
+                        description = "Hourly weather forecast retrieved successfully",
+                        content = @Content(array = @ArraySchema(schema = @Schema(implementation = HourlyWeatherForecast.class)))
+                )
+            }
+    )
+    public Flux<HourlyWeatherForecast> getHourlyForecast() {
+        return openWeatherMapClient.getHourlyForecast();
     }
 }
