@@ -53,6 +53,46 @@ class MealPlanMapperTest {
     }
 
     @Test
+    @DisplayName("toRowDTO carries over a non-null alternativeGroupId")
+    void toRowDTO_MapsAlternativeGroupId() {
+        final UUID alternativeGroupId = UUID.randomUUID();
+        final MealPlanRowEntity row = new MealPlanRowEntity();
+        row.setId(UUID.randomUUID());
+        row.setMealType(MealType.SNACK);
+        row.setFoodId(UUID.randomUUID());
+        row.setFoodName("Protein Käsekuchen");
+        row.setQuantityG(new BigDecimal("100.00"));
+        row.setKcal(new BigDecimal("250.00"));
+        row.setProteinG(new BigDecimal("20.00"));
+        row.setCarbsG(new BigDecimal("15.00"));
+        row.setFatG(new BigDecimal("8.00"));
+        row.setAlternativeGroupId(alternativeGroupId);
+
+        final MealPlanRowDTO dto = mealPlanMapper.toRowDTO(row);
+
+        assertEquals(alternativeGroupId, dto.alternativeGroupId());
+    }
+
+    @Test
+    @DisplayName("toRowDTO maps a null alternativeGroupId to null (ungrouped row)")
+    void toRowDTO_NullAlternativeGroupId_MapsToNull() {
+        final MealPlanRowEntity row = new MealPlanRowEntity();
+        row.setId(UUID.randomUUID());
+        row.setMealType(MealType.SNACK);
+        row.setFoodId(UUID.randomUUID());
+        row.setFoodName("Protein Brownie");
+        row.setQuantityG(new BigDecimal("100.00"));
+        row.setKcal(new BigDecimal("300.00"));
+        row.setProteinG(new BigDecimal("25.00"));
+        row.setCarbsG(new BigDecimal("20.00"));
+        row.setFatG(new BigDecimal("10.00"));
+
+        final MealPlanRowDTO dto = mealPlanMapper.toRowDTO(row);
+
+        assertEquals(null, dto.alternativeGroupId());
+    }
+
+    @Test
     @DisplayName("toSectionDTO carries over the section's id, title, note, callout and given rows")
     void toSectionDTO_MapsFieldsAndRows() {
         final UUID sectionId = UUID.randomUUID();

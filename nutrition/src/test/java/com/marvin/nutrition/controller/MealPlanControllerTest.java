@@ -186,6 +186,27 @@ class MealPlanControllerTest {
     }
 
     @Test
+    @DisplayName("addRow accepts and echoes back a non-null alternativeGroupId")
+    void addRow_EchoesBackAlternativeGroupId() {
+        final UUID sectionId = UUID.randomUUID();
+        final UUID rowId = UUID.randomUUID();
+        final UUID alternativeGroupId = UUID.randomUUID();
+        final CreateMealPlanRowRequest req = new CreateMealPlanRowRequest(
+                MealType.SNACK, UUID.randomUUID(), new BigDecimal("80.00"), alternativeGroupId);
+        final MealPlanRowDTO rowDTO = new MealPlanRowDTO(
+                rowId, MealType.SNACK, req.foodId(), "Protein Käsekuchen",
+                new BigDecimal("80.00"), new BigDecimal("250.00"), new BigDecimal("20.00"),
+                new BigDecimal("15.00"), new BigDecimal("8.00"), alternativeGroupId);
+        when(mealPlanWriteService.addRow(eq(sectionId), any(CreateMealPlanRowRequest.class))).thenReturn(rowDTO);
+
+        final Mono<ResponseEntity<MealPlanRowDTO>> result = mealPlanController.addRow(sectionId, req);
+
+        StepVerifier.create(result)
+                .assertNext(response -> assertEquals(alternativeGroupId, response.getBody().alternativeGroupId()))
+                .verifyComplete();
+    }
+
+    @Test
     @DisplayName("addRow returns 404 when the section or referenced food does not exist")
     void addRow_NotFound_Returns404() {
         final UUID sectionId = UUID.randomUUID();
@@ -230,6 +251,27 @@ class MealPlanControllerTest {
     }
 
     @Test
+    @DisplayName("addRows accepts and echoes back a non-null alternativeGroupId for each row")
+    void addRows_EchoesBackAlternativeGroupId() {
+        final UUID sectionId = UUID.randomUUID();
+        final UUID alternativeGroupId = UUID.randomUUID();
+        final CreateMealPlanRowRequest rowReq = new CreateMealPlanRowRequest(
+                MealType.SNACK, UUID.randomUUID(), new BigDecimal("80.00"), alternativeGroupId);
+        final CreateMealPlanRowsRequest req = new CreateMealPlanRowsRequest(List.of(rowReq));
+        final MealPlanRowDTO rowDTO = new MealPlanRowDTO(
+                UUID.randomUUID(), MealType.SNACK, rowReq.foodId(), "Protein Käsekuchen",
+                new BigDecimal("80.00"), new BigDecimal("250.00"), new BigDecimal("20.00"),
+                new BigDecimal("15.00"), new BigDecimal("8.00"), alternativeGroupId);
+        when(mealPlanWriteService.addRows(eq(sectionId), any())).thenReturn(List.of(rowDTO));
+
+        final Mono<ResponseEntity<List<MealPlanRowDTO>>> result = mealPlanController.addRows(sectionId, req);
+
+        StepVerifier.create(result)
+                .assertNext(response -> assertEquals(alternativeGroupId, response.getBody().get(0).alternativeGroupId()))
+                .verifyComplete();
+    }
+
+    @Test
     @DisplayName("addRows returns 404 when the section or any referenced food does not exist")
     void addRows_NotFound_Returns404() {
         final UUID sectionId = UUID.randomUUID();
@@ -267,6 +309,26 @@ class MealPlanControllerTest {
                     assertEquals(200, response.getStatusCode().value());
                     assertEquals(rowDTO, response.getBody());
                 })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("updateRow accepts and echoes back a non-null alternativeGroupId")
+    void updateRow_EchoesBackAlternativeGroupId() {
+        final UUID rowId = UUID.randomUUID();
+        final UUID alternativeGroupId = UUID.randomUUID();
+        final UpdateMealPlanRowRequest req = new UpdateMealPlanRowRequest(
+                MealType.SNACK, UUID.randomUUID(), new BigDecimal("80.00"), alternativeGroupId);
+        final MealPlanRowDTO rowDTO = new MealPlanRowDTO(
+                rowId, MealType.SNACK, req.foodId(), "Protein Käsekuchen",
+                new BigDecimal("80.00"), new BigDecimal("250.00"), new BigDecimal("20.00"),
+                new BigDecimal("15.00"), new BigDecimal("8.00"), alternativeGroupId);
+        when(mealPlanWriteService.updateRow(eq(rowId), any(UpdateMealPlanRowRequest.class))).thenReturn(rowDTO);
+
+        final Mono<ResponseEntity<MealPlanRowDTO>> result = mealPlanController.updateRow(rowId, req);
+
+        StepVerifier.create(result)
+                .assertNext(response -> assertEquals(alternativeGroupId, response.getBody().alternativeGroupId()))
                 .verifyComplete();
     }
 

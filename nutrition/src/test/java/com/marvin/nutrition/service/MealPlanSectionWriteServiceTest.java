@@ -306,6 +306,91 @@ class MealPlanSectionWriteServiceTest {
     }
 
     // -----------------------------------------------------------------------
+    // addRow - alternativeGroupId validation
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("addRow with a fresh (unused) alternativeGroupId succeeds and persists it on the row")
+    void addRow_FreshAlternativeGroupId_Succeeds() {
+        final UUID sectionId = UUID.randomUUID();
+        final UUID alternativeGroupId = UUID.randomUUID();
+        final MealPlanSectionEntity section = new MealPlanSectionEntity();
+        section.setId(sectionId);
+
+        final FoodEntity food = food(
+                new BigDecimal("250.00"), new BigDecimal("20.00"), new BigDecimal("15.00"), new BigDecimal("8.00"));
+        final CreateMealPlanRowRequest req =
+                new CreateMealPlanRowRequest(MealType.SNACK, food.getId(), new BigDecimal("100.00"), alternativeGroupId);
+
+        when(mealPlanSectionRepository.findById(sectionId)).thenReturn(Optional.of(section));
+        when(foodRepository.findById(food.getId())).thenReturn(Optional.of(food));
+        when(mealPlanRowRepository.findFirstByMealPlanSectionIdOrderBySortOrderDesc(sectionId))
+                .thenReturn(Optional.empty());
+        when(mealPlanRowRepository.findAllByAlternativeGroupId(alternativeGroupId)).thenReturn(List.of());
+        when(mealPlanRowRepository.save(any(MealPlanRowEntity.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(mealPlanMapper.toRowDTO(any(MealPlanRowEntity.class))).thenReturn(null);
+
+        mealPlanSectionWriteService.addRow(sectionId, req);
+
+        final ArgumentCaptor<MealPlanRowEntity> captor = ArgumentCaptor.forClass(MealPlanRowEntity.class);
+        verify(mealPlanRowRepository).save(captor.capture());
+        assertEquals(alternativeGroupId, captor.getValue().getAlternativeGroupId());
+    }
+
+    @Test
+    @DisplayName("addRow throws IllegalArgumentException when the alternativeGroupId is already used by a row in a different section")
+    void addRow_AlternativeGroupIdUsedInDifferentSection_ThrowsIllegalArgumentException() {
+        final UUID sectionId = UUID.randomUUID();
+        final UUID otherSectionId = UUID.randomUUID();
+        final UUID alternativeGroupId = UUID.randomUUID();
+        final MealPlanSectionEntity section = new MealPlanSectionEntity();
+        section.setId(sectionId);
+
+        final FoodEntity food = food(
+                new BigDecimal("250.00"), new BigDecimal("20.00"), new BigDecimal("15.00"), new BigDecimal("8.00"));
+        final CreateMealPlanRowRequest req =
+                new CreateMealPlanRowRequest(MealType.SNACK, food.getId(), new BigDecimal("100.00"), alternativeGroupId);
+
+        final MealPlanRowEntity existingMember = new MealPlanRowEntity();
+        existingMember.setId(UUID.randomUUID());
+        existingMember.setMealPlanSectionId(otherSectionId);
+        existingMember.setMealType(MealType.SNACK);
+
+        when(mealPlanSectionRepository.findById(sectionId)).thenReturn(Optional.of(section));
+        when(foodRepository.findById(food.getId())).thenReturn(Optional.of(food));
+        when(mealPlanRowRepository.findAllByAlternativeGroupId(alternativeGroupId)).thenReturn(List.of(existingMember));
+
+        assertThrows(IllegalArgumentException.class, () -> mealPlanSectionWriteService.addRow(sectionId, req));
+        verify(mealPlanRowRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("addRow throws IllegalArgumentException when the alternativeGroupId is already used by a row with a different mealType")
+    void addRow_AlternativeGroupIdUsedWithDifferentMealType_ThrowsIllegalArgumentException() {
+        final UUID sectionId = UUID.randomUUID();
+        final UUID alternativeGroupId = UUID.randomUUID();
+        final MealPlanSectionEntity section = new MealPlanSectionEntity();
+        section.setId(sectionId);
+
+        final FoodEntity food = food(
+                new BigDecimal("250.00"), new BigDecimal("20.00"), new BigDecimal("15.00"), new BigDecimal("8.00"));
+        final CreateMealPlanRowRequest req =
+                new CreateMealPlanRowRequest(MealType.SNACK, food.getId(), new BigDecimal("100.00"), alternativeGroupId);
+
+        final MealPlanRowEntity existingMember = new MealPlanRowEntity();
+        existingMember.setId(UUID.randomUUID());
+        existingMember.setMealPlanSectionId(sectionId);
+        existingMember.setMealType(MealType.LUNCH);
+
+        when(mealPlanSectionRepository.findById(sectionId)).thenReturn(Optional.of(section));
+        when(foodRepository.findById(food.getId())).thenReturn(Optional.of(food));
+        when(mealPlanRowRepository.findAllByAlternativeGroupId(alternativeGroupId)).thenReturn(List.of(existingMember));
+
+        assertThrows(IllegalArgumentException.class, () -> mealPlanSectionWriteService.addRow(sectionId, req));
+        verify(mealPlanRowRepository, never()).save(any());
+    }
+
+    // -----------------------------------------------------------------------
     // addRows (batch)
     // -----------------------------------------------------------------------
 
@@ -480,6 +565,152 @@ class MealPlanSectionWriteServiceTest {
         final UpdateMealPlanRowRequest req = new UpdateMealPlanRowRequest(MealType.LUNCH, foodId, new BigDecimal("100.00"));
 
         assertThrows(NoSuchElementException.class, () -> mealPlanSectionWriteService.updateRow(rowId, req));
+        verify(mealPlanRowRepository, never()).save(any());
+    }
+
+    // -----------------------------------------------------------------------
+    // updateRow - alternativeGroupId validation
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("updateRow to a null alternativeGroupId clears the row's group")
+    void updateRow_NullAlternativeGroupId_ClearsGroup() {
+        final UUID rowId = UUID.randomUUID();
+        final UUID sectionId = UUID.randomUUID();
+        final MealPlanRowEntity row = new MealPlanRowEntity();
+        row.setId(rowId);
+        row.setMealPlanSectionId(sectionId);
+        row.setMealType(MealType.SNACK);
+        row.setAlternativeGroupId(UUID.randomUUID());
+
+        final FoodEntity food = food(
+                new BigDecimal("100.00"), new BigDecimal("10.00"), new BigDecimal("10.00"), new BigDecimal("10.00"));
+        final UpdateMealPlanRowRequest req = new UpdateMealPlanRowRequest(MealType.SNACK, food.getId(), new BigDecimal("100.00"));
+
+        when(mealPlanRowRepository.findById(rowId)).thenReturn(Optional.of(row));
+        when(foodRepository.findById(food.getId())).thenReturn(Optional.of(food));
+        when(mealPlanRowRepository.save(row)).thenReturn(row);
+        when(mealPlanMapper.toRowDTO(row)).thenReturn(null);
+
+        mealPlanSectionWriteService.updateRow(rowId, req);
+
+        assertEquals(null, row.getAlternativeGroupId());
+        verify(mealPlanRowRepository, never()).findAllByAlternativeGroupId(any());
+    }
+
+    @Test
+    @DisplayName("updateRow with a fresh (unused) alternativeGroupId succeeds and persists it on the row")
+    void updateRow_FreshAlternativeGroupId_Succeeds() {
+        final UUID rowId = UUID.randomUUID();
+        final UUID sectionId = UUID.randomUUID();
+        final UUID alternativeGroupId = UUID.randomUUID();
+        final MealPlanRowEntity row = new MealPlanRowEntity();
+        row.setId(rowId);
+        row.setMealPlanSectionId(sectionId);
+        row.setMealType(MealType.SNACK);
+
+        final FoodEntity food = food(
+                new BigDecimal("100.00"), new BigDecimal("10.00"), new BigDecimal("10.00"), new BigDecimal("10.00"));
+        final UpdateMealPlanRowRequest req =
+                new UpdateMealPlanRowRequest(MealType.SNACK, food.getId(), new BigDecimal("100.00"), alternativeGroupId);
+
+        when(mealPlanRowRepository.findById(rowId)).thenReturn(Optional.of(row));
+        when(foodRepository.findById(food.getId())).thenReturn(Optional.of(food));
+        when(mealPlanRowRepository.findAllByAlternativeGroupId(alternativeGroupId)).thenReturn(List.of());
+        when(mealPlanRowRepository.save(row)).thenReturn(row);
+        when(mealPlanMapper.toRowDTO(row)).thenReturn(null);
+
+        mealPlanSectionWriteService.updateRow(rowId, req);
+
+        assertEquals(alternativeGroupId, row.getAlternativeGroupId());
+    }
+
+    @Test
+    @DisplayName("updateRow ignores the row's own current membership when re-validating the same alternativeGroupId")
+    void updateRow_SameAlternativeGroupIdAsBefore_DoesNotSelfConflict() {
+        final UUID rowId = UUID.randomUUID();
+        final UUID sectionId = UUID.randomUUID();
+        final UUID alternativeGroupId = UUID.randomUUID();
+        final MealPlanRowEntity row = new MealPlanRowEntity();
+        row.setId(rowId);
+        row.setMealPlanSectionId(sectionId);
+        row.setMealType(MealType.SNACK);
+        row.setAlternativeGroupId(alternativeGroupId);
+
+        final FoodEntity food = food(
+                new BigDecimal("100.00"), new BigDecimal("10.00"), new BigDecimal("10.00"), new BigDecimal("10.00"));
+        final UpdateMealPlanRowRequest req =
+                new UpdateMealPlanRowRequest(MealType.SNACK, food.getId(), new BigDecimal("150.00"), alternativeGroupId);
+
+        // findAllByAlternativeGroupId returns the row itself (its own prior membership) - this must
+        // not be treated as a conflicting "other" member of the group.
+        when(mealPlanRowRepository.findById(rowId)).thenReturn(Optional.of(row));
+        when(foodRepository.findById(food.getId())).thenReturn(Optional.of(food));
+        when(mealPlanRowRepository.findAllByAlternativeGroupId(alternativeGroupId)).thenReturn(List.of(row));
+        when(mealPlanRowRepository.save(row)).thenReturn(row);
+        when(mealPlanMapper.toRowDTO(row)).thenReturn(null);
+
+        mealPlanSectionWriteService.updateRow(rowId, req);
+
+        assertEquals(alternativeGroupId, row.getAlternativeGroupId());
+    }
+
+    @Test
+    @DisplayName("updateRow throws IllegalArgumentException when the alternativeGroupId is already used by a row in a different section")
+    void updateRow_AlternativeGroupIdUsedInDifferentSection_ThrowsIllegalArgumentException() {
+        final UUID rowId = UUID.randomUUID();
+        final UUID sectionId = UUID.randomUUID();
+        final UUID otherSectionId = UUID.randomUUID();
+        final UUID alternativeGroupId = UUID.randomUUID();
+        final MealPlanRowEntity row = new MealPlanRowEntity();
+        row.setId(rowId);
+        row.setMealPlanSectionId(sectionId);
+        row.setMealType(MealType.SNACK);
+
+        final FoodEntity food = food(
+                new BigDecimal("100.00"), new BigDecimal("10.00"), new BigDecimal("10.00"), new BigDecimal("10.00"));
+        final UpdateMealPlanRowRequest req =
+                new UpdateMealPlanRowRequest(MealType.SNACK, food.getId(), new BigDecimal("100.00"), alternativeGroupId);
+
+        final MealPlanRowEntity existingMember = new MealPlanRowEntity();
+        existingMember.setId(UUID.randomUUID());
+        existingMember.setMealPlanSectionId(otherSectionId);
+        existingMember.setMealType(MealType.SNACK);
+
+        when(mealPlanRowRepository.findById(rowId)).thenReturn(Optional.of(row));
+        when(foodRepository.findById(food.getId())).thenReturn(Optional.of(food));
+        when(mealPlanRowRepository.findAllByAlternativeGroupId(alternativeGroupId)).thenReturn(List.of(existingMember));
+
+        assertThrows(IllegalArgumentException.class, () -> mealPlanSectionWriteService.updateRow(rowId, req));
+        verify(mealPlanRowRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("updateRow throws IllegalArgumentException when the alternativeGroupId is already used by a row with a different mealType")
+    void updateRow_AlternativeGroupIdUsedWithDifferentMealType_ThrowsIllegalArgumentException() {
+        final UUID rowId = UUID.randomUUID();
+        final UUID sectionId = UUID.randomUUID();
+        final UUID alternativeGroupId = UUID.randomUUID();
+        final MealPlanRowEntity row = new MealPlanRowEntity();
+        row.setId(rowId);
+        row.setMealPlanSectionId(sectionId);
+        row.setMealType(MealType.SNACK);
+
+        final FoodEntity food = food(
+                new BigDecimal("100.00"), new BigDecimal("10.00"), new BigDecimal("10.00"), new BigDecimal("10.00"));
+        final UpdateMealPlanRowRequest req =
+                new UpdateMealPlanRowRequest(MealType.SNACK, food.getId(), new BigDecimal("100.00"), alternativeGroupId);
+
+        final MealPlanRowEntity existingMember = new MealPlanRowEntity();
+        existingMember.setId(UUID.randomUUID());
+        existingMember.setMealPlanSectionId(sectionId);
+        existingMember.setMealType(MealType.LUNCH);
+
+        when(mealPlanRowRepository.findById(rowId)).thenReturn(Optional.of(row));
+        when(foodRepository.findById(food.getId())).thenReturn(Optional.of(food));
+        when(mealPlanRowRepository.findAllByAlternativeGroupId(alternativeGroupId)).thenReturn(List.of(existingMember));
+
+        assertThrows(IllegalArgumentException.class, () -> mealPlanSectionWriteService.updateRow(rowId, req));
         verify(mealPlanRowRepository, never()).save(any());
     }
 
