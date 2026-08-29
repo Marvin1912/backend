@@ -8,15 +8,18 @@ import java.util.UUID;
 /**
  * Data Transfer Object representing a single food-backed meal row within a meal plan section.
  *
- * @param id        the row's unique identifier
- * @param mealType  the meal category (BREAKFAST, LUNCH, DINNER, SNACK)
- * @param foodId    UUID of the referenced food catalog item
- * @param foodName  snapshot of the food's name at write time
- * @param quantityG portion size in grams
- * @param kcal      snapshotted kilocalories
- * @param proteinG  snapshotted grams of protein
- * @param carbsG    snapshotted grams of carbohydrates
- * @param fatG      snapshotted grams of fat
+ * @param id                 the row's unique identifier
+ * @param mealType           the meal category (BREAKFAST, LUNCH, DINNER, SNACK)
+ * @param foodId             UUID of the referenced food catalog item
+ * @param foodName           snapshot of the food's name at write time
+ * @param quantityG          portion size in grams
+ * @param kcal               snapshotted kilocalories
+ * @param proteinG           snapshotted grams of protein
+ * @param carbsG             snapshotted grams of carbohydrates
+ * @param fatG               snapshotted grams of fat
+ * @param alternativeGroupId shared id linking this row to alternative/OR options within the same meal
+ *                           slot (e.g. "Protein Käsekuchen ODER Protein Brownie"); {@code null} means
+ *                           the row is standalone and not part of any alternative group
  */
 @Schema(description = "A single food-backed meal row within a meal plan section")
 public record MealPlanRowDTO(
@@ -45,6 +48,29 @@ public record MealPlanRowDTO(
         BigDecimal carbsG,
 
         @Schema(description = "Snapshotted grams of fat", example = "10.00")
-        BigDecimal fatG
+        BigDecimal fatG,
+
+        @Schema(description = "Shared id linking this row to alternative/OR options within the same meal slot; "
+                + "null if the row is standalone")
+        UUID alternativeGroupId
 ) {
+
+    /**
+     * Backward-compatible constructor for callers that predate the {@code alternativeGroupId} field;
+     * the row is treated as standalone (ungrouped).
+     *
+     * @param id        the row's unique identifier
+     * @param mealType  the meal category (BREAKFAST, LUNCH, DINNER, SNACK)
+     * @param foodId    UUID of the referenced food catalog item
+     * @param foodName  snapshot of the food's name at write time
+     * @param quantityG portion size in grams
+     * @param kcal      snapshotted kilocalories
+     * @param proteinG  snapshotted grams of protein
+     * @param carbsG    snapshotted grams of carbohydrates
+     * @param fatG      snapshotted grams of fat
+     */
+    public MealPlanRowDTO(UUID id, MealType mealType, UUID foodId, String foodName, BigDecimal quantityG,
+            BigDecimal kcal, BigDecimal proteinG, BigDecimal carbsG, BigDecimal fatG) {
+        this(id, mealType, foodId, foodName, quantityG, kcal, proteinG, carbsG, fatG, null);
+    }
 }

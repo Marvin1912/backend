@@ -37,4 +37,13 @@ public interface MealPlanRowRepository extends JpaRepository<MealPlanRowEntity, 
      * @return the number of rows referencing the food
      */
     long countByFoodId(UUID foodId);
+
+    /**
+     * Returns all rows currently sharing the given alternative-group id, used to validate that a new or
+     * updated group member belongs to the same section and meal type as any existing members.
+     *
+     * @param alternativeGroupId the shared alternative-group id
+     * @return the rows sharing that group id, in no particular order
+     */
+    List<MealPlanRowEntity> findAllByAlternativeGroupId(UUID alternativeGroupId);
 }

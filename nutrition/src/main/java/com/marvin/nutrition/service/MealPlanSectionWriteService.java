@@ -8,6 +8,7 @@ import com.marvin.nutrition.dto.UpdateMealPlanSectionRequest;
 import com.marvin.nutrition.entity.FoodEntity;
 import com.marvin.nutrition.entity.MealPlanRowEntity;
 import com.marvin.nutrition.entity.MealPlanSectionEntity;
+import com.marvin.nutrition.entity.MealType;
 import com.marvin.nutrition.mapper.MealPlanMapper;
 import com.marvin.nutrition.repository.FoodRepository;
 import com.marvin.nutrition.repository.MealPlanRowRepository;
@@ -98,6 +99,9 @@ public class MealPlanSectionWriteService {
      * deleted from the middle of the section never causes a new row to collide with a sort order
      * still in use by a remaining row.
      * Throws {@link NoSuchElementException} if the section or the referenced food is not found.
+     * Throws {@link IllegalArgumentException} if a non-null {@code alternativeGroupId} is already
+     * used by a row in a different section or with a different meal type (see
+     * {@link #validateAlternativeGroup(UUID, UUID, MealType, UUID)}).
      *
      * @param sectionId the UUID of the section to add the row to
      * @param req       the create request
@@ -109,6 +113,7 @@ public class MealPlanSectionWriteService {
                 .orElseThrow(() -> new NoSuchElementException("Meal plan section not found: " + sectionId));
         final FoodEntity food = foodRepository.findById(req.foodId())
                 .orElseThrow(() -> new NoSuchElementException("Food not found: " + req.foodId()));
+        validateAlternativeGroup(req.alternativeGroupId(), section.getId(), req.mealType(), null);
 
         final MealPlanRowEntity saved = buildAndSaveRow(section.getId(), req, food, nextSortOrder(sectionId));
         return mealPlanMapper.toRowDTO(saved);
@@ -139,6 +144,7 @@ public class MealPlanSectionWriteService {
             if (food == null) {
                 throw new NoSuchElementException("Food not found: " + req.foodId());
             }
+            validateAlternativeGroup(req.alternativeGroupId(), section.getId(), req.mealType(), null);
             final MealPlanRowEntity saved = buildAndSaveRow(section.getId(), req, food, nextSortOrder);
             created.add(mealPlanMapper.toRowDTO(saved));
             nextSortOrder++;
@@ -150,7 +156,12 @@ public class MealPlanSectionWriteService {
      * Updates an existing meal-plan row's meal type, referenced food and/or quantity. {@code foodId}
      * and {@code quantityG} are always required and macros are re-snapshotted from the referenced
      * food's per-100g values on every update; {@code mealType} is only applied when non-null.
+     * {@code alternativeGroupId} has no "leave unchanged" sentinel: whatever value is sent —
+     * including an explicit {@code null} — always becomes the row's new group.
      * Throws {@link NoSuchElementException} if no row or no food with the given ids exists.
+     * Throws {@link IllegalArgumentException} if a non-null {@code alternativeGroupId} is already
+     * used by a row (other than this one) in a different section or with a different meal type (see
+     * {@link #validateAlternativeGroup(UUID, UUID, MealType, UUID)}).
      *
      * @param id  the UUID of the row to update
      * @param req the update request
@@ -162,11 +173,14 @@ public class MealPlanSectionWriteService {
                 .orElseThrow(() -> new NoSuchElementException("Meal plan row not found: " + id));
         final FoodEntity food = foodRepository.findById(req.foodId())
                 .orElseThrow(() -> new NoSuchElementException("Food not found: " + req.foodId()));
+        final MealType effectiveMealType = req.mealType() != null ? req.mealType() : row.getMealType();
+        validateAlternativeGroup(req.alternativeGroupId(), row.getMealPlanSectionId(), effectiveMealType, row.getId());
 
         if (req.mealType() != null) {
             row.setMealType(req.mealType());
         }
         applyFoodSnapshot(row, food, req.quantityG());
+        row.setAlternativeGroupId(req.alternativeGroupId());
 
         final MealPlanRowEntity saved = mealPlanRowRepository.save(row);
         return mealPlanMapper.toRowDTO(saved);
@@ -216,6 +230,7 @@ public class MealPlanSectionWriteService {
         row.setMealType(req.mealType());
         applyFoodSnapshot(row, food, req.quantityG());
         row.setSortOrder(sortOrder);
+        row.setAlternativeGroupId(req.alternativeGroupId());
 
         return mealPlanRowRepository.save(row);
     }
@@ -236,6 +251,40 @@ public class MealPlanSectionWriteService {
         row.setProteinG(snapshot(food.getProteinPer100(), quantityG));
         row.setCarbsG(snapshot(food.getCarbsPer100(), quantityG));
         row.setFatG(snapshot(food.getFatPer100(), quantityG));
+    }
+
+    /**
+     * Validates that a non-null {@code alternativeGroupId} is consistent with any rows already
+     * sharing that group: every existing member must belong to the same {@code mealPlanSectionId}
+     * and have the same {@code mealType} as the row being created or updated. A group id shared by
+     * zero existing rows is trivially valid (it becomes the first member of the group). Does nothing
+     * if {@code alternativeGroupId} is {@code null} (the row is standalone).
+     *
+     * @param alternativeGroupId the alternative-group id to validate, or {@code null}
+     * @param mealPlanSectionId  the section the row being created/updated belongs to
+     * @param mealType           the meal type the row being created/updated will have
+     * @param excludeRowId       the id of the row being updated (excluded from the existing-members
+     *                           check so a row's own prior membership never conflicts with itself), or
+     *                           {@code null} when creating a brand-new row
+     * @throws IllegalArgumentException if an existing member of the group belongs to a different
+     *                                   section or has a different meal type
+     */
+    private void validateAlternativeGroup(UUID alternativeGroupId, UUID mealPlanSectionId, MealType mealType, UUID excludeRowId) {
+        if (alternativeGroupId == null) {
+            return;
+        }
+        final List<MealPlanRowEntity> existingMembers = mealPlanRowRepository.findAllByAlternativeGroupId(alternativeGroupId);
+        for (final MealPlanRowEntity existing : existingMembers) {
+            if (existing.getId().equals(excludeRowId)) {
+                continue;
+            }
+            final boolean sameSection = existing.getMealPlanSectionId().equals(mealPlanSectionId);
+            final boolean sameMealType = existing.getMealType() == mealType;
+            if (!sameSection || !sameMealType) {
+                throw new IllegalArgumentException("alternativeGroupId " + alternativeGroupId
+                        + " is already used by a row in a different section or with a different meal type");
+            }
+        }
     }
 
     /**

@@ -241,6 +241,28 @@ public class MealPlanRequestValidationTest {
         assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("quantityG")));
     }
 
+    @Test
+    @DisplayName("CreateMealPlanRowRequest with a non-null alternativeGroupId yields zero violations")
+    void createMealPlanRowRequest_withAlternativeGroupId_noViolations() {
+        final CreateMealPlanRowRequest req = new CreateMealPlanRowRequest(
+                MealType.SNACK, UUID.randomUUID(), new BigDecimal("90.00"), UUID.randomUUID());
+
+        final Set<ConstraintViolation<CreateMealPlanRowRequest>> violations = validator.validate(req);
+
+        assertTrue(violations.isEmpty(), "Expected zero violations for a valid request with an alternativeGroupId");
+    }
+
+    @Test
+    @DisplayName("CreateMealPlanRowRequest with a null (omitted) alternativeGroupId yields zero violations")
+    void createMealPlanRowRequest_nullAlternativeGroupId_noViolations() {
+        final CreateMealPlanRowRequest req =
+                new CreateMealPlanRowRequest(MealType.BREAKFAST, UUID.randomUUID(), new BigDecimal("90.00"));
+
+        final Set<ConstraintViolation<CreateMealPlanRowRequest>> violations = validator.validate(req);
+
+        assertTrue(violations.isEmpty(), "Expected zero violations when alternativeGroupId is omitted (standalone row)");
+    }
+
     // -----------------------------------------------------------------------
     // CreateMealPlanRowsRequest
     // -----------------------------------------------------------------------
@@ -342,5 +364,27 @@ public class MealPlanRequestValidationTest {
 
         assertFalse(violations.isEmpty(), "Expected a violation for non-positive quantityG");
         assertTrue(violations.stream().anyMatch(v -> v.getPropertyPath().toString().equals("quantityG")));
+    }
+
+    @Test
+    @DisplayName("UpdateMealPlanRowRequest with a non-null alternativeGroupId yields zero violations")
+    void updateMealPlanRowRequest_withAlternativeGroupId_noViolations() {
+        final UpdateMealPlanRowRequest req = new UpdateMealPlanRowRequest(
+                MealType.SNACK, UUID.randomUUID(), new BigDecimal("90.00"), UUID.randomUUID());
+
+        final Set<ConstraintViolation<UpdateMealPlanRowRequest>> violations = validator.validate(req);
+
+        assertTrue(violations.isEmpty(), "Expected zero violations for a valid request with an alternativeGroupId");
+    }
+
+    @Test
+    @DisplayName("UpdateMealPlanRowRequest with a null alternativeGroupId yields zero violations (clears the group)")
+    void updateMealPlanRowRequest_nullAlternativeGroupId_noViolations() {
+        final UpdateMealPlanRowRequest req =
+                new UpdateMealPlanRowRequest(MealType.LUNCH, UUID.randomUUID(), new BigDecimal("90.00"));
+
+        final Set<ConstraintViolation<UpdateMealPlanRowRequest>> violations = validator.validate(req);
+
+        assertTrue(violations.isEmpty(), "Expected zero violations when alternativeGroupId is omitted/null");
     }
 }

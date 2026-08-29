@@ -217,6 +217,35 @@ class MealPlanRepositoryTest {
     }
 
     @Test
+    void findAllByAlternativeGroupIdReturnsOnlyRowsSharingThatGroup() {
+        final MealPlanSectionEntity section = saveSection("Wochenende", "note", 0);
+        final UUID alternativeGroupId = UUID.randomUUID();
+
+        final MealPlanRowEntity kaesekuchen = saveRow(section.getId(), MealType.SNACK, BigDecimal.valueOf(80), 0);
+        kaesekuchen.setAlternativeGroupId(alternativeGroupId);
+        mealPlanRowRepository.save(kaesekuchen);
+
+        final MealPlanRowEntity brownie = saveRow(section.getId(), MealType.SNACK, BigDecimal.valueOf(60), 1);
+        brownie.setAlternativeGroupId(alternativeGroupId);
+        mealPlanRowRepository.save(brownie);
+
+        // Ungrouped row: must not show up in the alternative-group lookup.
+        saveRow(section.getId(), MealType.BREAKFAST, BigDecimal.valueOf(90), 2);
+
+        final List<MealPlanRowEntity> group = mealPlanRowRepository.findAllByAlternativeGroupId(alternativeGroupId);
+
+        assertThat(group).extracting(MealPlanRowEntity::getId)
+                .containsExactlyInAnyOrder(kaesekuchen.getId(), brownie.getId());
+    }
+
+    @Test
+    void findAllByAlternativeGroupIdReturnsEmptyForAnUnusedGroupId() {
+        final List<MealPlanRowEntity> group = mealPlanRowRepository.findAllByAlternativeGroupId(UUID.randomUUID());
+
+        assertThat(group).isEmpty();
+    }
+
+    @Test
     void deletingMealPlanCascadesToSourcesSectionsAndRows() {
         saveSource("Magerquark", "https://example.org/magerquark", 0);
         final MealPlanSectionEntity section = saveSection("Section", "note", 0);

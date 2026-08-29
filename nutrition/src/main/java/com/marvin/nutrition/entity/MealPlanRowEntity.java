@@ -58,6 +58,9 @@ public class MealPlanRowEntity extends BasicEntity {
     @Column(name = "sort_order", nullable = false)
     private Integer sortOrder;
 
+    @Column(name = "alternative_group_id")
+    private UUID alternativeGroupId;
+
     @Override
     public boolean equals(Object o) {
         if (o == null || getClass() != o.getClass()) {
