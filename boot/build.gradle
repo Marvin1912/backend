@@ -8,7 +8,6 @@ dependencies {
     implementation project(':influxdb')
     implementation project(':camt')
     implementation project(':common')
-    implementation project(':exporter')
     implementation project(':uploader')
     implementation project(':plants')
     implementation project(':image-server')
