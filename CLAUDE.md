@@ -45,20 +45,17 @@ This is a **multi-module Gradle monolith** using Spring Boot with an orthogonal 
 
 - **boot** - Application entry point (`com.marvin.Application`). Aggregates all 16 modules, enables scheduling. Only module that produces a bootJar.
 - **common** - Shared utilities (JacksonMapper, DTOs, NullSafeUtil). No dependencies of its own.
-- **entities** - Orphaned. Directory has no sources and is not in `settings.gradle`. JPA entities now live within their owning modules; the shared `BasicEntity` (providing `creationDate`/`lastModified`) lives in `costs` (`com.marvin.costs.entity.BasicEntity`).
-- **api** - REST API facade and orchestration layer. Depends on costs, backup, exporter, uploader, camt.
+- **api** - REST API facade and orchestration layer. Depends on costs, backup, uploader, camt.
 
 ### Domain Modules
 
-- **costs** - Financial cost management (daily/special costs, accounting imports). Owns Flyway migrations, depends on entities, influxdb, consul, camt.
-- **backup** - Data backup operations tracking and run history. Uses Hibernate Envers for audit trail. Depends on entities, uploader.
+- **costs** - Financial cost management (daily/special costs, accounting imports). Owns Flyway migrations, depends on influxdb, camt.
+- **backup** - Owns backup operations tracking and run history (exposed via `BackupRunController` in `api`). Uses Hibernate Envers for audit trail. Depends on uploader.
 - **camt** - CAMT (ISO 20022) XML bank message parsing. Uses xjc plugin for schema-to-Java generation.
 
 ### Infrastructure Modules
 
 - **influxdb** - InfluxDB time-series client wrapper for metrics storage.
-- **consul** - HashiCorp Consul KV client for distributed config/secrets.
-- **exporter** - Pass-through module re-exporting costs, influxdb, vocabulary dependencies.
 - **uploader** - Google Drive file upload/download and ZIP compression.
 
 ### Feature Modules
@@ -75,7 +72,7 @@ Self-contained vertical slices, each with own Flyway migrations in separate sche
 
 ### Legacy (not in settings.gradle)
 
-The `database/` and `importer/` directories exist but are not included as Gradle modules. They are orphaned and not wired into the boot application.
+The `importer/` directory exists but is not included as a Gradle module. It is orphaned and not wired into the boot application.
 
 ### Key Technical Choices
 

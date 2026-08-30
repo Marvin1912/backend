@@ -4,7 +4,7 @@ This document provides comprehensive documentation for all APIs in the Adapter A
 
 ## Overview
 
-The application exposes REST APIs for importing data, exporting data, managing files, and tracking export runs. APIs are built with Spring WebFlux for reactive programming.
+The application exposes REST APIs for importing data, managing files, and tracking backup runs. APIs are built with Spring WebFlux for reactive programming.
 
 Swagger UI is available at: `http://localhost:9001/swagger-ui.html` (assuming default port 9001)
 
@@ -14,7 +14,7 @@ OpenAPI spec: `http://localhost:9001/v3/api-docs`
 
 ### 1. AdapterController
 
-Handles import and export triggers for various data types.
+Handles import triggers for cost data.
 
 #### POST /import/costs
 Triggers cost data import.
@@ -29,62 +29,6 @@ Triggers cost data import.
 - Body: None (Void)
 
 **Description:** Initiates the import process for cost data from configured sources.
-
-#### POST /import/sensordata
-Triggers sensor data import.
-
-**Request:**
-- Method: POST
-- Content-Type: N/A
-- Body: None
-
-**Response:**
-- Status: 200 OK
-- Body: None (Void)
-
-**Description:** Initiates the import process for sensor data.
-
-#### POST /import/vocabulary
-Triggers vocabulary data import.
-
-**Request:**
-- Method: POST
-- Content-Type: N/A
-- Body: None
-
-**Response:**
-- Status: 200 OK
-- Body: None (Void)
-
-**Description:** Initiates the import process for vocabulary data.
-
-#### POST /export/costs
-Triggers cost data export.
-
-**Request:**
-- Method: POST
-- Content-Type: N/A
-- Body: None
-
-**Response:**
-- Status: 200 OK
-- Body: None (Void)
-
-**Description:** Initiates the export process for cost data, tracked via ExportTrackingService.
-
-#### POST /export/vocabulary
-Triggers vocabulary data export.
-
-**Request:**
-- Method: POST
-- Content-Type: N/A
-- Body: None
-
-**Response:**
-- Status: 200 OK
-- Body: None (Void)
-
-**Description:** Initiates the export process for vocabulary data, tracked via ExportTrackingService.
 
 ### 2. CamtController
 
@@ -136,56 +80,52 @@ Parses and extracts booking entries from uploaded CAMT zip files.
 
 **Description:** Uploads a zip file containing CAMT.052.001.08 XML files, parses them, and returns categorized booking entries grouped by month.
 
-### 3. ExportTrackingController
+### 3. BackupRunController
 
-Manages and retrieves information about export runs.
+Manages and retrieves information about backup upload runs.
 
-#### GET /exports
-Retrieves a paginated list of export runs with optional filtering.
+#### GET /backups
+Retrieves a paginated list of backup runs with optional filtering.
 
 **Request:**
 - Method: GET
 - Query Parameters:
   - `from` (LocalDateTime, ISO format): Start date filter
   - `to` (LocalDateTime, ISO format): End date filter
-  - `type` (String): Exporter type filter
-  - `status` (String): Status filter
+  - `status` (String): Status filter (SUCCESS, FAILED, IN_PROGRESS)
   - `limit` (int, default 20): Page size
   - `offset` (int, default 0): Page offset
 
 **Response:**
 - Status: 200 OK
 - Content-Type: application/json
-- Body: Page<ExportRunDTO>
+- Body: Page<BackupRunDTO>
 
-**ExportRunDTO Schema:**
+**BackupRunDTO Schema:**
 ```json
 {
   "id": "long",
-  "exporterType": "string",
-  "exportName": "string",
+  "fileName": "string",
   "status": "string",
   "startedAt": "LocalDateTime",
   "finishedAt": "LocalDateTime",
   "durationMs": "long",
-  "exportedFiles": ["string"],
   "uploadSuccess": "boolean",
-  "errorMessage": "string",
-  "requestParams": "string"
+  "errorMessage": "string"
 }
 ```
 
-#### GET /exports/{id}
-Retrieves details of a specific export run.
+#### GET /backups/{id}
+Retrieves details of a specific backup run.
 
 **Request:**
 - Method: GET
-- Path Parameter: `id` (Long) - Export run ID
+- Path Parameter: `id` (Long) - Backup run ID
 
 **Response:**
 - Status: 200 OK / 404 Not Found
 - Content-Type: application/json
-- Body: ExportRunDTO
+- Body: BackupRunDTO
 
 ### 4. FileListController
 
@@ -243,71 +183,6 @@ Deletes a specific file from Google Drive.
 }
 ```
 
-### 5. InfluxExportController
-
-Handles export of InfluxDB bucket data.
-
-#### GET /export/influxdb/buckets
-Retrieves a list of available InfluxDB buckets for export.
-
-**Request:**
-- Method: GET
-- Content-Type: N/A
-
-**Response:**
-- Status: 200 OK / 500 Internal Server Error
-- Content-Type: application/json
-- Body: InfluxBucketResponse
-
-**InfluxBucketResponse Schema:**
-```json
-{
-  "success": true,
-  "buckets": [
-    {
-      "name": "string",
-      "bucketName": "string",
-      "description": "string"
-    }
-  ],
-  "timestamp": "Instant"
-}
-```
-
-#### POST /export/influxdb
-Exports data from selected InfluxDB buckets with optional time range filtering.
-
-**Request:**
-- Method: POST
-- Content-Type: application/json
-- Body: InfluxExportRequest
-
-**InfluxExportRequest Schema:**
-```json
-{
-  "bucket": "string",
-  "startTime": "string (ISO-8601)",
-  "endTime": "string (ISO-8601)"
-}
-```
-
-**Response:**
-- Status: 200 OK / 400 Bad Request / 500 Internal Server Error
-- Content-Type: application/json
-- Body: InfluxExportResponse
-
-**InfluxExportResponse Schema:**
-```json
-{
-  "success": true,
-  "message": "string",
-  "exportedFiles": ["string"],
-  "timestamp": "Instant"
-}
-```
-
-**Description:** Exports InfluxDB data asynchronously. Time range uses ISO-8601 format (e.g., 2024-01-15T10:30:00). Defaults to 5 years ago if startTime not provided, current time if endTime not provided.
-
 ## Error Handling
 
 - 400 Bad Request: Invalid parameters or malformed requests
@@ -324,7 +199,7 @@ The application uses Spring Security configuration (see SecurityConfig.java). Sp
 
 APIs are configured via application.yaml with environment variables for database connections, file paths, and external service credentials.
 
-### 6. ClimateController
+### 5. ClimateController
 
 Exposes current climate sensor readings sourced from InfluxDB.
 
