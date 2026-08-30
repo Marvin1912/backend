@@ -4,7 +4,6 @@ version = '0.0.1-SNAPSHOT'
 dependencies {
     implementation project(':costs')
     implementation project(':backup')
-    implementation project(':exporter')
     implementation project(':uploader')
     implementation project(':camt')
 
