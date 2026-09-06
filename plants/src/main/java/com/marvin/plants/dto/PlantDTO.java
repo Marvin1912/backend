@@ -45,7 +45,43 @@ public record PlantDTO(
         LocalDate nextFertilizedDate,
 
         @Schema(description = "InfluxDB entity_id of the soil moisture sensor for this plant", example = "feder_calathea_soil_moisture")
-        String soilMoistureEntityId
+        String soilMoistureEntityId,
+
+        @Schema(description = "Soil moisture percentage below which the plant is considered to need water", example = "20.0")
+        Double soilMoistureThreshold,
+
+        @Schema(description = "Whether the soil moisture check is active for this plant; treated as enabled when null",
+                example = "true")
+        Boolean soilMoistureCheckEnabled
 ) {
 
+    /**
+     * Preserves the pre-moisture-threshold constructor signature for existing callers;
+     * omitting {@code soilMoistureThreshold}/{@code soilMoistureCheckEnabled} falls back to the
+     * schedule-only watering logic, consistent with a {@code null} threshold or check-enabled
+     * value on the canonical constructor.
+     *
+     * @param id                   unique identifier of the plant
+     * @param name                 common name of the plant
+     * @param species              scientific species name
+     * @param description          detailed description of the plant
+     * @param careInstructions     specific care instructions for this plant
+     * @param location             physical location of the plant in the house
+     * @param wateringFrequency    watering frequency in days
+     * @param lastWateredDate      date when the plant was last watered
+     * @param nextWateredDate      calculated date for the next watering
+     * @param image                UUID of the plant's image
+     * @param fertilizingFrequency fertilizing frequency in days
+     * @param lastFertilizedDate   date when the plant was last fertilized
+     * @param nextFertilizedDate   calculated date for the next fertilizing
+     * @param soilMoistureEntityId InfluxDB entity_id of the soil moisture sensor for this plant
+     */
+    public PlantDTO(long id, String name, String species, String description, String careInstructions,
+            PlantLocation location, Integer wateringFrequency, LocalDate lastWateredDate, LocalDate nextWateredDate,
+            String image, Integer fertilizingFrequency, LocalDate lastFertilizedDate, LocalDate nextFertilizedDate,
+            String soilMoistureEntityId) {
+        this(id, name, species, description, careInstructions, location, wateringFrequency, lastWateredDate,
+                nextWateredDate, image, fertilizingFrequency, lastFertilizedDate, nextFertilizedDate,
+                soilMoistureEntityId, null, null);
+    }
 }

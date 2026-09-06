@@ -66,6 +66,12 @@ public class Plant {
     @Column(name = "soil_moisture_entity_id")
     private String soilMoistureEntityId;
 
+    @Column(name = "soil_moisture_threshold")
+    private Double soilMoistureThreshold;
+
+    @Column(name = "soil_moisture_check_enabled")
+    private Boolean soilMoistureCheckEnabled;
+
     @Override
     public boolean equals(Object o) {
         if (o == null || getClass() != o.getClass()) {

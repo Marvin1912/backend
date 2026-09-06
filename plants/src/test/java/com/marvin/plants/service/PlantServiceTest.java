@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -13,9 +14,13 @@ import static org.mockito.Mockito.when;
 
 import com.marvin.plants.dto.PlantDTO;
 import com.marvin.plants.dto.PlantLocation;
+import com.marvin.plants.dto.PlantMoistureReading;
 import com.marvin.plants.entity.Plant;
 import com.marvin.plants.mapper.PlantMapper;
 import com.marvin.plants.repository.PlantRepository;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -24,7 +29,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import reactor.core.publisher.Mono;
 
 @ExtendWith(MockitoExtension.class)
 class PlantServiceTest {
@@ -34,6 +41,10 @@ class PlantServiceTest {
     private PlantRepository plantRepository;
     @Mock
     private PlantMapper plantMapper;
+    @Mock
+    private PlantMoistureService plantMoistureService;
+    @Spy
+    private MeterRegistry meterRegistry = new SimpleMeterRegistry();
     @InjectMocks
     private PlantService plantService;
     private Plant testPlant;
@@ -543,5 +554,190 @@ class PlantServiceTest {
         assertEquals(2L, result);
         verify(plantMapper).toPlant(plantDto, null);
         verify(plantRepository).save(newPlant);
+    }
+
+    @Test
+    void sendWateringNotification_SetsGaugeToOne_WhenScheduleDueAndNoMoistureConfigured() {
+        // Given
+        testPlant.setNextWateredDate(LocalDate.now().minusDays(1));
+        when(plantRepository.findAll()).thenReturn(List.of(testPlant));
+        plantService.initGauges();
+
+        // When
+        plantService.sendWateringNotification();
+
+        // Then
+        assertEquals(1.0, waterGaugeValue("Test Plant"));
+    }
+
+    @Test
+    void sendWateringNotification_SetsGaugeToZero_WhenScheduleNotDueAndNoMoistureConfigured() {
+        // Given
+        testPlant.setNextWateredDate(LocalDate.now().plusDays(4));
+        when(plantRepository.findAll()).thenReturn(List.of(testPlant));
+        plantService.initGauges();
+
+        // When
+        plantService.sendWateringNotification();
+
+        // Then
+        assertEquals(0.0, waterGaugeValue("Test Plant"));
+    }
+
+    @Test
+    void sendWateringNotification_SetsGaugeToOne_WhenMoistureBelowThreshold_EvenIfScheduleNotDue() {
+        // Given
+        testPlant.setNextWateredDate(LocalDate.now().plusDays(4));
+        testPlant.setSoilMoistureEntityId("test_plant_soil_moisture");
+        testPlant.setSoilMoistureThreshold(30.0);
+        testPlant.setSoilMoistureCheckEnabled(true);
+        when(plantRepository.findAll()).thenReturn(List.of(testPlant));
+        when(plantMoistureService.getCurrentMoisture("Test Plant", "test_plant_soil_moisture"))
+                .thenReturn(Mono.just(new PlantMoistureReading("Test Plant", 15.0, Instant.now())));
+        plantService.initGauges();
+
+        // When
+        plantService.sendWateringNotification();
+
+        // Then
+        assertEquals(1.0, waterGaugeValue("Test Plant"));
+    }
+
+    @Test
+    void sendWateringNotification_SetsGaugeToZero_WhenMoistureAboveThresholdAndScheduleNotDue() {
+        // Given
+        testPlant.setNextWateredDate(LocalDate.now().plusDays(4));
+        testPlant.setSoilMoistureEntityId("test_plant_soil_moisture");
+        testPlant.setSoilMoistureThreshold(30.0);
+        testPlant.setSoilMoistureCheckEnabled(true);
+        when(plantRepository.findAll()).thenReturn(List.of(testPlant));
+        when(plantMoistureService.getCurrentMoisture("Test Plant", "test_plant_soil_moisture"))
+                .thenReturn(Mono.just(new PlantMoistureReading("Test Plant", 45.0, Instant.now())));
+        plantService.initGauges();
+
+        // When
+        plantService.sendWateringNotification();
+
+        // Then
+        assertEquals(0.0, waterGaugeValue("Test Plant"));
+    }
+
+    @Test
+    void sendWateringNotification_FallsBackToSchedule_WhenMoistureCheckDisabled() {
+        // Given
+        testPlant.setNextWateredDate(LocalDate.now().plusDays(4));
+        testPlant.setSoilMoistureEntityId("test_plant_soil_moisture");
+        testPlant.setSoilMoistureThreshold(30.0);
+        testPlant.setSoilMoistureCheckEnabled(false);
+        when(plantRepository.findAll()).thenReturn(List.of(testPlant));
+        plantService.initGauges();
+
+        // When
+        plantService.sendWateringNotification();
+
+        // Then
+        assertEquals(0.0, waterGaugeValue("Test Plant"));
+        verify(plantMoistureService, never()).getCurrentMoisture(anyString(), anyString());
+    }
+
+    @Test
+    void sendWateringNotification_FallsBackToSchedule_WhenNoThresholdConfigured() {
+        // Given
+        testPlant.setNextWateredDate(LocalDate.now().plusDays(4));
+        testPlant.setSoilMoistureEntityId("test_plant_soil_moisture");
+        testPlant.setSoilMoistureThreshold(null);
+        testPlant.setSoilMoistureCheckEnabled(true);
+        when(plantRepository.findAll()).thenReturn(List.of(testPlant));
+        plantService.initGauges();
+
+        // When
+        plantService.sendWateringNotification();
+
+        // Then
+        assertEquals(0.0, waterGaugeValue("Test Plant"));
+        verify(plantMoistureService, never()).getCurrentMoisture(anyString(), anyString());
+    }
+
+    @Test
+    void sendWateringNotification_FallsBackToSchedule_WhenNoSensorConfigured() {
+        // Given
+        testPlant.setNextWateredDate(LocalDate.now().plusDays(4));
+        testPlant.setSoilMoistureEntityId(null);
+        testPlant.setSoilMoistureThreshold(30.0);
+        testPlant.setSoilMoistureCheckEnabled(true);
+        when(plantRepository.findAll()).thenReturn(List.of(testPlant));
+        plantService.initGauges();
+
+        // When
+        plantService.sendWateringNotification();
+
+        // Then
+        assertEquals(0.0, waterGaugeValue("Test Plant"));
+        verify(plantMoistureService, never()).getCurrentMoisture(anyString(), anyString());
+    }
+
+    @Test
+    void sendWateringNotification_FallsBackToSchedule_WhenMoistureDataUnavailable() {
+        // Given
+        testPlant.setNextWateredDate(LocalDate.now().plusDays(4));
+        testPlant.setSoilMoistureEntityId("test_plant_soil_moisture");
+        testPlant.setSoilMoistureThreshold(30.0);
+        testPlant.setSoilMoistureCheckEnabled(true);
+        when(plantRepository.findAll()).thenReturn(List.of(testPlant));
+        when(plantMoistureService.getCurrentMoisture("Test Plant", "test_plant_soil_moisture"))
+                .thenReturn(Mono.empty());
+        plantService.initGauges();
+
+        // When
+        plantService.sendWateringNotification();
+
+        // Then
+        assertEquals(0.0, waterGaugeValue("Test Plant"));
+    }
+
+    @Test
+    void updateMoistureThreshold_ShouldSetThresholdAndEnabledFlag_WhenPlantExists() {
+        // Given
+        when(plantRepository.findById(1L)).thenReturn(Optional.of(testPlant));
+        when(plantMapper.toPlantDTO(testPlant)).thenReturn(testPlantDTO);
+
+        // When
+        final PlantDTO result = plantService.updateMoistureThreshold(1L, 25.0, true);
+
+        // Then
+        assertNotNull(result);
+        assertEquals(25.0, testPlant.getSoilMoistureThreshold());
+        assertEquals(Boolean.TRUE, testPlant.getSoilMoistureCheckEnabled());
+        verify(plantRepository).findById(1L);
+    }
+
+    @Test
+    void updateMoistureThreshold_ShouldClearThreshold_WhenNullPassed() {
+        // Given
+        testPlant.setSoilMoistureThreshold(30.0);
+        testPlant.setSoilMoistureCheckEnabled(true);
+        when(plantRepository.findById(1L)).thenReturn(Optional.of(testPlant));
+        when(plantMapper.toPlantDTO(testPlant)).thenReturn(testPlantDTO);
+
+        // When
+        plantService.updateMoistureThreshold(1L, null, false);
+
+        // Then
+        assertNull(testPlant.getSoilMoistureThreshold());
+        assertEquals(Boolean.FALSE, testPlant.getSoilMoistureCheckEnabled());
+    }
+
+    @Test
+    void updateMoistureThreshold_ShouldThrowException_WhenPlantNotExists() {
+        // Given
+        when(plantRepository.findById(999L)).thenReturn(Optional.empty());
+
+        // When & Then
+        assertThrows(RuntimeException.class, () -> plantService.updateMoistureThreshold(999L, 25.0, true));
+        verify(plantRepository).findById(999L);
+    }
+
+    private double waterGaugeValue(String plantName) {
+        return meterRegistry.get("water_plant").tag("plant", plantName).gauge().value();
     }
 }

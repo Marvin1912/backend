@@ -869,4 +869,74 @@ class PlantControllerTest {
 
         verify(plantMoistureService).listAvailableSensorEntityIds();
     }
+
+    @Test
+    @DisplayName("Should update moisture threshold successfully")
+    void updateMoistureThreshold_ShouldReturnUpdatedPlant_WhenValidInput() {
+        // Given
+        final PlantDTO updatedDTO = new PlantDTO(
+                1L,
+                "Test Plant",
+                "Test Species",
+                "Test Description",
+                "Test Care Instructions",
+                PlantLocation.LIVING_ROOM,
+                7,
+                LocalDate.now().minusDays(3),
+                LocalDate.now().plusDays(4),
+                testImageUuid.toString(),
+                null,
+                null,
+                null,
+                "feder_calathea_soil_moisture",
+                25.0,
+                true
+        );
+
+        when(plantService.updateMoistureThreshold(1L, 25.0, true)).thenReturn(updatedDTO);
+
+        // When
+        final Mono<ResponseEntity<PlantDTO>> result = plantController.updateMoistureThreshold(1L, 25.0, true);
+
+        // Then
+        StepVerifier.create(result)
+                .assertNext(response -> {
+                    assertEquals(200, response.getStatusCode().value());
+                    assertEquals(updatedDTO, response.getBody());
+                })
+                .verifyComplete();
+
+        verify(plantService).updateMoistureThreshold(1L, 25.0, true);
+    }
+
+    @Test
+    @DisplayName("Should clear moisture threshold when null passed")
+    void updateMoistureThreshold_ShouldClearThreshold_WhenNullPassed() {
+        // Given
+        when(plantService.updateMoistureThreshold(1L, null, false)).thenReturn(testPlantDTO);
+
+        // When
+        final Mono<ResponseEntity<PlantDTO>> result = plantController.updateMoistureThreshold(1L, null, false);
+
+        // Then
+        StepVerifier.create(result)
+                .assertNext(response -> assertEquals(200, response.getStatusCode().value()))
+                .verifyComplete();
+
+        verify(plantService).updateMoistureThreshold(1L, null, false);
+    }
+
+    @Test
+    @DisplayName("Should handle update moisture threshold when plant does not exist")
+    void updateMoistureThreshold_ShouldHandleServiceException_WhenPlantNotFound() {
+        // Given
+        when(plantService.updateMoistureThreshold(999L, 25.0, true))
+                .thenThrow(new RuntimeException("Plant not found"));
+
+        // When & Then
+        assertThrows(RuntimeException.class, () ->
+                plantController.updateMoistureThreshold(999L, 25.0, true).block());
+
+        verify(plantService).updateMoistureThreshold(999L, 25.0, true);
+    }
 }
