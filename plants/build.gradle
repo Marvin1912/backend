@@ -5,6 +5,7 @@ dependencies {
     implementation project(':common')
     implementation project(':costs')
     implementation project(':image-server')
+    implementation project(':influxdb')
 
     implementation 'io.micrometer:micrometer-registry-prometheus'
     implementation 'org.mapstruct:mapstruct:1.6.3'

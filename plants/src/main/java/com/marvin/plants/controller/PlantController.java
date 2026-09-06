@@ -2,6 +2,8 @@ package com.marvin.plants.controller;
 
 import com.marvin.image.service.ImageService;
 import com.marvin.plants.dto.PlantDTO;
+import com.marvin.plants.dto.PlantMoistureReading;
+import com.marvin.plants.service.PlantMoistureService;
 import com.marvin.plants.service.PlantService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -49,10 +51,12 @@ public class PlantController {
 
     private final PlantService plantService;
     private final ImageService imageService;
+    private final PlantMoistureService plantMoistureService;
 
-    public PlantController(PlantService plantService, ImageService imageService) {
+    public PlantController(PlantService plantService, ImageService imageService, PlantMoistureService plantMoistureService) {
         this.plantService = plantService;
         this.imageService = imageService;
+        this.plantMoistureService = plantMoistureService;
     }
 
     /**
@@ -289,6 +293,53 @@ public class PlantController {
             @PathVariable @Parameter(description = "ID of the plant to delete") long id) {
         plantService.deletePlant(id);
         return Mono.just(ResponseEntity.noContent().build());
+    }
+
+    /**
+     * Retrieves the current soil moisture reading for a plant from InfluxDB. Returns an empty
+     * Mono (resulting in a 404 response) when the plant does not exist, when it has no soil
+     * moisture sensor configured, or when InfluxDB has no data for it.
+     *
+     * @param id ID of the plant to retrieve the moisture reading for
+     * @return Mono containing the current moisture reading, or empty if unavailable
+     */
+    @GetMapping(path = "/{id}/moisture")
+    @Operation(
+            summary = "Get current soil moisture for a plant",
+            description = "Retrieves the most recent soil moisture reading for a plant from InfluxDB, "
+                    + "based on the plant's configured soil moisture sensor entity_id.",
+            responses = {
+                @ApiResponse(
+                        responseCode = "200",
+                        description = "Moisture reading retrieved successfully",
+                        content = @Content(schema = @Schema(implementation = PlantMoistureReading.class))
+                ),
+                @ApiResponse(
+                        responseCode = "404",
+                        description = "Plant not found, no soil moisture sensor configured, or no data available"
+                )
+            }
+    )
+    public Mono<PlantMoistureReading> getPlantMoisture(
+            @PathVariable @Parameter(description = "ID of the plant to retrieve the moisture reading for") long id) {
+        return Mono.fromCallable(() -> plantService.getPlant(id))
+                .subscribeOn(Schedulers.boundedElastic())
+                .flatMap(this::fetchMoistureForPlant);
+    }
+
+    /**
+     * Fetches the current moisture reading for the given plant, provided it has a soil moisture
+     * sensor configured.
+     *
+     * @param plant the plant to fetch the moisture reading for
+     * @return Mono containing the current moisture reading, or empty if no sensor is configured
+     */
+    private Mono<PlantMoistureReading> fetchMoistureForPlant(PlantDTO plant) {
+        final String entityId = plant.soilMoistureEntityId();
+        if (entityId == null || entityId.isBlank()) {
+            return Mono.empty();
+        }
+        return plantMoistureService.getCurrentMoisture(plant.name(), entityId);
     }
 
     /**

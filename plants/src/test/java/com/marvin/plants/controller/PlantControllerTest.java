@@ -16,8 +16,11 @@ import static org.mockito.Mockito.when;
 import com.marvin.image.service.ImageService;
 import com.marvin.plants.dto.PlantDTO;
 import com.marvin.plants.dto.PlantLocation;
+import com.marvin.plants.dto.PlantMoistureReading;
+import com.marvin.plants.service.PlantMoistureService;
 import com.marvin.plants.service.PlantService;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -47,6 +50,8 @@ class PlantControllerTest {
     private PlantService plantService;
     @Mock
     private ImageService imageService;
+    @Mock
+    private PlantMoistureService plantMoistureService;
     @InjectMocks
     private PlantController plantController;
     private PlantDTO testPlantDTO;
@@ -66,6 +71,7 @@ class PlantControllerTest {
                 testImageUuid.toString(),
                 null,
                 null,
+                null,
                 null
         );
     }
@@ -82,6 +88,7 @@ class PlantControllerTest {
                 "New Care Instructions",
                 PlantLocation.BEDROOM,
                 5,
+                null,
                 null,
                 null,
                 null,
@@ -120,6 +127,7 @@ class PlantControllerTest {
                 "New Care Instructions",
                 PlantLocation.BEDROOM,
                 5,
+                null,
                 null,
                 null,
                 null,
@@ -174,6 +182,7 @@ class PlantControllerTest {
                 null,
                 null,
                 null,
+                null,
                 null
         );
 
@@ -211,6 +220,7 @@ class PlantControllerTest {
                 "New Care Instructions",
                 PlantLocation.BEDROOM,
                 5,
+                null,
                 null,
                 null,
                 null,
@@ -258,6 +268,7 @@ class PlantControllerTest {
                 "updated-image.jpg",
                 null,
                 null,
+                null,
                 null
         );
 
@@ -288,6 +299,7 @@ class PlantControllerTest {
                 "Care 2",
                 PlantLocation.KITCHEN,
                 10,
+                null,
                 null,
                 null,
                 null,
@@ -397,6 +409,7 @@ class PlantControllerTest {
                 testImageUuid.toString(),
                 null,
                 null,
+                null,
                 null
         );
 
@@ -434,6 +447,7 @@ class PlantControllerTest {
                 testImageUuid.toString(),
                 null,
                 null,
+                null,
                 null
         );
 
@@ -469,6 +483,7 @@ class PlantControllerTest {
                 futureDate,
                 futureDate.plusDays(7),
                 testImageUuid.toString(),
+                null,
                 null,
                 null,
                 null
@@ -524,6 +539,7 @@ class PlantControllerTest {
                 testImageUuid.toString(),
                 null,
                 null,
+                null,
                 null
         );
 
@@ -555,6 +571,7 @@ class PlantControllerTest {
                 "New Care Instructions",
                 PlantLocation.BEDROOM,
                 5,
+                null,
                 null,
                 null,
                 null,
@@ -606,6 +623,7 @@ class PlantControllerTest {
                     "Care " + i,
                     PlantLocation.values()[i % PlantLocation.values().length],
                     i % 30 + 1,
+                    null,
                     null,
                     null,
                     null,
@@ -707,5 +725,113 @@ class PlantControllerTest {
         StepVerifier.create(result)
                 .expectNextMatches(bytes -> bytes.length == 0)
                 .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should return current moisture when plant exists and has data")
+    void getPlantMoisture_ShouldReturnReading_WhenPlantHasEntityIdAndDataAvailable() {
+        // Given
+        final PlantDTO plantWithSensor = new PlantDTO(
+                1L,
+                "Test Plant",
+                "Test Species",
+                "Test Description",
+                "Test Care Instructions",
+                PlantLocation.LIVING_ROOM,
+                7,
+                LocalDate.now().minusDays(3),
+                LocalDate.now().plusDays(4),
+                testImageUuid.toString(),
+                null,
+                null,
+                null,
+                "feder_calathea_soil_moisture"
+        );
+        final PlantMoistureReading reading = new PlantMoistureReading(
+                "Test Plant", 42.5, Instant.parse("2026-05-16T10:00:00Z"));
+
+        when(plantService.getPlant(1L)).thenReturn(plantWithSensor);
+        when(plantMoistureService.getCurrentMoisture("Test Plant", "feder_calathea_soil_moisture"))
+                .thenReturn(Mono.just(reading));
+
+        // When
+        final Mono<PlantMoistureReading> result = plantController.getPlantMoisture(1L);
+
+        // Then
+        StepVerifier.create(result)
+                .expectNext(reading)
+                .verifyComplete();
+
+        verify(plantService).getPlant(1L);
+        verify(plantMoistureService).getCurrentMoisture("Test Plant", "feder_calathea_soil_moisture");
+    }
+
+    @Test
+    @DisplayName("Should return empty when plant does not exist")
+    void getPlantMoisture_ShouldReturnEmpty_WhenPlantNotFound() {
+        // Given
+        when(plantService.getPlant(999L)).thenReturn(null);
+
+        // When
+        final Mono<PlantMoistureReading> result = plantController.getPlantMoisture(999L);
+
+        // Then
+        StepVerifier.create(result)
+                .verifyComplete();
+
+        verify(plantService).getPlant(999L);
+        verify(plantMoistureService, never()).getCurrentMoisture(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("Should return empty when plant has no soil moisture entity id configured")
+    void getPlantMoisture_ShouldReturnEmpty_WhenNoEntityIdConfigured() {
+        // Given
+        when(plantService.getPlant(1L)).thenReturn(testPlantDTO);
+
+        // When
+        final Mono<PlantMoistureReading> result = plantController.getPlantMoisture(1L);
+
+        // Then
+        StepVerifier.create(result)
+                .verifyComplete();
+
+        verify(plantService).getPlant(1L);
+        verify(plantMoistureService, never()).getCurrentMoisture(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("Should return empty when InfluxDB has no moisture data for the plant")
+    void getPlantMoisture_ShouldReturnEmpty_WhenServiceReturnsEmpty() {
+        // Given
+        final PlantDTO plantWithSensor = new PlantDTO(
+                1L,
+                "Test Plant",
+                "Test Species",
+                "Test Description",
+                "Test Care Instructions",
+                PlantLocation.LIVING_ROOM,
+                7,
+                LocalDate.now().minusDays(3),
+                LocalDate.now().plusDays(4),
+                testImageUuid.toString(),
+                null,
+                null,
+                null,
+                "feder_calathea_soil_moisture"
+        );
+
+        when(plantService.getPlant(1L)).thenReturn(plantWithSensor);
+        when(plantMoistureService.getCurrentMoisture("Test Plant", "feder_calathea_soil_moisture"))
+                .thenReturn(Mono.empty());
+
+        // When
+        final Mono<PlantMoistureReading> result = plantController.getPlantMoisture(1L);
+
+        // Then
+        StepVerifier.create(result)
+                .verifyComplete();
+
+        verify(plantMoistureService).getCurrentMoisture("Test Plant", "feder_calathea_soil_moisture");
     }
 }

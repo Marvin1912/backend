@@ -63,6 +63,9 @@ public class Plant {
     @Column(name = "image")
     private String image;
 
+    @Column(name = "soil_moisture_entity_id")
+    private String soilMoistureEntityId;
+
     @Override
     public boolean equals(Object o) {
         if (o == null || getClass() != o.getClass()) {
