@@ -22,17 +22,20 @@ public class PlantService {
     private final PlantRepository plantRepository;
     private final PlantMapper plantMapper;
     private final MeterRegistry meterRegistry;
+    private final PlantMoistureService plantMoistureService;
     private final Map<Integer, AtomicInteger> wateringStates = new ConcurrentHashMap<>();
     private final Map<Integer, AtomicInteger> fertilizingStates = new ConcurrentHashMap<>();
 
     public PlantService(
             PlantRepository plantRepository,
             PlantMapper plantMapper,
-            MeterRegistry meterRegistry
+            MeterRegistry meterRegistry,
+            PlantMoistureService plantMoistureService
     ) {
         this.plantRepository = plantRepository;
         this.plantMapper = plantMapper;
         this.meterRegistry = meterRegistry;
+        this.plantMoistureService = plantMoistureService;
     }
 
     @PostConstruct
@@ -101,6 +104,23 @@ public class PlantService {
         return plantMapper.toPlantDTO(plant);
     }
 
+    /**
+     * Sets or clears a plant's soil moisture threshold and enables/disables the moisture check.
+     *
+     * @param id        ID of the plant to update
+     * @param threshold soil moisture percentage below which the plant needs water, or {@code null} to clear it
+     * @param enabled   whether the moisture check should be active for this plant
+     * @return the updated plant data
+     */
+    @Transactional
+    public PlantDTO updateMoistureThreshold(long id, Double threshold, Boolean enabled) {
+        final Plant plant = plantRepository.findById(id).orElseThrow();
+        plant.setSoilMoistureThreshold(threshold);
+        plant.setSoilMoistureCheckEnabled(enabled);
+
+        return plantMapper.toPlantDTO(plant);
+    }
+
     private void waterPlant(Plant plant, LocalDate lastWatered) {
         plant.setLastWateredDate(lastWatered);
         plant.setNextWateredDate(lastWatered.plusDays(plant.getWateringFrequency()));
@@ -143,8 +163,42 @@ public class PlantService {
     public void sendWateringNotification() {
         final LocalDate today = LocalDate.now();
         plantRepository.findAll().forEach(plant ->
-                wateringStates.get(plant.getId()).set(!plant.getNextWateredDate().isAfter(today) ? 1 : 0)
+                wateringStates.get(plant.getId()).set(needsWater(plant, today) ? 1 : 0)
         );
+    }
+
+    private boolean needsWater(Plant plant, LocalDate today) {
+        return isScheduleDue(plant, today) || isMoistureBelowThreshold(plant);
+    }
+
+    private boolean isScheduleDue(Plant plant, LocalDate today) {
+        final LocalDate nextWateredDate = plant.getNextWateredDate();
+        return nextWateredDate != null && !nextWateredDate.isAfter(today);
+    }
+
+    /**
+     * Checks whether a plant's current soil moisture reading is below its configured threshold.
+     * Falls back to {@code false} (i.e. relying solely on {@link #isScheduleDue}) whenever the
+     * moisture check is disabled, no threshold or sensor is configured, or InfluxDB has no
+     * current reading for the sensor — see {@link PlantMoistureService#getCurrentMoisture}.
+     *
+     * @param plant the plant to check
+     * @return {@code true} if the plant's soil moisture is below its threshold
+     */
+    private boolean isMoistureBelowThreshold(Plant plant) {
+        if (Boolean.FALSE.equals(plant.getSoilMoistureCheckEnabled()) || plant.getSoilMoistureThreshold() == null) {
+            return false;
+        }
+
+        final String entityId = plant.getSoilMoistureEntityId();
+        if (entityId == null || entityId.isBlank()) {
+            return false;
+        }
+
+        return plantMoistureService.getCurrentMoisture(plant.getName(), entityId)
+                .map(reading -> reading.moisturePercent() < plant.getSoilMoistureThreshold())
+                .blockOptional()
+                .orElse(false);
     }
 
     public void sendFertilizingNotification() {

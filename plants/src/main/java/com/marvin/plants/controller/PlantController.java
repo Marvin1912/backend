@@ -448,4 +448,42 @@ public class PlantController {
         return Mono.fromCallable(() -> plantService.fertilizePlant(plantId, lastFertilized))
                 .subscribeOn(Schedulers.boundedElastic());
     }
+
+    /**
+     * Sets or clears a plant's soil moisture threshold and enables/disables the moisture check,
+     * independently of its regular watering schedule.
+     *
+     * @param id        ID of the plant to update
+     * @param threshold soil moisture percentage below which the plant needs water (optional; omit to clear it)
+     * @param enabled   whether the moisture check should be active for this plant
+     * @return Mono containing ResponseEntity with updated plant data
+     */
+    @PatchMapping("/{id}/moisture-threshold")
+    @Operation(
+            summary = "Set soil moisture threshold",
+            description = "Sets the soil moisture percentage threshold below which a plant is considered to need "
+                    + "water, and enables/disables that check, independently of the plant's day-based watering "
+                    + "schedule.",
+            responses = {
+                @ApiResponse(
+                        responseCode = "200",
+                        description = "Moisture threshold updated successfully",
+                        content = @Content(schema = @Schema(implementation = PlantDTO.class))
+                ),
+                @ApiResponse(responseCode = "404", description = "Plant not found")
+            }
+    )
+    public Mono<ResponseEntity<PlantDTO>> updateMoistureThreshold(
+            @PathVariable @Parameter(description = "ID of the plant to update") long id,
+            @RequestParam(name = "threshold", required = false)
+            @Parameter(description = "Soil moisture percentage below which the plant needs water", example = "20.0")
+            Double threshold,
+            @RequestParam(name = "enabled")
+            @Parameter(description = "Whether the moisture check should be active for this plant", example = "true")
+            boolean enabled
+    ) {
+        return Mono.fromCallable(() -> plantService.updateMoistureThreshold(id, threshold, enabled))
+                .subscribeOn(Schedulers.boundedElastic())
+                .map(ResponseEntity::ok);
+    }
 }
