@@ -42,7 +42,10 @@ public record PlantDTO(
         LocalDate lastFertilizedDate,
         
         @Schema(description = "Calculated date for the next fertilizing")
-        LocalDate nextFertilizedDate
+        LocalDate nextFertilizedDate,
+
+        @Schema(description = "InfluxDB entity_id of the soil moisture sensor for this plant", example = "feder_calathea_soil_moisture")
+        String soilMoistureEntityId
 ) {
 
 }

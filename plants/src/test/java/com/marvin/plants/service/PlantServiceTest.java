@@ -66,6 +66,7 @@ class PlantServiceTest {
                 "test-image.jpg",
                 null,
                 null,
+                null,
                 null
         );
     }
@@ -81,6 +82,7 @@ class PlantServiceTest {
                 "New Care Instructions",
                 PlantLocation.BEDROOM,
                 5,
+                null,
                 null,
                 null,
                 null,
@@ -169,6 +171,7 @@ class PlantServiceTest {
                 null,
                 null,
                 null,
+                null,
                 null
         );
 
@@ -220,6 +223,7 @@ class PlantServiceTest {
                 "updated-image.jpg",
                 10,
                 lastFertilizedDate,
+                null,
                 null
         );
 
@@ -254,6 +258,7 @@ class PlantServiceTest {
                 LocalDate.now(),
                 LocalDate.now().plusDays(10),
                 "updated-image.jpg",
+                null,
                 null,
                 null,
                 null
@@ -509,6 +514,7 @@ class PlantServiceTest {
                 "New Care Instructions",
                 PlantLocation.BEDROOM,
                 5,
+                null,
                 null,
                 null,
                 null,
