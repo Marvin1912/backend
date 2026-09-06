@@ -5,6 +5,8 @@ import com.influxdb.query.FluxRecord;
 import com.influxdb.query.FluxTable;
 import com.marvin.plants.dto.PlantMoistureReading;
 import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -21,6 +23,8 @@ public class PlantMoistureService {
     private static final Logger LOGGER = LoggerFactory.getLogger(PlantMoistureService.class);
     private static final String BUCKET = "sensor_data";
     private static final String MOISTURE_MEASUREMENT = "%";
+    private static final String ENTITY_ID_COLUMN = "entity_id";
+    private static final int SENSOR_LOOKUP_RANGE_DAYS = 30;
 
     private final InfluxDBClient influxDBClient;
     private final String org;
@@ -43,7 +47,10 @@ public class PlantMoistureService {
      * Retrieves the most recent soil moisture reading for the given plant. Emits an empty Mono
      * (without querying InfluxDB) when no {@code entityId} is configured, and also when InfluxDB
      * has no data or the query fails, so that a missing or misbehaving sensor never causes the
-     * caller to fail.
+     * caller to fail. Queries a {@value #SENSOR_LOOKUP_RANGE_DAYS}-day range rather than a short
+     * one, since Home Assistant only writes a new data point when a sensor's value actually
+     * changes; a soil moisture sensor can therefore legitimately go unchanged (and thus silent)
+     * for days between waterings without that being a sensor failure.
      *
      * @param plantName the name of the plant the reading belongs to
      * @param entityId  the InfluxDB {@code entity_id} of the plant's soil moisture sensor
@@ -88,10 +95,52 @@ public class PlantMoistureService {
     private String buildFluxQuery(String entityId) {
         return String.format(
                 "from(bucket: \"%s\")"
-                + " |> range(start: -24h)"
+                + " |> range(start: -%dd)"
                 + " |> filter(fn: (r) => r._measurement == \"%s\" and r.entity_id == \"%s\" and r._field == \"value\")"
                 + " |> last()",
-                BUCKET, MOISTURE_MEASUREMENT, entityId
+                BUCKET, SENSOR_LOOKUP_RANGE_DAYS, MOISTURE_MEASUREMENT, entityId
+        );
+    }
+
+    /**
+     * Lists the {@code entity_id}s of all known soil moisture sensors found in InfluxDB, so that a
+     * caller (e.g. a future UI) can offer them for assignment to a plant instead of requiring the
+     * user to look them up manually. Filters out sibling sensors on the same "%" measurement, such
+     * as room humidity ({@code *_humidity}) sensors, by matching only entity ids containing
+     * "moisture". Never fails: returns an empty list when InfluxDB has no matching data or the
+     * query fails.
+     *
+     * @return a Mono emitting the sorted, distinct list of available moisture sensor entity ids
+     */
+    public Mono<List<String>> listAvailableSensorEntityIds() {
+        return Mono.fromCallable(() -> influxDBClient.getQueryApi().query(buildAvailableSensorsFluxQuery(), org))
+                .subscribeOn(Schedulers.boundedElastic())
+                .map(this::extractSortedEntityIds)
+                .onErrorResume(e -> {
+                    LOGGER.error("Failed to fetch available moisture sensor entity_ids from InfluxDB", e);
+                    return Mono.just(List.of());
+                });
+    }
+
+    private List<String> extractSortedEntityIds(List<FluxTable> tables) {
+        return tables.stream()
+                .flatMap(table -> table.getRecords().stream())
+                .map(record -> (String) record.getValue())
+                .filter(Objects::nonNull)
+                .distinct()
+                .sorted()
+                .collect(Collectors.toUnmodifiableList());
+    }
+
+    private String buildAvailableSensorsFluxQuery() {
+        return String.format(
+                "from(bucket: \"%s\")"
+                + " |> range(start: -%dd)"
+                + " |> filter(fn: (r) => r._measurement == \"%s\" and r._field == \"value\")"
+                + " |> filter(fn: (r) => r.%s =~ /moisture/)"
+                + " |> keep(columns: [\"%s\"])"
+                + " |> distinct(column: \"%s\")",
+                BUCKET, SENSOR_LOOKUP_RANGE_DAYS, MOISTURE_MEASUREMENT, ENTITY_ID_COLUMN, ENTITY_ID_COLUMN, ENTITY_ID_COLUMN
         );
     }
 }
