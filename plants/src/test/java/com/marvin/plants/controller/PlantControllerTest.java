@@ -834,4 +834,39 @@ class PlantControllerTest {
 
         verify(plantMoistureService).getCurrentMoisture("Test Plant", "feder_calathea_soil_moisture");
     }
+
+    @Test
+    @DisplayName("Should return available moisture sensor entity ids")
+    void getMoistureSensors_ShouldReturnEntityIds_WhenAvailable() {
+        // Given
+        final List<String> entityIds = List.of("alpha_plant_soil_moisture", "zebra_plant_soil_moisture");
+        when(plantMoistureService.listAvailableSensorEntityIds()).thenReturn(Mono.just(entityIds));
+
+        // When
+        final Flux<String> result = plantController.getMoistureSensors();
+
+        // Then
+        StepVerifier.create(result)
+                .expectNext("alpha_plant_soil_moisture")
+                .expectNext("zebra_plant_soil_moisture")
+                .verifyComplete();
+
+        verify(plantMoistureService).listAvailableSensorEntityIds();
+    }
+
+    @Test
+    @DisplayName("Should return empty when no moisture sensors are available")
+    void getMoistureSensors_ShouldReturnEmpty_WhenNoneAvailable() {
+        // Given
+        when(plantMoistureService.listAvailableSensorEntityIds()).thenReturn(Mono.just(List.of()));
+
+        // When
+        final Flux<String> result = plantController.getMoistureSensors();
+
+        // Then
+        StepVerifier.create(result)
+                .verifyComplete();
+
+        verify(plantMoistureService).listAvailableSensorEntityIds();
+    }
 }

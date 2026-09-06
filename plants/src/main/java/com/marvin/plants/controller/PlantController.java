@@ -343,6 +343,31 @@ public class PlantController {
     }
 
     /**
+     * Lists the {@code entity_id}s of all known soil moisture sensors found in InfluxDB. Intended
+     * to help a caller (e.g. a future UI) pick a sensor to assign to a plant via the {@code PUT
+     * /plants} endpoint, instead of having to look the entity id up manually in InfluxDB/Grafana.
+     *
+     * @return Flux emitting the sorted, distinct list of available moisture sensor entity ids, empty if none are found
+     */
+    @GetMapping(path = "/moisture-sensors")
+    @Operation(
+            summary = "List available soil moisture sensor entity ids",
+            description = "Retrieves the entity_ids of all known soil moisture sensors found in InfluxDB, "
+                    + "so one can be assigned to a plant. Returns an empty list if none are found.",
+            responses = {
+                @ApiResponse(
+                        responseCode = "200",
+                        description = "List of available moisture sensor entity ids retrieved successfully",
+                        content = @Content(array = @ArraySchema(schema = @Schema(implementation = String.class)))
+                )
+            }
+    )
+    public Flux<String> getMoistureSensors() {
+        return plantMoistureService.listAvailableSensorEntityIds()
+                .flatMapMany(Flux::fromIterable);
+    }
+
+    /**
      * Records that a plant has been watered and updates watering schedule.
      *
      * @param id          ID of the plant to water
