@@ -164,7 +164,8 @@ public class OpenWeatherMapClient {
     private HourlyWeatherForecast toHourlyForecast(final LocalDateTime dateTime, final ForecastEntry entry) {
         final WeatherAttributes attributes = extractWeatherAttributes(entry);
         return new HourlyWeatherForecast(dateTime, attributes.iconCode(), attributes.weatherId(), attributes.description(),
-                attributes.temperatureC(), attributes.humidityPct(), attributes.windSpeedMs(), lat, lon);
+                attributes.temperatureC(), attributes.humidityPct(), attributes.windSpeedMs(),
+                attributes.pressureHpa(), attributes.feelsLikeC(), lat, lon);
     }
 
     private WeatherAttributes extractWeatherAttributes(final ForecastEntry entry) {
@@ -175,7 +176,9 @@ public class OpenWeatherMapClient {
         final double temperatureC = entry.main() == null ? 0 : entry.main().temp();
         final Double humidityPct = entry.main() == null ? null : (double) entry.main().humidity();
         final Double windSpeedMs = entry.wind() == null ? null : entry.wind().speed();
-        return new WeatherAttributes(iconCode, weatherId, description, temperatureC, humidityPct, windSpeedMs);
+        final Double pressureHpa = entry.main() == null ? null : entry.main().pressure();
+        final Double feelsLikeC = entry.main() == null ? null : entry.main().feelsLike();
+        return new WeatherAttributes(iconCode, weatherId, description, temperatureC, humidityPct, windSpeedMs, pressureHpa, feelsLikeC);
     }
 
     private record WeatherAttributes(
@@ -184,7 +187,9 @@ public class OpenWeatherMapClient {
             String description,
             double temperatureC,
             Double humidityPct,
-            Double windSpeedMs
+            Double windSpeedMs,
+            Double pressureHpa,
+            Double feelsLikeC
     ) {
     }
 
@@ -204,8 +209,14 @@ public class OpenWeatherMapClient {
     @JsonIgnoreProperties(ignoreUnknown = true)
     record MainInfo(
             @JsonProperty("temp") double temp,
-            @JsonProperty("humidity") int humidity
+            @JsonProperty("humidity") int humidity,
+            @JsonProperty("pressure") Double pressure,
+            @JsonProperty("feels_like") Double feelsLike
     ) {
+
+        MainInfo(double temp, int humidity) {
+            this(temp, humidity, null, null);
+        }
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)

@@ -1,6 +1,7 @@
 package com.marvin.climate.weather;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.when;
@@ -10,6 +11,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.web.reactive.function.client.ClientResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -28,6 +32,19 @@ class OpenWeatherMapClientTest {
     private static final String API_KEY = "test-api-key";
     private static final double LAT = 52.52;
     private static final double LON = 13.405;
+
+    private static final String SAMPLE_JSON = """
+            {"list":[
+              {"dt_txt":"2026-08-16 09:00:00",
+               "main":{"temp":18.0,"feels_like":16.4,"pressure":1013,"humidity":70},
+               "weather":[{"id":800,"description":"clear sky","icon":"01d"}],
+               "wind":{"speed":2.0}},
+              {"dt_txt":"2026-08-16 12:00:00",
+               "main":{"temp":22.5,"humidity":60},
+               "weather":[{"id":500,"description":"light rain","icon":"10d"}],
+               "wind":{"speed":3.5}}
+            ]}
+            """;
 
     @Mock
     private WebClient.Builder webClientBuilder;
@@ -263,6 +280,51 @@ class OpenWeatherMapClientTest {
 
         // When / Then
         StepVerifier.create(openWeatherMapClient.getHourlyForecast())
+                .verifyComplete();
+    }
+
+    private OpenWeatherMapClient clientReturningJson(final String json) {
+        final WebClient.Builder builder = WebClient.builder().exchangeFunction(request -> Mono.just(
+                ClientResponse.create(HttpStatus.OK)
+                        .header("Content-Type", MediaType.APPLICATION_JSON_VALUE)
+                        .body(json)
+                        .build()));
+        return new OpenWeatherMapClient(builder, API_KEY, LAT, LON, fixedClockAt(LocalDateTime.of(2026, 8, 16, 7, 0, 0)));
+    }
+
+    @Test
+    @DisplayName("Should map pressure and feels_like from the raw OpenWeatherMap JSON into the hourly forecast")
+    void getHourlyForecast_ShouldMapPressureAndFeelsLike_FromJson() {
+        StepVerifier.create(clientReturningJson(SAMPLE_JSON).getHourlyForecast())
+                .assertNext(forecast -> {
+                    assertEquals(1013.0, forecast.pressure());
+                    assertEquals(16.4, forecast.feelsLike());
+                    assertEquals(18.0, forecast.temperatureC());
+                })
+                .assertNext(forecast -> {
+                    assertNull(forecast.pressure());
+                    assertNull(forecast.feelsLike());
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should map pressure and feels_like from MainInfo built in code")
+    void getHourlyForecast_ShouldMapPressureAndFeelsLike_FromMainInfo() {
+        final OpenWeatherMapClient client = new OpenWeatherMapClient(
+                webClientBuilder, API_KEY, LAT, LON, fixedClockAt(LocalDateTime.of(2026, 8, 16, 7, 0, 0)));
+        final OpenWeatherMapClient.ForecastEntry forecastEntry = new OpenWeatherMapClient.ForecastEntry(
+                "2026-08-16 09:00:00",
+                new OpenWeatherMapClient.MainInfo(18.0, 70, 1008.0, 17.2),
+                List.of(weather(800, "clear sky", "01d")),
+                wind(2.0));
+        stubWebClientChain(Mono.just(new OpenWeatherMapClient.ForecastResponse(List.of(forecastEntry))));
+
+        StepVerifier.create(client.getHourlyForecast())
+                .assertNext(forecast -> {
+                    assertEquals(1008.0, forecast.pressure());
+                    assertEquals(17.2, forecast.feelsLike());
+                })
                 .verifyComplete();
     }
 }

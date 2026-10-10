@@ -16,6 +16,8 @@ import java.time.LocalDateTime;
  * @param temperatureC the forecast temperature in degrees Celsius
  * @param humidityPct  the forecast relative humidity in percent, or {@code null} when unavailable
  * @param windSpeedMs  the forecast wind speed in meters per second, or {@code null} when unavailable
+ * @param pressure     the atmospheric pressure in hPa, or {@code null} when unavailable
+ * @param feelsLike    the perceived ("feels like") temperature in degrees Celsius, or {@code null} when unavailable
  * @param latitude     the latitude of the location this forecast was requested for
  * @param longitude    the longitude of the location this forecast was requested for
  */
@@ -28,7 +30,27 @@ public record HourlyWeatherForecast(
         double temperatureC,
         Double humidityPct,
         Double windSpeedMs,
+        Double pressure,
+        Double feelsLike,
         double latitude,
         double longitude
 ) {
+
+    /**
+     * Creates a forecast without pressure and feels-like temperature (both {@code null}).
+     *
+     * @param dateTime     the date and time this forecast entry represents
+     * @param iconCode     the OpenWeatherMap icon code
+     * @param weatherId    the OpenWeatherMap condition id
+     * @param description  the weather condition description
+     * @param temperatureC the temperature in degrees Celsius
+     * @param humidityPct  the relative humidity in percent, or {@code null}
+     * @param windSpeedMs  the wind speed in meters per second, or {@code null}
+     * @param latitude     the latitude of the forecast location
+     * @param longitude    the longitude of the forecast location
+     */
+    public HourlyWeatherForecast(LocalDateTime dateTime, String iconCode, int weatherId, String description,
+            double temperatureC, Double humidityPct, Double windSpeedMs, double latitude, double longitude) {
+        this(dateTime, iconCode, weatherId, description, temperatureC, humidityPct, windSpeedMs, null, null, latitude, longitude);
+    }
 }

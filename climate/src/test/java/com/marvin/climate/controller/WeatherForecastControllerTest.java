@@ -135,4 +135,24 @@ class WeatherForecastControllerTest {
                 .jsonPath("$").isArray()
                 .jsonPath("$.length()").isEqualTo(0);
     }
+
+    @Test
+    @DisplayName("GET /climate/forecast/hourly returns pressure and feelsLike")
+    void getHourlyForecast_ShouldReturnPressureAndFeelsLike() {
+        // Given
+        final HourlyWeatherForecast forecast = new HourlyWeatherForecast(
+                LocalDateTime.of(2026, 8, 16, 9, 0), "10d", 500, "light rain", 21.5, 60.0, 3.5, 1013.0, 20.1, 52.52, 13.405);
+        when(openWeatherMapClient.getHourlyForecast()).thenReturn(Flux.just(forecast));
+
+        // When / Then
+        webTestClient.get()
+                .uri("/climate/forecast/hourly")
+                .accept(MediaType.APPLICATION_JSON)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$[0].pressure").isEqualTo(1013.0)
+                .jsonPath("$[0].feelsLike").isEqualTo(20.1)
+                .jsonPath("$[0].temperatureC").isEqualTo(21.5);
+    }
 }

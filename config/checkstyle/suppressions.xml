@@ -26,6 +26,12 @@
          added to keep existing test call sites compiling is what checkstyle now sees and flags. -->
     <suppress checks="ParameterNumber" files=".*PlantDTO\.java"/>
 
+    <!-- Suppress for HourlyWeatherForecast's backward-compatible secondary constructor: the record already
+         had 9 components before pressure/feelsLike were added (implicit canonical constructor,
+         invisible to checkstyle); the explicit 9-arg compat constructor added to keep existing test
+         call sites compiling is what checkstyle now sees and flags. -->
+    <suppress checks="ParameterNumber" files=".*HourlyWeatherForecast\.java"/>
+
     <!-- Suppress specific rules for utility classes -->
     <suppress checks="Javadoc" files=".*Util\.java"/>
     <suppress checks="MagicNumber" files=".*Util\.java"/>
