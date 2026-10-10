@@ -7,6 +7,7 @@ import com.marvin.climate.dto.WeatherSensitivity.Level;
 import com.marvin.climate.dto.WeatherSensitivity.Metrics;
 import com.marvin.climate.dto.WeatherSensitivity.Trend;
 import com.marvin.climate.weather.HourlyWeatherForecast;
+import com.marvin.climate.weather.MetNoForecastClient;
 import com.marvin.climate.weather.OpenWeatherMapClient;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -15,7 +16,9 @@ import java.util.Locale;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 /**
@@ -32,11 +35,12 @@ import reactor.core.publisher.Mono;
  *   <tr><td>Pressure drop 3 h or forecast (hPa)</td><td>&gt;= 0.5</td><td>&gt;= 1</td><td>&gt;= 3</td></tr>
  *   <tr><td>Outdoor dew point (degrees C)</td><td>&gt;= 14</td><td>&gt;= 16 (schwuel)</td><td>&gt;= 20</td></tr>
  *   <tr><td>Heat index (degrees C, valid range only)</td><td>-</td><td>&gt;= 27</td><td>&gt;= 32</td></tr>
- *   <tr><td>Dew point rise 3 h (K)</td><td>&gt;= 2</td><td>&gt;= 3</td><td>-</td></tr>
+ *   <tr><td>Dew point rise 3 h or forecast (K)</td><td>&gt;= 2</td><td>&gt;= 3</td><td>-</td></tr>
  * </table>
  *
  * <p>The trend compares the level of the measured signals with the level of the forecast-only signals (forecast
- * temperature and pressure change within the OpenWeatherMap window of the next few hours): a stronger forecast
+ * temperature and pressure change and dew point rise within the next few hours; met.no hourly
+ * data is the primary source, OpenWeatherMap the fallback when met.no fails or returns nothing): a stronger forecast
  * level is {@link Trend#RISING}, a weaker one {@link Trend#FALLING}, an equal one {@link Trend#STABLE}.
  * Without forecast data the trend is {@link Trend#STABLE}.</p>
  *
@@ -70,16 +74,31 @@ public class WeatherSensitivityService {
 
     private final ClimateTrendService climateTrendService;
     private final OpenWeatherMapClient openWeatherMapClient;
+    private final MetNoForecastClient metNoForecastClient;
 
     /**
-     * Constructs the service.
+     * Constructs the service with OpenWeatherMap as the only forecast source.
      *
      * @param climateTrendService  the service providing measured temperature, dew point and pressure changes
      * @param openWeatherMapClient the client providing the OpenWeatherMap forecast
      */
     public WeatherSensitivityService(ClimateTrendService climateTrendService, OpenWeatherMapClient openWeatherMapClient) {
+        this(climateTrendService, openWeatherMapClient, null);
+    }
+
+    /**
+     * Constructs the service with met.no as primary and OpenWeatherMap as fallback forecast source.
+     *
+     * @param climateTrendService  the service providing measured temperature, dew point and pressure changes
+     * @param openWeatherMapClient the client providing the OpenWeatherMap fallback forecast
+     * @param metNoForecastClient  the client providing the hourly met.no forecast, or {@code null} to use OpenWeatherMap only
+     */
+    @Autowired
+    public WeatherSensitivityService(ClimateTrendService climateTrendService, OpenWeatherMapClient openWeatherMapClient,
+            MetNoForecastClient metNoForecastClient) {
         this.climateTrendService = climateTrendService;
         this.openWeatherMapClient = openWeatherMapClient;
+        this.metNoForecastClient = metNoForecastClient;
     }
 
     /**
@@ -94,18 +113,32 @@ public class WeatherSensitivityService {
                     return Mono.empty();
                 })
                 .defaultIfEmpty(new ClimateTrend(null, null, null, null, null, null, null));
-        final Mono<List<HourlyWeatherForecast>> forecast = openWeatherMapClient.getHourlyForecast()
-                .collectList()
+        return Mono.zip(trend, loadForecast()).map(tuple -> evaluate(tuple.getT1(), tuple.getT2()));
+    }
+
+    private Mono<List<HourlyWeatherForecast>> loadForecast() {
+        final Mono<List<HourlyWeatherForecast>> openWeatherMap = Mono.defer(
+                () -> collectSafely(openWeatherMapClient.getHourlyForecast(), "OpenWeatherMap"));
+        if (metNoForecastClient == null) {
+            return openWeatherMap;
+        }
+        return collectSafely(metNoForecastClient.getHourlyForecast(), "met.no")
+                .filter(list -> !list.isEmpty())
+                .switchIfEmpty(openWeatherMap);
+    }
+
+    private static Mono<List<HourlyWeatherForecast>> collectSafely(Flux<HourlyWeatherForecast> source, String name) {
+        return source.collectList()
                 .onErrorResume(e -> {
-                    LOGGER.warn("Weather forecast unavailable for weather sensitivity", e);
+                    LOGGER.warn("{} weather forecast unavailable for weather sensitivity", name, e);
                     return Mono.just(List.of());
                 });
-        return Mono.zip(trend, forecast).map(tuple -> evaluate(tuple.getT1(), tuple.getT2()));
     }
 
     private WeatherSensitivity evaluate(ClimateTrend trend, List<HourlyWeatherForecast> forecasts) {
         final Double forecastDeltaT = forecastDeltaTemperature(trend, forecasts);
         final Double forecastDeltaPressure = forecastDeltaPressure(forecasts);
+        final Double forecastDeltaDewPoint = forecastDeltaDewPoint(trend, forecasts);
         final Double relativeHumidity = relativeHumidity(trend);
         final Double heatIndex = heatIndex(trend, relativeHumidity);
 
@@ -115,11 +148,12 @@ public class WeatherSensitivityService {
         measured.add(pressureDrop(trend.pressureDelta3h(), " in 3 h"));
         measured.add(dewPointLevel(trend.dewPointC()));
         measured.add(heatIndexSignal(heatIndex));
-        measured.add(dewPointRise(trend.dewPointDelta3h()));
+        measured.add(dewPointRise(trend.dewPointDelta3h(), " in 3 h"));
 
         final List<Signal> forecastSignals = List.of(
                 temperatureDrop(forecastDeltaT, " laut Prognose", TEMP_DROP_GERING, TEMP_DROP_HOCH, true),
-                pressureDrop(forecastDeltaPressure, " laut Prognose"));
+                pressureDrop(forecastDeltaPressure, " laut Prognose"),
+                dewPointRise(forecastDeltaDewPoint, " laut Prognose"));
 
         final List<Signal> all = new ArrayList<>(measured);
         all.addAll(forecastSignals);
@@ -199,12 +233,12 @@ public class WeatherSensitivityService {
         return level == Level.KEINE ? Signal.none() : new Signal(level, "Hitzeindex " + formatPlain(heatIndex) + " °C");
     }
 
-    private static Signal dewPointRise(Double delta) {
+    private static Signal dewPointRise(Double delta, String suffix) {
         if (delta == null) {
             return Signal.none();
         }
         final Level level = classify(delta, DEW_RISE_GERING, DEW_RISE_MITTEL, UNREACHABLE);
-        return level == Level.KEINE ? Signal.none() : new Signal(level, "Taupunkt steigt schnell: " + format(delta) + " K in 3 h");
+        return level == Level.KEINE ? Signal.none() : new Signal(level, "Taupunkt steigt schnell: " + format(delta) + " K" + suffix);
     }
 
     private static Level classify(double magnitude, double gering, double mittel, double hoch) {
@@ -237,6 +271,21 @@ public class WeatherSensitivityService {
         final Double first = forecasts.get(0).pressure();
         final Double last = forecasts.get(forecasts.size() - 1).pressure();
         return first == null || last == null ? null : last - first;
+    }
+
+    private static Double forecastDeltaDewPoint(ClimateTrend trend, List<HourlyWeatherForecast> forecasts) {
+        if (forecasts.isEmpty()) {
+            return null;
+        }
+        final Double last = forecasts.get(forecasts.size() - 1).dewPointC();
+        if (last == null) {
+            return null;
+        }
+        if (trend.dewPointC() != null) {
+            return last - trend.dewPointC();
+        }
+        final Double first = forecasts.get(0).dewPointC();
+        return forecasts.size() > 1 && first != null ? last - first : null;
     }
 
     private static Double relativeHumidity(ClimateTrend trend) {
