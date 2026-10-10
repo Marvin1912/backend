@@ -42,6 +42,23 @@ public final class BiometeorologyCalculator {
     }
 
     /**
+     * Calculates the relative humidity from air temperature and dew point (inverse Magnus formula).
+     * A dew point above the temperature is physically implausible for measured values and yields 100 %.
+     *
+     * @param temperatureCelsius air temperature in degrees Celsius
+     * @param dewPointCelsius    dew point in degrees Celsius
+     * @return the relative humidity in percent, in the range (0, 100]
+     * @throws IllegalArgumentException if an input is NaN
+     */
+    public static double relativeHumidity(final double temperatureCelsius, final double dewPointCelsius) {
+        validateTemperature(temperatureCelsius);
+        validateTemperature(dewPointCelsius);
+        final double exponent = MAGNUS_A * dewPointCelsius / (MAGNUS_B + dewPointCelsius)
+                - MAGNUS_A * temperatureCelsius / (MAGNUS_B + temperatureCelsius);
+        return Math.min(MAX_HUMIDITY, MAX_HUMIDITY * Math.exp(exponent));
+    }
+
+    /**
      * Calculates the absolute humidity (water vapour mass per air volume).
      *
      * @param temperatureCelsius air temperature in degrees Celsius
