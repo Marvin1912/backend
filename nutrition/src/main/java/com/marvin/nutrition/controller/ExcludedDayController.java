@@ -76,7 +76,7 @@ public class ExcludedDayController {
      * Excludes the given day from nutrition evaluations, or updates its reason if already excluded.
      *
      * @param date    the day to exclude
-     * @param request optional reason for the exclusion
+     * @param request optional body carrying the reason for the exclusion; may be omitted
      * @return a Mono with 200 and the excluded day
      */
     @PutMapping("/{date}")
@@ -96,8 +96,9 @@ public class ExcludedDayController {
     public Mono<ResponseEntity<ExcludedDayDTO>> excludeDay(
             @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
             @Parameter(description = "Day to exclude") LocalDate date,
-            @Valid @RequestBody ExcludeDayRequest request) {
-        return excludedDayService.exclude(date, request.reason()).map(ResponseEntity::ok);
+            @Valid @RequestBody(required = false) ExcludeDayRequest request) {
+        final String reason = request != null ? request.reason() : null;
+        return excludedDayService.exclude(date, reason).map(ResponseEntity::ok);
     }
 
     /**

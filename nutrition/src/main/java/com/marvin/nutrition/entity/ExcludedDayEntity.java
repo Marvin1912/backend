@@ -24,7 +24,7 @@ public class ExcludedDayEntity extends BasicEntity {
     @Column(name = "entry_date", nullable = false, updatable = false)
     private LocalDate entryDate;
 
-    @Column(name = "reason")
+    @Column(name = "reason", length = 255)
     private String reason;
 
     @Override

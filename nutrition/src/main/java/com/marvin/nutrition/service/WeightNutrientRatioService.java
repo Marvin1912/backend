@@ -2,10 +2,8 @@ package com.marvin.nutrition.service;
 
 import com.marvin.nutrition.dto.MacrosDTO;
 import com.marvin.nutrition.dto.WeightNutrientRatioDTO;
-import com.marvin.nutrition.entity.ExcludedDayEntity;
 import com.marvin.nutrition.entity.MealEntryEntity;
 import com.marvin.nutrition.entity.WeightEntryEntity;
-import com.marvin.nutrition.repository.ExcludedDayRepository;
 import com.marvin.nutrition.repository.MealEntryRepository;
 import com.marvin.nutrition.repository.WeightEntryRepository;
 import java.math.BigDecimal;
@@ -32,22 +30,22 @@ public class WeightNutrientRatioService {
 
     private final MealEntryRepository mealEntryRepository;
     private final WeightEntryRepository weightEntryRepository;
-    private final ExcludedDayRepository excludedDayRepository;
+    private final ExcludedDayService excludedDayService;
 
     /**
      * Creates a new WeightNutrientRatioService.
      *
      * @param mealEntryRepository   JPA repository for meal entries
      * @param weightEntryRepository JPA repository for weight entries
-     * @param excludedDayRepository JPA repository for days excluded from evaluations
+     * @param excludedDayService    service for days excluded from evaluations
      */
     public WeightNutrientRatioService(
             MealEntryRepository mealEntryRepository,
             WeightEntryRepository weightEntryRepository,
-            ExcludedDayRepository excludedDayRepository) {
+            ExcludedDayService excludedDayService) {
         this.mealEntryRepository = mealEntryRepository;
         this.weightEntryRepository = weightEntryRepository;
-        this.excludedDayRepository = excludedDayRepository;
+        this.excludedDayService = excludedDayService;
     }
 
     /**
@@ -79,9 +77,7 @@ public class WeightNutrientRatioService {
         ).subscribeOn(Schedulers.boundedElastic());
 
         final Mono<Set<LocalDate>> excludedDatesMono = Mono.fromCallable(() ->
-                excludedDayRepository.findByEntryDateBetweenOrderByEntryDateAsc(from, to).stream()
-                        .map(ExcludedDayEntity::getEntryDate)
-                        .collect(Collectors.toSet())
+                excludedDayService.findExcludedDatesSync(from, to)
         ).subscribeOn(Schedulers.boundedElastic());
 
         return Mono.zip(totalsByDateMono, weightsUpToMono, earliestEverMono, excludedDatesMono)

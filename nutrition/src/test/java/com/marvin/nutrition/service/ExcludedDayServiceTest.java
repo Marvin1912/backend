@@ -3,7 +3,6 @@ package com.marvin.nutrition.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -12,6 +11,7 @@ import com.marvin.nutrition.repository.ExcludedDayRepository;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -82,22 +82,20 @@ class ExcludedDayServiceTest {
     }
 
     @Test
-    @DisplayName("include deletes an excluded day")
-    void include_ExcludedDay_Deletes() {
-        when(excludedDayRepository.existsById(DAY)).thenReturn(true);
-
+    @DisplayName("include deletes the excluded day by its date")
+    void include_DeletesById() {
         StepVerifier.create(excludedDayService.include(DAY)).verifyComplete();
 
         verify(excludedDayRepository).deleteById(DAY);
     }
 
     @Test
-    @DisplayName("include is a no-op for a day that is not excluded")
-    void include_NotExcluded_DoesNothing() {
-        when(excludedDayRepository.existsById(DAY)).thenReturn(false);
+    @DisplayName("findExcludedDatesSync returns the excluded dates within the range")
+    void findExcludedDatesSync_ReturnsDates() {
+        final LocalDate to = DAY.plusDays(3);
+        when(excludedDayRepository.findByEntryDateBetweenOrderByEntryDateAsc(DAY, to))
+                .thenReturn(List.of(entity(DAY, null)));
 
-        StepVerifier.create(excludedDayService.include(DAY)).verifyComplete();
-
-        verify(excludedDayRepository, never()).deleteById(DAY);
+        assertEquals(Set.of(DAY), excludedDayService.findExcludedDatesSync(DAY, to));
     }
 }

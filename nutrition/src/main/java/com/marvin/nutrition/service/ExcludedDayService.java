@@ -5,6 +5,8 @@ import com.marvin.nutrition.entity.ExcludedDayEntity;
 import com.marvin.nutrition.repository.ExcludedDayRepository;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -40,6 +42,31 @@ public class ExcludedDayService {
     }
 
     /**
+     * Returns the set of excluded dates within the given range (inclusive). Performs blocking
+     * repository access and must only be called from a blocking-friendly scheduler.
+     *
+     * @param from the first date to include
+     * @param to   the last date to include
+     * @return the excluded dates within the range
+     */
+    public Set<LocalDate> findExcludedDatesSync(LocalDate from, LocalDate to) {
+        return excludedDayRepository.findByEntryDateBetweenOrderByEntryDateAsc(from, to).stream()
+                .map(ExcludedDayEntity::getEntryDate)
+                .collect(Collectors.toSet());
+    }
+
+    /**
+     * Returns whether the given date is excluded. Performs blocking repository access and must
+     * only be called from a blocking-friendly scheduler.
+     *
+     * @param date the date to check
+     * @return true if the date is excluded
+     */
+    public boolean isExcludedSync(LocalDate date) {
+        return excludedDayRepository.existsById(date);
+    }
+
+    /**
      * Excludes the given day, or updates its reason if it is already excluded.
      *
      * @param date   the day to exclude
@@ -65,11 +92,9 @@ public class ExcludedDayService {
      * @return an empty Mono on completion
      */
     public Mono<Void> include(LocalDate date) {
-        return Mono.fromRunnable(() -> {
-            if (excludedDayRepository.existsById(date)) {
-                excludedDayRepository.deleteById(date);
-            }
-        }).subscribeOn(Schedulers.boundedElastic()).then();
+        return Mono.fromRunnable(() -> excludedDayRepository.deleteById(date))
+                .subscribeOn(Schedulers.boundedElastic())
+                .then();
     }
 
     private ExcludedDayDTO toDTO(ExcludedDayEntity entity) {

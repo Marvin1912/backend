@@ -69,4 +69,15 @@ class ExcludedDayControllerTest {
 
         verify(excludedDayService).include(DAY);
     }
+
+    @Test
+    @DisplayName("excludeDay without a body excludes the day without a reason")
+    void excludeDay_NoBody_ExcludesWithoutReason() {
+        final ExcludedDayDTO dto = new ExcludedDayDTO(DAY, null);
+        when(excludedDayService.exclude(DAY, null)).thenReturn(Mono.just(dto));
+
+        StepVerifier.create(excludedDayController.excludeDay(DAY, null))
+                .assertNext(response -> assertEquals(dto, response.getBody()))
+                .verifyComplete();
+    }
 }

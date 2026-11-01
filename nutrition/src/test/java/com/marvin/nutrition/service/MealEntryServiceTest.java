@@ -16,14 +16,12 @@ import com.marvin.nutrition.dto.SportActivityDTO;
 import com.marvin.nutrition.dto.TargetsDTO;
 import com.marvin.nutrition.dto.UpdateMealEntryRequest;
 import com.marvin.nutrition.entity.DayTargetSnapshotEntity;
-import com.marvin.nutrition.entity.ExcludedDayEntity;
 import com.marvin.nutrition.entity.FoodEntity;
 import com.marvin.nutrition.entity.MealEntryEntity;
 import com.marvin.nutrition.entity.MealType;
 import com.marvin.nutrition.entity.SportActivityType;
 import com.marvin.nutrition.mapper.MealEntryMapper;
 import com.marvin.nutrition.repository.DayTargetSnapshotRepository;
-import com.marvin.nutrition.repository.ExcludedDayRepository;
 import com.marvin.nutrition.repository.FoodRepository;
 import com.marvin.nutrition.repository.MealEntryRepository;
 import java.math.BigDecimal;
@@ -31,6 +29,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -69,7 +68,7 @@ class MealEntryServiceTest {
     private SportActivityLookupService sportActivityLookupService;
 
     @Mock
-    private ExcludedDayRepository excludedDayRepository;
+    private ExcludedDayService excludedDayService;
 
     @InjectMocks
     private MealEntryService mealEntryService;
@@ -720,8 +719,6 @@ class MealEntryServiceTest {
     void getDays_ExcludedDay_IsFlagged() {
         final LocalDate from = today.minusDays(1);
         final LocalDate to = today;
-        final ExcludedDayEntity excluded = new ExcludedDayEntity();
-        excluded.setEntryDate(from);
 
         when(mealEntryRepository.findByEntryDateBetweenOrderByEntryDateAscCreationDateAsc(from, to))
                 .thenReturn(List.of());
@@ -729,14 +726,27 @@ class MealEntryServiceTest {
         when(dayTargetSnapshotRepository.findByEntryDateBetween(from, to)).thenReturn(List.of());
         when(nutritionTargetService.getTargetsSync(any(LocalDate.class)))
                 .thenReturn(new TargetsDTO(1750, 2160, 2160, 160, 72, 252, "MIFFLIN_ST_JEOR"));
-        when(excludedDayRepository.findByEntryDateBetweenOrderByEntryDateAsc(from, to))
-                .thenReturn(List.of(excluded));
+        when(excludedDayService.findExcludedDatesSync(from, to)).thenReturn(Set.of(from));
 
         StepVerifier.create(mealEntryService.getDays(from, to))
                 .assertNext(summaries -> {
                     assertTrue(summaries.get(0).excluded());
                     assertFalse(summaries.get(1).excluded());
                 })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("getDay flags an excluded day")
+    void getDay_ExcludedDay_IsFlagged() {
+        when(mealEntryRepository.findByEntryDateOrderByCreationDateAsc(today)).thenReturn(List.of());
+        when(foodRepository.findAllById(List.of())).thenReturn(List.of());
+        when(nutritionTargetService.getTargets(today))
+                .thenReturn(Mono.error(new TargetCalculationException("No data")));
+        when(excludedDayService.isExcludedSync(today)).thenReturn(true);
+
+        StepVerifier.create(mealEntryService.getDay(today))
+                .assertNext(summary -> assertTrue(summary.excluded()))
                 .verifyComplete();
     }
 }

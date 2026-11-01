@@ -8,17 +8,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
 import com.marvin.nutrition.dto.WeightNutrientRatioDTO;
-import com.marvin.nutrition.entity.ExcludedDayEntity;
 import com.marvin.nutrition.entity.MealEntryEntity;
 import com.marvin.nutrition.entity.MealType;
 import com.marvin.nutrition.entity.WeightEntryEntity;
-import com.marvin.nutrition.repository.ExcludedDayRepository;
 import com.marvin.nutrition.repository.MealEntryRepository;
 import com.marvin.nutrition.repository.WeightEntryRepository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -40,7 +39,7 @@ class WeightNutrientRatioServiceTest {
     private WeightEntryRepository weightEntryRepository;
 
     @Mock
-    private ExcludedDayRepository excludedDayRepository;
+    private ExcludedDayService excludedDayService;
 
     @InjectMocks
     private WeightNutrientRatioService weightNutrientRatioService;
@@ -216,16 +215,13 @@ class WeightNutrientRatioServiceTest {
     @DisplayName("getRatios flags excluded days and leaves other days unflagged")
     void getRatios_ExcludedDay_IsFlagged() {
         final WeightEntryEntity weight = weightEntry(LocalDate.of(2025, 12, 31), "80.00");
-        final ExcludedDayEntity excluded = new ExcludedDayEntity();
-        excluded.setEntryDate(day2);
 
         when(mealEntryRepository.findByEntryDateBetweenOrderByEntryDateAscCreationDateAsc(day1, day3))
                 .thenReturn(List.of());
         when(weightEntryRepository.findByEntryDateLessThanEqualOrderByEntryDateAsc(day3))
                 .thenReturn(List.of(weight));
         when(weightEntryRepository.findTopByOrderByEntryDateAsc()).thenReturn(Optional.of(weight));
-        when(excludedDayRepository.findByEntryDateBetweenOrderByEntryDateAsc(day1, day3))
-                .thenReturn(List.of(excluded));
+        when(excludedDayService.findExcludedDatesSync(day1, day3)).thenReturn(Set.of(day2));
 
         StepVerifier.create(weightNutrientRatioService.getRatios(day1, day3))
                 .assertNext(results -> {

@@ -8,12 +8,10 @@ import com.marvin.nutrition.dto.SportActivityDTO;
 import com.marvin.nutrition.dto.TargetsDTO;
 import com.marvin.nutrition.dto.UpdateMealEntryRequest;
 import com.marvin.nutrition.entity.DayTargetSnapshotEntity;
-import com.marvin.nutrition.entity.ExcludedDayEntity;
 import com.marvin.nutrition.entity.FoodEntity;
 import com.marvin.nutrition.entity.MealEntryEntity;
 import com.marvin.nutrition.mapper.MealEntryMapper;
 import com.marvin.nutrition.repository.DayTargetSnapshotRepository;
-import com.marvin.nutrition.repository.ExcludedDayRepository;
 import com.marvin.nutrition.repository.FoodRepository;
 import com.marvin.nutrition.repository.MealEntryRepository;
 import java.math.BigDecimal;
@@ -41,7 +39,7 @@ public class MealEntryService {
     private final DayTargetSnapshotRepository dayTargetSnapshotRepository;
     private final MealEntryWriteService mealEntryWriteService;
     private final SportActivityLookupService sportActivityLookupService;
-    private final ExcludedDayRepository excludedDayRepository;
+    private final ExcludedDayService excludedDayService;
 
     /**
      * Creates a new MealEntryService with the required dependencies.
@@ -53,7 +51,7 @@ public class MealEntryService {
      * @param dayTargetSnapshotRepository JPA repository for per-day nutrition target snapshots
      * @param mealEntryWriteService       service owning transactional meal entry write operations
      * @param sportActivityLookupService  service owning read access to sport activities
-     * @param excludedDayRepository       JPA repository for days excluded from evaluations
+     * @param excludedDayService          service for days excluded from evaluations
      */
     public MealEntryService(
             MealEntryRepository mealEntryRepository,
@@ -63,7 +61,7 @@ public class MealEntryService {
             DayTargetSnapshotRepository dayTargetSnapshotRepository,
             MealEntryWriteService mealEntryWriteService,
             SportActivityLookupService sportActivityLookupService,
-            ExcludedDayRepository excludedDayRepository) {
+            ExcludedDayService excludedDayService) {
         this.mealEntryRepository = mealEntryRepository;
         this.foodRepository = foodRepository;
         this.mealEntryMapper = mealEntryMapper;
@@ -71,7 +69,7 @@ public class MealEntryService {
         this.dayTargetSnapshotRepository = dayTargetSnapshotRepository;
         this.mealEntryWriteService = mealEntryWriteService;
         this.sportActivityLookupService = sportActivityLookupService;
-        this.excludedDayRepository = excludedDayRepository;
+        this.excludedDayService = excludedDayService;
     }
 
     /**
@@ -183,7 +181,7 @@ public class MealEntryService {
         ).subscribeOn(Schedulers.boundedElastic());
 
         final Mono<Boolean> excludedMono = Mono.fromCallable(() ->
-                excludedDayRepository.existsById(date)
+                excludedDayService.isExcludedSync(date)
         ).subscribeOn(Schedulers.boundedElastic());
 
         return Mono.zip(entriesMono, targetsMono, activitiesMono, excludedMono)
@@ -233,9 +231,7 @@ public class MealEntryService {
         ).subscribeOn(Schedulers.boundedElastic());
 
         final Mono<Set<LocalDate>> excludedDatesMono = Mono.fromCallable(() ->
-                excludedDayRepository.findByEntryDateBetweenOrderByEntryDateAsc(from, to).stream()
-                        .map(ExcludedDayEntity::getEntryDate)
-                        .collect(Collectors.toSet())
+                excludedDayService.findExcludedDatesSync(from, to)
         ).subscribeOn(Schedulers.boundedElastic());
 
         return Mono.zip(entriesByDateMono, snapshotsByDateMono, activitiesByDateMono, excludedDatesMono)
