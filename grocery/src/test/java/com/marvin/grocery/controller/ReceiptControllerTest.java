@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import com.marvin.grocery.dto.ReceiptDTO;
 import com.marvin.grocery.dto.ReceiptItemDTO;
+import com.marvin.grocery.dto.UpdateReceiptDateRequest;
 import com.marvin.grocery.dto.UpdateSupermarketRequest;
 import com.marvin.grocery.entity.Supermarket;
 import com.marvin.grocery.service.ReceiptService;
@@ -251,5 +252,40 @@ class ReceiptControllerTest {
                 .verifyComplete();
 
         verify(receiptService).updateSupermarket(unknownId, Supermarket.REWE);
+    }
+
+    @Test
+    @DisplayName("Should return 200 with updated DTO after receipt date update")
+    void updateReceiptDate_Exists_Returns200() {
+        final LocalDate date = LocalDate.of(2026, 8, 21);
+        final ReceiptDTO updated = new ReceiptDTO(
+                testReceiptId, date, new BigDecimal("1.09"), LocalDateTime.now(), null, Supermarket.LIDL);
+        when(receiptService.updateReceiptDate(eq(testReceiptId), eq(date))).thenReturn(Mono.just(updated));
+
+        final Mono<ResponseEntity<ReceiptDTO>> result =
+                receiptController.updateReceiptDate(testReceiptId, new UpdateReceiptDateRequest(date));
+
+        StepVerifier.create(result)
+                .assertNext(response -> {
+                    assertEquals(200, response.getStatusCode().value());
+                    assertNotNull(response.getBody());
+                    assertEquals(date, response.getBody().receiptDate());
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("Should return 404 when receipt does not exist for receipt date update")
+    void updateReceiptDate_NotFound_Returns404() {
+        final UUID unknownId = UUID.randomUUID();
+        when(receiptService.updateReceiptDate(eq(unknownId), any()))
+                .thenReturn(Mono.error(new NoSuchElementException("Receipt not found: " + unknownId)));
+
+        final Mono<ResponseEntity<ReceiptDTO>> result = receiptController.updateReceiptDate(
+                unknownId, new UpdateReceiptDateRequest(LocalDate.of(2026, 8, 21)));
+
+        StepVerifier.create(result)
+                .assertNext(response -> assertEquals(404, response.getStatusCode().value()))
+                .verifyComplete();
     }
 }
