@@ -52,7 +52,7 @@ class WeightNutrientRatioSummaryServiceTest {
             LocalDate date, String kcal, BigDecimal proteinPerKg, BigDecimal carbsPerKg, BigDecimal fatPerKg) {
         return new WeightNutrientRatioDTO(
                 date, new BigDecimal("80.00"), new BigDecimal(kcal), BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
-                new BigDecimal("1.00"), proteinPerKg, carbsPerKg, fatPerKg);
+                new BigDecimal("1.00"), proteinPerKg, carbsPerKg, fatPerKg, false);
     }
 
     private MealEntryEntity mealEntry(LocalDate date) {
@@ -205,6 +205,37 @@ class WeightNutrientRatioSummaryServiceTest {
                     assertEquals(earliest, totalPeriod.from());
                     assertEquals(today, totalPeriod.to());
                     assertEquals(101, totalPeriod.totalDays());
+                })
+                .verifyComplete();
+    }
+
+    // -----------------------------------------------------------------------
+    // excluded days
+    // -----------------------------------------------------------------------
+
+    @Test
+    @DisplayName("getSummary ignores excluded days even if they have logged meals")
+    void getSummary_ExcludedTrackedDay_IsNotAveraged() {
+        final LocalDate day1 = today.minusDays(1);
+        final LocalDate day2 = today;
+        final WeightNutrientRatioDTO excluded = new WeightNutrientRatioDTO(
+                day2, new BigDecimal("80.00"), new BigDecimal("3500.00"), BigDecimal.ZERO, BigDecimal.ZERO,
+                BigDecimal.ZERO, new BigDecimal("1.00"), new BigDecimal("9.00"), new BigDecimal("9.00"),
+                new BigDecimal("9.00"), true);
+        final List<WeightNutrientRatioDTO> ratios = List.of(
+                ratio(day1, "2000.00", new BigDecimal("2.00"), new BigDecimal("3.00"), new BigDecimal("1.00")),
+                excluded
+        );
+        when(weightNutrientRatioService.getRatios(any(), any())).thenReturn(Mono.just(ratios));
+        when(mealEntryRepository.findTopByOrderByEntryDateAsc()).thenReturn(Optional.of(mealEntry(day1)));
+
+        StepVerifier.create(weightNutrientRatioSummaryService.getSummary())
+                .assertNext(response -> {
+                    final WeightNutrientRatioSummaryDTO totalPeriod = response.totalPeriod();
+                    assertEquals(1, totalPeriod.trackedDays());
+                    assertEquals(new BigDecimal("2.00"), totalPeriod.avgProteinPerKg());
+                    assertEquals(new BigDecimal("3.00"), totalPeriod.avgCarbsPerKg());
+                    assertEquals(new BigDecimal("1.00"), totalPeriod.avgFatPerKg());
                 })
                 .verifyComplete();
     }

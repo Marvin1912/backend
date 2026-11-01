@@ -18,6 +18,7 @@ import java.time.LocalDate;
  * @param proteinPerKg  grams of protein consumed per kilogram of body weight, or null if weightKg is null
  * @param carbsPerKg    grams of carbohydrates consumed per kilogram of body weight, or null if weightKg is null
  * @param fatPerKg      grams of fat consumed per kilogram of body weight, or null if weightKg is null
+ * @param excluded      whether this day is excluded from nutrition evaluations
  */
 @Schema(description = "A day's total nutrient intake paired with the applicable body weight and per-kilogram ratios")
 public record WeightNutrientRatioDTO(
@@ -49,6 +50,9 @@ public record WeightNutrientRatioDTO(
         BigDecimal carbsPerKg,
 
         @Schema(description = "Grams of fat consumed per kilogram of body weight", example = "0.87")
-        BigDecimal fatPerKg
+        BigDecimal fatPerKg,
+
+        @Schema(description = "Whether this day is excluded from nutrition evaluations", example = "false")
+        boolean excluded
 ) {
 }

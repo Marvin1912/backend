@@ -60,12 +60,12 @@ class WeightControllerTest {
         final WeightNutrientRatioDTO day1 = new WeightNutrientRatioDTO(
                 from, new BigDecimal("80.00"),
                 new BigDecimal("2000.00"), new BigDecimal("160.00"), new BigDecimal("200.00"), new BigDecimal("60.00"),
-                new BigDecimal("25.00"), new BigDecimal("2.00"), new BigDecimal("2.50"), new BigDecimal("0.75")
+                new BigDecimal("25.00"), new BigDecimal("2.00"), new BigDecimal("2.50"), new BigDecimal("0.75"), false
         );
         final WeightNutrientRatioDTO day2 = new WeightNutrientRatioDTO(
                 to, new BigDecimal("80.00"),
                 new BigDecimal("0.00"), new BigDecimal("0.00"), new BigDecimal("0.00"), new BigDecimal("0.00"),
-                new BigDecimal("0.00"), new BigDecimal("0.00"), new BigDecimal("0.00"), new BigDecimal("0.00")
+                new BigDecimal("0.00"), new BigDecimal("0.00"), new BigDecimal("0.00"), new BigDecimal("0.00"), false
         );
 
         when(weightNutrientRatioService.getRatios(from, to)).thenReturn(Mono.just(List.of(day1, day2)));

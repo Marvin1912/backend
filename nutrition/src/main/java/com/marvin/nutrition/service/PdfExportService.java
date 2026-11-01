@@ -182,11 +182,16 @@ public class PdfExportService {
             Document doc, PdfContext ctx, LocalDate from, LocalDate to) throws DocumentException {
         doc.add(new Paragraph("2. Period Summary", FONT_SECTION));
         final List<DaySummaryDTO> trackedDays = ctx.days().stream()
+                .filter(d -> !d.excluded())
                 .filter(d -> !d.entries().isEmpty())
                 .toList();
+        final long excludedDays = ctx.days().stream().filter(DaySummaryDTO::excluded).count();
         final long calendarDays = from.datesUntil(to.plusDays(1)).count();
         doc.add(new Paragraph(
                 "Days tracked: " + trackedDays.size() + " / " + calendarDays, FONT_BODY));
+        if (excludedDays > 0) {
+            doc.add(new Paragraph("Days excluded: " + excludedDays, FONT_BODY));
+        }
         if (!trackedDays.isEmpty()) {
             renderPeriodAverages(doc, trackedDays, ctx);
         }
@@ -197,7 +202,7 @@ public class PdfExportService {
      * Renders average kcal statistics and the on-target count for the tracked days.
      *
      * @param doc         the document to write to
-     * @param trackedDays days that have at least one meal entry
+     * @param trackedDays days that have at least one meal entry and are not excluded
      * @param ctx         the PDF context (used for the target kcal reference)
      * @throws DocumentException if the PDF library encounters an error
      */
@@ -298,7 +303,8 @@ public class PdfExportService {
      * @throws DocumentException if the PDF library encounters an error
      */
     private void renderDaySection(Document doc, DaySummaryDTO day) throws DocumentException {
-        doc.add(new Paragraph(day.date().toString(), FONT_SUBSECTION));
+        final String header = day.excluded() ? day.date() + " (excluded from evaluation)" : day.date().toString();
+        doc.add(new Paragraph(header, FONT_SUBSECTION));
         if (day.targets() != null) {
             doc.add(new Paragraph("Target: " + day.targets().targetKcal() + " kcal", FONT_SMALL));
         }

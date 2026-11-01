@@ -2,8 +2,10 @@ package com.marvin.nutrition.service;
 
 import com.marvin.nutrition.dto.MacrosDTO;
 import com.marvin.nutrition.dto.WeightNutrientRatioDTO;
+import com.marvin.nutrition.entity.ExcludedDayEntity;
 import com.marvin.nutrition.entity.MealEntryEntity;
 import com.marvin.nutrition.entity.WeightEntryEntity;
+import com.marvin.nutrition.repository.ExcludedDayRepository;
 import com.marvin.nutrition.repository.MealEntryRepository;
 import com.marvin.nutrition.repository.WeightEntryRepository;
 import java.math.BigDecimal;
@@ -13,6 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
@@ -29,17 +32,22 @@ public class WeightNutrientRatioService {
 
     private final MealEntryRepository mealEntryRepository;
     private final WeightEntryRepository weightEntryRepository;
+    private final ExcludedDayRepository excludedDayRepository;
 
     /**
      * Creates a new WeightNutrientRatioService.
      *
      * @param mealEntryRepository   JPA repository for meal entries
      * @param weightEntryRepository JPA repository for weight entries
+     * @param excludedDayRepository JPA repository for days excluded from evaluations
      */
     public WeightNutrientRatioService(
-            MealEntryRepository mealEntryRepository, WeightEntryRepository weightEntryRepository) {
+            MealEntryRepository mealEntryRepository,
+            WeightEntryRepository weightEntryRepository,
+            ExcludedDayRepository excludedDayRepository) {
         this.mealEntryRepository = mealEntryRepository;
         this.weightEntryRepository = weightEntryRepository;
+        this.excludedDayRepository = excludedDayRepository;
     }
 
     /**
@@ -70,8 +78,15 @@ public class WeightNutrientRatioService {
                 weightEntryRepository.findTopByOrderByEntryDateAsc()
         ).subscribeOn(Schedulers.boundedElastic());
 
-        return Mono.zip(totalsByDateMono, weightsUpToMono, earliestEverMono)
-                .map(tuple -> buildRatios(from, to, tuple.getT1(), tuple.getT2(), tuple.getT3().orElse(null)));
+        final Mono<Set<LocalDate>> excludedDatesMono = Mono.fromCallable(() ->
+                excludedDayRepository.findByEntryDateBetweenOrderByEntryDateAsc(from, to).stream()
+                        .map(ExcludedDayEntity::getEntryDate)
+                        .collect(Collectors.toSet())
+        ).subscribeOn(Schedulers.boundedElastic());
+
+        return Mono.zip(totalsByDateMono, weightsUpToMono, earliestEverMono, excludedDatesMono)
+                .map(tuple -> buildRatios(
+                        from, to, tuple.getT1(), tuple.getT2(), tuple.getT3().orElse(null), tuple.getT4()));
     }
 
     /**
@@ -83,6 +98,7 @@ public class WeightNutrientRatioService {
      * @param totalsByDate per-day nutrient totals, keyed by date
      * @param weightsUpTo  weight entries on or before {@code to}, ordered ascending by entry date
      * @param earliestEver the earliest ever weight entry, or null if none exists
+     * @param excludedDates days within the range excluded from nutrition evaluations
      * @return the assembled ratio DTOs, ordered ascending by date
      */
     private List<WeightNutrientRatioDTO> buildRatios(
@@ -90,7 +106,8 @@ public class WeightNutrientRatioService {
             LocalDate to,
             Map<LocalDate, MacrosDTO> totalsByDate,
             List<WeightEntryEntity> weightsUpTo,
-            WeightEntryEntity earliestEver) {
+            WeightEntryEntity earliestEver,
+            Set<LocalDate> excludedDates) {
         final List<WeightNutrientRatioDTO> ratios = new ArrayList<>();
         final BigDecimal zeroTotal = BigDecimal.ZERO.setScale(RATIO_SCALE, RoundingMode.UNNECESSARY);
         final MacrosDTO zero = new MacrosDTO(zeroTotal, zeroTotal, zeroTotal, zeroTotal);
@@ -102,7 +119,7 @@ public class WeightNutrientRatioService {
             final WeightEntryEntity applicable = pointer >= 0 ? weightsUpTo.get(pointer) : earliestEver;
             final BigDecimal weightKg = applicable != null ? applicable.getWeightKg() : null;
             final MacrosDTO totals = totalsByDate.getOrDefault(date, zero);
-            ratios.add(buildRatio(date, totals, weightKg));
+            ratios.add(buildRatio(date, totals, weightKg, excludedDates.contains(date)));
         }
         return ratios;
     }
@@ -145,9 +162,11 @@ public class WeightNutrientRatioService {
      * @param date     the date this entry applies to
      * @param totals   the day's nutrient totals
      * @param weightKg the applicable body weight in kilograms, or null if unavailable
+     * @param excluded whether the day is excluded from nutrition evaluations
      * @return the assembled ratio DTO
      */
-    private WeightNutrientRatioDTO buildRatio(LocalDate date, MacrosDTO totals, BigDecimal weightKg) {
+    private WeightNutrientRatioDTO buildRatio(
+            LocalDate date, MacrosDTO totals, BigDecimal weightKg, boolean excluded) {
         return new WeightNutrientRatioDTO(
                 date,
                 weightKg,
@@ -158,7 +177,8 @@ public class WeightNutrientRatioService {
                 ratio(totals.kcal(), weightKg),
                 ratio(totals.proteinG(), weightKg),
                 ratio(totals.carbsG(), weightKg),
-                ratio(totals.fatG(), weightKg)
+                ratio(totals.fatG(), weightKg),
+                excluded
         );
     }
 

@@ -73,7 +73,7 @@ class PdfExportServiceTest {
     private DaySummaryDTO emptyDay(LocalDate date) {
         final MacrosDTO zero = new MacrosDTO(
                 BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
-        return new DaySummaryDTO(date, List.of(), zero, sampleTargets(), null, List.of(), BigDecimal.ZERO);
+        return new DaySummaryDTO(date, List.of(), zero, sampleTargets(), null, List.of(), BigDecimal.ZERO, false);
     }
 
     private void setupHappyPathMocks() {
@@ -160,5 +160,22 @@ class PdfExportServiceTest {
 
         verify(mealEntryService).getDays(from, to);
         verify(weightService).findAll();
+    }
+
+    @Test
+    @DisplayName("generatePdf produces a valid PDF when the range contains excluded days")
+    void rendersExcludedDays() {
+        when(profileService.getProfile()).thenReturn(Mono.just(sampleProfile()));
+        when(nutritionTargetService.getTargets()).thenReturn(Mono.just(sampleTargets()));
+        when(weightService.findAll()).thenReturn(Flux.empty());
+        final MacrosDTO zero = new MacrosDTO(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
+        final DaySummaryDTO excludedDay =
+                new DaySummaryDTO(from, List.of(), zero, sampleTargets(), null, List.of(), BigDecimal.ZERO, true);
+        when(mealEntryService.getDays(from, to))
+                .thenReturn(Mono.just(List.of(excludedDay, emptyDay(from.plusDays(1)), emptyDay(to))));
+
+        StepVerifier.create(pdfExportService.generatePdf(from, to))
+                .assertNext(bytes -> assertEquals('%', (char) bytes[0]))
+                .verifyComplete();
     }
 }
