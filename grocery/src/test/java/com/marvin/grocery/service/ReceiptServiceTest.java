@@ -1,5 +1,6 @@
 package com.marvin.grocery.service;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -16,7 +17,9 @@ import com.marvin.grocery.mapper.ReceiptMapper;
 import com.marvin.grocery.ocr.OcrProvider;
 import com.marvin.grocery.repository.ReceiptItemRepository;
 import com.marvin.grocery.repository.ReceiptRepository;
+import com.marvin.grocery.dto.ReceiptDTO;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.UUID;
@@ -132,5 +135,37 @@ class ReceiptServiceTest {
                 .verify();
 
         verify(receiptItemRepository, never()).delete(any(ReceiptItemEntity.class));
+    }
+
+    @Test
+    @DisplayName("updateReceiptDate should set the receipt date and return the mapped DTO")
+    void updateReceiptDate_Exists_SetsDate() {
+        final UUID receiptId = UUID.randomUUID();
+        final ReceiptEntity receipt = new ReceiptEntity();
+        receipt.setId(receiptId);
+        receipt.setReceiptDate(LocalDate.of(2020, 11, 8));
+        final ReceiptDTO dto = new ReceiptDTO(receiptId, LocalDate.of(2026, 8, 21), null, null, null, null);
+        when(receiptRepository.findById(receiptId)).thenReturn(Optional.of(receipt));
+        when(receiptRepository.save(receipt)).thenReturn(receipt);
+        when(receiptMapper.toReceiptDTO(receipt)).thenReturn(dto);
+
+        StepVerifier.create(receiptService.updateReceiptDate(receiptId, LocalDate.of(2026, 8, 21)))
+                .expectNext(dto)
+                .verifyComplete();
+
+        assertEquals(LocalDate.of(2026, 8, 21), receipt.getReceiptDate());
+    }
+
+    @Test
+    @DisplayName("updateReceiptDate should emit NoSuchElementException for an unknown receipt")
+    void updateReceiptDate_NotFound_EmitsError() {
+        final UUID receiptId = UUID.randomUUID();
+        when(receiptRepository.findById(receiptId)).thenReturn(Optional.empty());
+
+        StepVerifier.create(receiptService.updateReceiptDate(receiptId, LocalDate.of(2026, 8, 21)))
+                .expectError(NoSuchElementException.class)
+                .verify();
+
+        verify(receiptRepository, never()).save(any(ReceiptEntity.class));
     }
 }

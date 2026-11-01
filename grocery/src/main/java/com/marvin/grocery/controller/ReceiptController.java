@@ -5,6 +5,7 @@ import com.marvin.grocery.dto.ArticleGroupPriceSummaryDTO;
 import com.marvin.grocery.dto.PriceHistoryPointDTO;
 import com.marvin.grocery.dto.ReceiptDTO;
 import com.marvin.grocery.dto.ReceiptItemDTO;
+import com.marvin.grocery.dto.UpdateReceiptDateRequest;
 import com.marvin.grocery.dto.UpdateReceiptItemRequest;
 import com.marvin.grocery.dto.UpdateSupermarketRequest;
 import com.marvin.grocery.service.PriceTrendService;
@@ -253,6 +254,35 @@ public class ReceiptController {
             @PathVariable @Parameter(description = "UUID of the receipt") UUID id,
             @RequestBody UpdateSupermarketRequest request) {
         return receiptService.updateSupermarket(id, request.supermarket())
+                .map(ResponseEntity::ok)
+                .onErrorReturn(NoSuchElementException.class, ResponseEntity.notFound().build());
+    }
+
+    /**
+     * Updates the date printed on the given receipt.
+     *
+     * @param id      the UUID of the receipt to update
+     * @param request the corrected receipt date
+     * @return a Mono with 200 OK and the updated receipt DTO, or 404 if not found
+     */
+    @PatchMapping("/{id}/date")
+    @Operation(
+            summary = "Set the date of a receipt",
+            description = "Corrects the purchase date printed on an existing receipt.",
+            responses = {
+                @ApiResponse(
+                        responseCode = "200",
+                        description = "Receipt date updated",
+                        content = @Content(schema = @Schema(implementation = ReceiptDTO.class))
+                ),
+                @ApiResponse(responseCode = "400", description = "Missing or invalid date"),
+                @ApiResponse(responseCode = "404", description = "Receipt not found")
+            }
+    )
+    public Mono<ResponseEntity<ReceiptDTO>> updateReceiptDate(
+            @PathVariable @Parameter(description = "UUID of the receipt") UUID id,
+            @Valid @RequestBody UpdateReceiptDateRequest request) {
+        return receiptService.updateReceiptDate(id, request.receiptDate())
                 .map(ResponseEntity::ok)
                 .onErrorReturn(NoSuchElementException.class, ResponseEntity.notFound().build());
     }

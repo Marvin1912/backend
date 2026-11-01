@@ -12,6 +12,7 @@ import com.marvin.grocery.ocr.OcrProvider;
 import com.marvin.grocery.repository.ReceiptItemRepository;
 import com.marvin.grocery.repository.ReceiptRepository;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
@@ -164,6 +165,23 @@ public class ReceiptService {
             receipt.setSupermarket(supermarket);
             final ReceiptEntity saved = receiptRepository.save(receipt);
             return receiptMapper.toReceiptDTO(saved);
+        }).subscribeOn(Schedulers.boundedElastic());
+    }
+
+    /**
+     * Updates the date printed on the given receipt.
+     * Emits {@link NoSuchElementException} if the receipt does not exist.
+     *
+     * @param receiptId   the UUID of the receipt to update
+     * @param receiptDate the purchase date printed on the receipt
+     * @return a Mono emitting the updated receipt DTO
+     */
+    public Mono<ReceiptDTO> updateReceiptDate(UUID receiptId, LocalDate receiptDate) {
+        return Mono.fromCallable(() -> {
+            final ReceiptEntity receipt = receiptRepository.findById(receiptId)
+                    .orElseThrow(() -> new NoSuchElementException("Receipt not found: " + receiptId));
+            receipt.setReceiptDate(receiptDate);
+            return receiptMapper.toReceiptDTO(receiptRepository.save(receipt));
         }).subscribeOn(Schedulers.boundedElastic());
     }
 
