@@ -31,4 +31,14 @@ public interface ArticleGroupSuggestionRepository extends JpaRepository<ArticleG
      * @return true if a matching suggestion exists
      */
     boolean existsByArticleIdAndStatus(Long articleId, SuggestionStatus status);
+
+    /**
+     * Returns the (article id, suggested group id) pairs of every suggestion with the given status.
+     *
+     * @param status the status to match
+     * @return list of article/group id pairs
+     */
+    @Query("SELECT new com.marvin.grocery.repository.ArticleGroupPair(s.article.id, s.suggestedGroup.id) "
+            + "FROM ArticleGroupSuggestionEntity s WHERE s.status = :status")
+    List<ArticleGroupPair> findPairsByStatus(@Param("status") SuggestionStatus status);
 }
