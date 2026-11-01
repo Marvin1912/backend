@@ -20,6 +20,7 @@ import java.util.List;
  *                        line; null if targets are unavailable)
  * @param activities      all sport activities logged for this day
  * @param totalKcalBurned aggregated kilocalories burned across all activities for this day
+ * @param excluded        whether this day is excluded from nutrition evaluations (averages, adherence)
  */
 @Schema(description = "Nutritional summary for a given day")
 public record DaySummaryDTO(
@@ -45,6 +46,9 @@ public record DaySummaryDTO(
         List<SportActivityDTO> activities,
 
         @Schema(description = "Total kilocalories burned across all activities for this day", example = "300.00")
-        BigDecimal totalKcalBurned
+        BigDecimal totalKcalBurned,
+
+        @Schema(description = "Whether this day is excluded from nutrition evaluations", example = "false")
+        boolean excluded
 ) {
 }

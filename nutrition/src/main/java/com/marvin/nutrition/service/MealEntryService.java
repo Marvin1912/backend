@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
@@ -38,6 +39,7 @@ public class MealEntryService {
     private final DayTargetSnapshotRepository dayTargetSnapshotRepository;
     private final MealEntryWriteService mealEntryWriteService;
     private final SportActivityLookupService sportActivityLookupService;
+    private final ExcludedDayService excludedDayService;
 
     /**
      * Creates a new MealEntryService with the required dependencies.
@@ -49,6 +51,7 @@ public class MealEntryService {
      * @param dayTargetSnapshotRepository JPA repository for per-day nutrition target snapshots
      * @param mealEntryWriteService       service owning transactional meal entry write operations
      * @param sportActivityLookupService  service owning read access to sport activities
+     * @param excludedDayService          service for days excluded from evaluations
      */
     public MealEntryService(
             MealEntryRepository mealEntryRepository,
@@ -57,7 +60,8 @@ public class MealEntryService {
             NutritionTargetService nutritionTargetService,
             DayTargetSnapshotRepository dayTargetSnapshotRepository,
             MealEntryWriteService mealEntryWriteService,
-            SportActivityLookupService sportActivityLookupService) {
+            SportActivityLookupService sportActivityLookupService,
+            ExcludedDayService excludedDayService) {
         this.mealEntryRepository = mealEntryRepository;
         this.foodRepository = foodRepository;
         this.mealEntryMapper = mealEntryMapper;
@@ -65,6 +69,7 @@ public class MealEntryService {
         this.dayTargetSnapshotRepository = dayTargetSnapshotRepository;
         this.mealEntryWriteService = mealEntryWriteService;
         this.sportActivityLookupService = sportActivityLookupService;
+        this.excludedDayService = excludedDayService;
     }
 
     /**
@@ -175,8 +180,13 @@ public class MealEntryService {
                 sportActivityLookupService.findByDate(date)
         ).subscribeOn(Schedulers.boundedElastic());
 
-        return Mono.zip(entriesMono, targetsMono, activitiesMono)
-                .map(tuple -> buildDaySummary(date, tuple.getT1(), tuple.getT2().orElse(null), tuple.getT3()));
+        final Mono<Boolean> excludedMono = Mono.fromCallable(() ->
+                excludedDayService.isExcludedSync(date)
+        ).subscribeOn(Schedulers.boundedElastic());
+
+        return Mono.zip(entriesMono, targetsMono, activitiesMono, excludedMono)
+                .map(tuple -> buildDaySummary(
+                        date, tuple.getT1(), tuple.getT2().orElse(null), tuple.getT3(), tuple.getT4()));
     }
 
     /**
@@ -220,11 +230,16 @@ public class MealEntryService {
                 sportActivityLookupService.findByDateRangeGroupedByDate(from, to)
         ).subscribeOn(Schedulers.boundedElastic());
 
-        return Mono.zip(entriesByDateMono, snapshotsByDateMono, activitiesByDateMono)
+        final Mono<Set<LocalDate>> excludedDatesMono = Mono.fromCallable(() ->
+                excludedDayService.findExcludedDatesSync(from, to)
+        ).subscribeOn(Schedulers.boundedElastic());
+
+        return Mono.zip(entriesByDateMono, snapshotsByDateMono, activitiesByDateMono, excludedDatesMono)
                 .flatMap(tuple -> {
                     final Map<LocalDate, List<MealEntryDTO>> entriesByDate = tuple.getT1();
                     final Map<LocalDate, TargetsDTO> snapshotsByDate = tuple.getT2();
                     final Map<LocalDate, List<SportActivityDTO>> activitiesByDate = tuple.getT3();
+                    final Set<LocalDate> excludedDates = tuple.getT4();
 
                     return Mono.fromCallable(() -> {
                         final List<DaySummaryDTO> summaries = new ArrayList<>();
@@ -233,7 +248,8 @@ public class MealEntryService {
                             final TargetsDTO targets = resolveTargets(date, snapshotsByDate);
                             final List<SportActivityDTO> activities =
                                     activitiesByDate.getOrDefault(date, List.of());
-                            summaries.add(buildDaySummary(date, entries, targets, activities));
+                            summaries.add(buildDaySummary(
+                                    date, entries, targets, activities, excludedDates.contains(date)));
                         }
                         return summaries;
                     }).subscribeOn(Schedulers.boundedElastic());
@@ -285,14 +301,19 @@ public class MealEntryService {
      * @param entries    the mapped entry DTOs
      * @param targets    the daily nutrition targets, or null if unavailable
      * @param activities the mapped sport activity DTOs
+     * @param excluded   whether the day is excluded from nutrition evaluations
      * @return the assembled day summary
      */
     private DaySummaryDTO buildDaySummary(
-            LocalDate date, List<MealEntryDTO> entries, TargetsDTO targets, List<SportActivityDTO> activities) {
+            LocalDate date,
+            List<MealEntryDTO> entries,
+            TargetsDTO targets,
+            List<SportActivityDTO> activities,
+            boolean excluded) {
         final MacrosDTO totals = computeTotals(entries);
         final BigDecimal totalKcalBurned = computeTotalKcalBurned(activities);
         final MacrosDTO remaining = targets != null ? computeRemaining(targets, totals, totalKcalBurned) : null;
-        return new DaySummaryDTO(date, entries, totals, targets, remaining, activities, totalKcalBurned);
+        return new DaySummaryDTO(date, entries, totals, targets, remaining, activities, totalKcalBurned, excluded);
     }
 
     /**

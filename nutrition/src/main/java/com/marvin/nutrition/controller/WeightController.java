@@ -205,7 +205,7 @@ public class WeightController {
     @Operation(
             summary = "Get weight/nutrient-intake ratio summary",
             description = "Returns the average macro-nutrient-to-body-weight ratios (protein, carbs, fat) for the "
-                    + "last 30 days and for the entire tracked period, averaged over days with logged meals.",
+                    + "last 30 days and for the entire tracked period, averaged over days with logged meals that are not excluded.",
             responses = {
                 @ApiResponse(
                         responseCode = "200",

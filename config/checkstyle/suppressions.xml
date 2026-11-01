@@ -41,6 +41,9 @@
     <suppress checks="MethodLength" files=".*AdapterController\.java"/>
     <suppress checks="ParameterNumber" files=".*AdapterController\.java"/>
 
+    <!-- Day summary orchestration needs one repository/service per aggregated source -->
+    <suppress checks="ParameterNumber" files=".*MealEntryService\.java"/>
+
     <!-- Suppress for configuration files -->
     <suppress checks=".*" files=".*[\/\\]config[\/\\].*"/>
 

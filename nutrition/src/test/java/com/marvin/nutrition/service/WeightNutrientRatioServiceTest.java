@@ -1,8 +1,10 @@
 package com.marvin.nutrition.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
 import com.marvin.nutrition.dto.WeightNutrientRatioDTO;
@@ -15,6 +17,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -34,6 +37,9 @@ class WeightNutrientRatioServiceTest {
 
     @Mock
     private WeightEntryRepository weightEntryRepository;
+
+    @Mock
+    private ExcludedDayService excludedDayService;
 
     @InjectMocks
     private WeightNutrientRatioService weightNutrientRatioService;
@@ -201,6 +207,27 @@ class WeightNutrientRatioServiceTest {
                         assertNull(dto.carbsPerKg());
                         assertNull(dto.fatPerKg());
                     }
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("getRatios flags excluded days and leaves other days unflagged")
+    void getRatios_ExcludedDay_IsFlagged() {
+        final WeightEntryEntity weight = weightEntry(LocalDate.of(2025, 12, 31), "80.00");
+
+        when(mealEntryRepository.findByEntryDateBetweenOrderByEntryDateAscCreationDateAsc(day1, day3))
+                .thenReturn(List.of());
+        when(weightEntryRepository.findByEntryDateLessThanEqualOrderByEntryDateAsc(day3))
+                .thenReturn(List.of(weight));
+        when(weightEntryRepository.findTopByOrderByEntryDateAsc()).thenReturn(Optional.of(weight));
+        when(excludedDayService.findExcludedDatesSync(day1, day3)).thenReturn(Set.of(day2));
+
+        StepVerifier.create(weightNutrientRatioService.getRatios(day1, day3))
+                .assertNext(results -> {
+                    assertFalse(results.get(0).excluded());
+                    assertTrue(results.get(1).excluded());
+                    assertFalse(results.get(2).excluded());
                 })
                 .verifyComplete();
     }

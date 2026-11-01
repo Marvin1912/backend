@@ -1,7 +1,9 @@
 package com.marvin.nutrition.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
@@ -27,6 +29,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -63,6 +66,9 @@ class MealEntryServiceTest {
 
     @Mock
     private SportActivityLookupService sportActivityLookupService;
+
+    @Mock
+    private ExcludedDayService excludedDayService;
 
     @InjectMocks
     private MealEntryService mealEntryService;
@@ -706,5 +712,41 @@ class MealEntryServiceTest {
                 .verifyComplete();
 
         verify(foodRepository).findAllById(any());
+    }
+
+    @Test
+    @DisplayName("getDays flags excluded days in the returned summaries")
+    void getDays_ExcludedDay_IsFlagged() {
+        final LocalDate from = today.minusDays(1);
+        final LocalDate to = today;
+
+        when(mealEntryRepository.findByEntryDateBetweenOrderByEntryDateAscCreationDateAsc(from, to))
+                .thenReturn(List.of());
+        when(foodRepository.findAllById(any())).thenReturn(List.of());
+        when(dayTargetSnapshotRepository.findByEntryDateBetween(from, to)).thenReturn(List.of());
+        when(nutritionTargetService.getTargetsSync(any(LocalDate.class)))
+                .thenReturn(new TargetsDTO(1750, 2160, 2160, 160, 72, 252, "MIFFLIN_ST_JEOR"));
+        when(excludedDayService.findExcludedDatesSync(from, to)).thenReturn(Set.of(from));
+
+        StepVerifier.create(mealEntryService.getDays(from, to))
+                .assertNext(summaries -> {
+                    assertTrue(summaries.get(0).excluded());
+                    assertFalse(summaries.get(1).excluded());
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("getDay flags an excluded day")
+    void getDay_ExcludedDay_IsFlagged() {
+        when(mealEntryRepository.findByEntryDateOrderByCreationDateAsc(today)).thenReturn(List.of());
+        when(foodRepository.findAllById(List.of())).thenReturn(List.of());
+        when(nutritionTargetService.getTargets(today))
+                .thenReturn(Mono.error(new TargetCalculationException("No data")));
+        when(excludedDayService.isExcludedSync(today)).thenReturn(true);
+
+        StepVerifier.create(mealEntryService.getDay(today))
+                .assertNext(summary -> assertTrue(summary.excluded()))
+                .verifyComplete();
     }
 }

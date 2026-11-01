@@ -18,8 +18,8 @@ import reactor.core.scheduler.Schedulers;
 /**
  * Composes {@link WeightNutrientRatioService} into period-level averages: the already-correct
  * per-day macro-to-body-weight ratios are averaged over the "tracked" days (days with logged
- * meals) of the last 30 days and of the entire tracked period, analogous to the averaging pattern
- * in {@code PdfExportService.renderPeriodAverages()}.
+ * meals that are not excluded from evaluations) of the last 30 days and of the entire tracked
+ * period, analogous to the averaging pattern in {@code PdfExportService.renderPeriodAverages()}.
  */
 @Service
 public class WeightNutrientRatioSummaryService {
@@ -78,6 +78,7 @@ public class WeightNutrientRatioSummaryService {
         return weightNutrientRatioService.getRatios(from, to)
                 .map(ratios -> {
                     final List<WeightNutrientRatioDTO> trackedDays = ratios.stream()
+                            .filter(r -> !r.excluded())
                             .filter(r -> r.kcal() != null && r.kcal().compareTo(BigDecimal.ZERO) > 0)
                             .toList();
                     final int totalDays = (int) ChronoUnit.DAYS.between(from, to) + 1;
