@@ -9,14 +9,17 @@ import com.marvin.grocery.entity.ArticleGroupSuggestionEntity;
 import com.marvin.grocery.entity.SuggestionSource;
 import com.marvin.grocery.entity.SuggestionStatus;
 import com.marvin.grocery.matching.ArticleGroupLlmMatcher.LlmMatchResponse.Match;
+import com.marvin.grocery.repository.ArticleGroupPair;
 import com.marvin.grocery.repository.ArticleGroupRepository;
 import com.marvin.grocery.repository.ArticleGroupSuggestionRepository;
 import com.marvin.grocery.repository.ArticleRepository;
 import com.marvin.grocery.repository.ReceiptItemRepository;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
@@ -28,7 +31,7 @@ import reactor.core.scheduler.Schedulers;
  * Matches ungrouped {@link ArticleEntity} rows to existing {@link ArticleGroupEntity} rows, either
  * automatically (score above the auto-assign threshold), by queueing a pending
  * {@link ArticleGroupSuggestionEntity} for manual review (score above the suggestion threshold), or
- * by asking the LLM-backed matcher to fill in the rest in a single batched call.
+ * by asking the LLM-backed matcher to propose suggestions for the rest in a single batched call.
  */
 @Service
 public class ArticleGroupSuggestionService {
@@ -160,10 +163,11 @@ public class ArticleGroupSuggestionService {
 
     /**
      * Runs the LLM-backed matcher over every ungrouped article that does not already have a pending
-     * suggestion, applying every returned match directly (no manual accept/reject step) and
-     * recording an already-accepted suggestion row per match for traceability.
+     * suggestion and queues every returned match as a pending suggestion for manual review.
+     * Previously rejected article/group pairs are passed to the LLM as exclusions and any match
+     * repeating one is dropped.
      *
-     * @return a Mono emitting a summary of how many articles were evaluated and matched
+     * @return a Mono emitting a summary of how many articles were evaluated and suggested
      */
     public Mono<MatchingRunResultDTO> runLlmBatch() {
         return Mono.fromCallable(this::loadLlmCandidates)
@@ -177,14 +181,25 @@ public class ArticleGroupSuggestionService {
                 .filter(a -> !articleGroupSuggestionRepository.existsByArticleIdAndStatus(a.getId(), SuggestionStatus.PENDING))
                 .toList();
         final List<ArticleGroupEntity> groups = articleGroupRepository.findAll();
-        return new LlmCandidates(ungrouped, groups);
+        return new LlmCandidates(ungrouped, groups, loadRejectedPairs(ungrouped));
+    }
+
+    private Map<Long, Set<Long>> loadRejectedPairs(List<ArticleEntity> candidates) {
+        if (candidates.isEmpty()) {
+            return Map.of();
+        }
+        final Set<Long> candidateIds = candidates.stream().map(ArticleEntity::getId).collect(Collectors.toSet());
+        return articleGroupSuggestionRepository.findPairsByStatus(SuggestionStatus.REJECTED).stream()
+                .filter(pair -> candidateIds.contains(pair.articleId()))
+                .collect(Collectors.groupingBy(ArticleGroupPair::articleId,
+                        Collectors.mapping(ArticleGroupPair::groupId, Collectors.toSet())));
     }
 
     private Mono<MatchingRunResultDTO> runLlmBatchForCandidates(LlmCandidates candidates) {
         if (candidates.articles().isEmpty() || candidates.groups().isEmpty()) {
             return Mono.just(new MatchingRunResultDTO(0, 0, 0, 0));
         }
-        return llmMatcher.matchBatch(candidates.articles(), candidates.groups())
+        return llmMatcher.matchBatch(candidates.articles(), candidates.groups(), candidates.rejectedPairs())
                 .flatMap(matches -> applyLlmMatches(candidates, matches));
     }
 
@@ -194,34 +209,40 @@ public class ArticleGroupSuggestionService {
                     .collect(Collectors.toMap(ArticleEntity::getId, Function.identity()));
             final Map<Long, ArticleGroupEntity> groupsById = candidates.groups().stream()
                     .collect(Collectors.toMap(ArticleGroupEntity::getId, Function.identity()));
-            final int applied = applyMatches(matches, articlesById, groupsById);
-            return new MatchingRunResultDTO(candidates.articles().size(), applied, 0, candidates.articles().size() - applied);
+            final int suggested = queueLlmSuggestions(matches, articlesById, groupsById, candidates.rejectedPairs());
+            return new MatchingRunResultDTO(candidates.articles().size(), 0, suggested, candidates.articles().size() - suggested);
         }).subscribeOn(Schedulers.boundedElastic());
     }
 
-    private int applyMatches(List<Match> matches, Map<Long, ArticleEntity> articlesById, Map<Long, ArticleGroupEntity> groupsById) {
-        int applied = 0;
+    private int queueLlmSuggestions(
+            List<Match> matches,
+            Map<Long, ArticleEntity> articlesById,
+            Map<Long, ArticleGroupEntity> groupsById,
+            Map<Long, Set<Long>> rejectedPairs) {
+        final Set<Long> suggestedArticleIds = new HashSet<>();
         for (final Match match : matches) {
             final ArticleEntity article = articlesById.get(match.articleId());
             final ArticleGroupEntity group = groupsById.get(match.groupId());
-            if (article == null || group == null) {
+            if (article == null || group == null || isRejected(rejectedPairs, match)
+                    || !suggestedArticleIds.add(article.getId())) {
                 continue;
             }
-            applyLlmMatch(article, group, match.confidence());
-            applied++;
+            queueLlmSuggestion(article, group, match.confidence());
         }
-        return applied;
+        return suggestedArticleIds.size();
     }
 
-    private void applyLlmMatch(ArticleEntity article, ArticleGroupEntity group, Double confidence) {
-        article.setArticleGroup(group);
-        articleRepository.save(article);
+    private boolean isRejected(Map<Long, Set<Long>> rejectedPairs, Match match) {
+        return rejectedPairs.getOrDefault(match.articleId(), Set.of()).contains(match.groupId());
+    }
+
+    private void queueLlmSuggestion(ArticleEntity article, ArticleGroupEntity group, Double confidence) {
         final ArticleGroupSuggestionEntity suggestion = new ArticleGroupSuggestionEntity();
         suggestion.setArticle(article);
         suggestion.setSuggestedGroup(group);
         suggestion.setScore(confidence == null ? 0.0 : confidence);
         suggestion.setSource(SuggestionSource.LLM);
-        suggestion.setStatus(SuggestionStatus.ACCEPTED);
+        suggestion.setStatus(SuggestionStatus.PENDING);
         articleGroupSuggestionRepository.save(suggestion);
     }
 
@@ -314,6 +335,7 @@ public class ArticleGroupSuggestionService {
     private record BestMatch(ArticleGroupEntity group, double score) {
     }
 
-    private record LlmCandidates(List<ArticleEntity> articles, List<ArticleGroupEntity> groups) {
+    private record LlmCandidates(
+            List<ArticleEntity> articles, List<ArticleGroupEntity> groups, Map<Long, Set<Long>> rejectedPairs) {
     }
 }

@@ -6,6 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -20,13 +23,16 @@ import com.marvin.grocery.entity.ArticleGroupSuggestionEntity;
 import com.marvin.grocery.entity.SuggestionSource;
 import com.marvin.grocery.entity.SuggestionStatus;
 import com.marvin.grocery.matching.ArticleGroupLlmMatcher.LlmMatchResponse.Match;
+import com.marvin.grocery.repository.ArticleGroupPair;
 import com.marvin.grocery.repository.ArticleGroupRepository;
 import com.marvin.grocery.repository.ArticleGroupSuggestionRepository;
 import com.marvin.grocery.repository.ArticleRepository;
 import com.marvin.grocery.repository.ReceiptItemRepository;
 import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -264,26 +270,79 @@ class ArticleGroupSuggestionServiceTest {
         when(articleGroupRepository.findAll()).thenReturn(List.of(dairyGroup));
         final Match match = new Match(2L, 10L, 0.9);
         final ArgumentCaptor<List<ArticleEntity>> candidatesCaptor = ArgumentCaptor.forClass(List.class);
-        when(llmMatcher.matchBatch(candidatesCaptor.capture(), anyList())).thenReturn(Mono.just(List.of(match)));
+        when(llmMatcher.matchBatch(candidatesCaptor.capture(), anyList(), anyMap())).thenReturn(Mono.just(List.of(match)));
 
         final Mono<MatchingRunResultDTO> resultMono = service.runLlmBatch();
 
         StepVerifier.create(resultMono)
                 .assertNext(result -> {
                     assertEquals(1, result.candidatesEvaluated());
-                    assertEquals(1, result.autoAssigned());
-                    assertEquals(0, result.suggested());
+                    assertEquals(0, result.autoAssigned());
+                    assertEquals(1, result.suggested());
                     assertEquals(0, result.unmatched());
                 })
                 .verifyComplete();
         assertEquals(List.of(withoutPending), candidatesCaptor.getValue());
-        assertSame(dairyGroup, withoutPending.getArticleGroup());
-        verify(articleRepository).save(withoutPending);
+        assertNull(withoutPending.getArticleGroup());
+        verify(articleRepository, never()).save(any());
         final ArgumentCaptor<ArticleGroupSuggestionEntity> suggestionCaptor = ArgumentCaptor.forClass(ArticleGroupSuggestionEntity.class);
         verify(articleGroupSuggestionRepository).save(suggestionCaptor.capture());
+        assertSame(withoutPending, suggestionCaptor.getValue().getArticle());
+        assertSame(dairyGroup, suggestionCaptor.getValue().getSuggestedGroup());
         assertEquals(SuggestionSource.LLM, suggestionCaptor.getValue().getSource());
-        assertEquals(SuggestionStatus.ACCEPTED, suggestionCaptor.getValue().getStatus());
+        assertEquals(SuggestionStatus.PENDING, suggestionCaptor.getValue().getStatus());
         assertEquals(0.9, suggestionCaptor.getValue().getScore());
+    }
+
+    @Test
+    @DisplayName("runLlmBatch should pass previously rejected pairs to the LLM and drop any match repeating one")
+    void runLlmBatch_RejectedPairs_AreExcludedAndFiltered() {
+        final ArticleGroupEntity coffeeGroup = new ArticleGroupEntity();
+        coffeeGroup.setId(11L);
+        coffeeGroup.setName("Coffee");
+        final ArticleEntity coffee = article(2L, "kaffee");
+        final ArticleEntity tea = article(3L, "tee");
+        when(articleRepository.findAllWithGroup()).thenReturn(List.of(coffee, tea));
+        when(articleGroupSuggestionRepository.existsByArticleIdAndStatus(anyLong(), eq(SuggestionStatus.PENDING))).thenReturn(false);
+        when(articleGroupRepository.findAll()).thenReturn(List.of(dairyGroup, coffeeGroup));
+        when(articleGroupSuggestionRepository.findPairsByStatus(SuggestionStatus.REJECTED)).thenReturn(List.of(
+                new ArticleGroupPair(2L, 10L),
+                new ArticleGroupPair(99L, 10L)));
+        final ArgumentCaptor<Map<Long, Set<Long>>> exclusionsCaptor = ArgumentCaptor.forClass(Map.class);
+        when(llmMatcher.matchBatch(anyList(), anyList(), exclusionsCaptor.capture())).thenReturn(Mono.just(List.of(
+                new Match(2L, 10L, 0.9),
+                new Match(3L, 11L, 0.8))));
+
+        final Mono<MatchingRunResultDTO> resultMono = service.runLlmBatch();
+
+        StepVerifier.create(resultMono)
+                .expectNext(new MatchingRunResultDTO(2, 0, 1, 1))
+                .verifyComplete();
+        assertEquals(Map.of(2L, Set.of(10L)), exclusionsCaptor.getValue());
+        final ArgumentCaptor<ArticleGroupSuggestionEntity> suggestionCaptor = ArgumentCaptor.forClass(ArticleGroupSuggestionEntity.class);
+        verify(articleGroupSuggestionRepository).save(suggestionCaptor.capture());
+        assertSame(tea, suggestionCaptor.getValue().getArticle());
+        assertSame(coffeeGroup, suggestionCaptor.getValue().getSuggestedGroup());
+        assertEquals(SuggestionStatus.PENDING, suggestionCaptor.getValue().getStatus());
+    }
+
+    @Test
+    @DisplayName("runLlmBatch should queue only one suggestion per article when the LLM returns duplicates")
+    void runLlmBatch_DuplicateArticleMatches_QueuesOnlyFirst() {
+        final ArticleEntity coffee = article(2L, "kaffee");
+        when(articleRepository.findAllWithGroup()).thenReturn(List.of(coffee));
+        when(articleGroupSuggestionRepository.existsByArticleIdAndStatus(2L, SuggestionStatus.PENDING)).thenReturn(false);
+        when(articleGroupRepository.findAll()).thenReturn(List.of(dairyGroup));
+        when(llmMatcher.matchBatch(anyList(), anyList(), anyMap())).thenReturn(Mono.just(List.of(
+                new Match(2L, 10L, 0.9),
+                new Match(2L, 10L, 0.7))));
+
+        final Mono<MatchingRunResultDTO> resultMono = service.runLlmBatch();
+
+        StepVerifier.create(resultMono)
+                .expectNext(new MatchingRunResultDTO(1, 0, 1, 0))
+                .verifyComplete();
+        verify(articleGroupSuggestionRepository).save(any(ArticleGroupSuggestionEntity.class));
     }
 
     @Test

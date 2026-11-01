@@ -1,8 +1,10 @@
 package com.marvin.grocery.matching;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -10,10 +12,12 @@ import com.marvin.grocery.entity.ArticleEntity;
 import com.marvin.grocery.entity.ArticleGroupEntity;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpHeaders;
@@ -153,5 +157,37 @@ class ArticleGroupLlmMatcherTest {
         StepVerifier.create(matcher.matchBatch(List.of(milkArticle), List.of(dairyGroup)))
                 .expectError(ArticleGroupMatchingException.class)
                 .verify();
+    }
+
+    @Test
+    @DisplayName("Should list previously rejected pairs in the prompt and drop any match repeating one")
+    @SuppressWarnings("unchecked")
+    void matchBatch_RejectedPairs_AreListedInPromptAndDropped() {
+        final String jsonText = """
+                {"matches": [
+                    {"articleId": 1, "groupId": 10, "confidence": 0.95},
+                    {"articleId": 2, "groupId": 10, "confidence": 0.9}
+                ]}""";
+        final Map<String, Object> claudeResponse = Map.of(
+                "content", List.of(Map.of("type", "text", "text", jsonText))
+        );
+        stubWebClientChain(Mono.just(claudeResponse));
+
+        StepVerifier.create(matcher.matchBatch(
+                        List.of(milkArticle, breadArticle), List.of(dairyGroup), Map.of(2L, Set.of(10L))))
+                .assertNext(matches -> {
+                    assertEquals(1, matches.size());
+                    assertEquals(1L, matches.get(0).articleId());
+                })
+                .verifyComplete();
+
+        final ArgumentCaptor<Object> bodyCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(requestBodySpec).bodyValue(bodyCaptor.capture());
+        final Map<String, Object> body = (Map<String, Object>) bodyCaptor.getValue();
+        final Map<String, Object> message = ((List<Map<String, Object>>) body.get("messages")).get(0);
+        final Map<String, Object> textBlock = ((List<Map<String, Object>>) message.get("content")).get(0);
+        final String prompt = (String) textBlock.get("text");
+        assertTrue(prompt.contains("Rejected"), prompt);
+        assertTrue(prompt.contains("2: 10"), prompt);
     }
 }

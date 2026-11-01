@@ -146,7 +146,8 @@ public class ArticleMatchingController {
     }
 
     /**
-     * Runs the LLM-backed matcher over every ungrouped article without a pending suggestion.
+     * Runs the LLM-backed matcher over every ungrouped article without a pending suggestion,
+     * queueing its matches as pending suggestions.
      *
      * @return a Mono with 200 OK and a summary of the run, or 502 if the LLM call fails
      */
@@ -154,7 +155,7 @@ public class ArticleMatchingController {
     @Operation(
             summary = "Run the LLM-backed matcher",
             description = "Runs the LLM-backed matcher over every ungrouped article without a pending suggestion, "
-                    + "applying every confident match directly.",
+                    + "queueing every match as a pending suggestion (previously rejected pairs are excluded).",
             responses = {
                 @ApiResponse(
                         responseCode = "200",

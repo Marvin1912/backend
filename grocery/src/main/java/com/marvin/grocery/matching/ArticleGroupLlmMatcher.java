@@ -68,9 +68,26 @@ public class ArticleGroupLlmMatcher {
      */
     public Mono<List<LlmMatchResponse.Match>> matchBatch(
             List<ArticleEntity> candidateArticles, List<ArticleGroupEntity> existingGroups) {
+        return matchBatch(candidateArticles, existingGroups, Map.of());
+    }
+
+    /**
+     * Asks Claude to match every candidate article to one of the existing groups, telling it which
+     * article/group pairs were previously rejected and dropping any match that hallucinates an id or
+     * repeats a rejected pair.
+     *
+     * @param candidateArticles the ungrouped articles to attempt to match
+     * @param existingGroups    the existing article groups Claude may match against
+     * @param rejectedPairs     group ids per article id that must not be suggested again
+     * @return a Mono emitting the confirmed (non-hallucinated, non-rejected) matches
+     */
+    public Mono<List<LlmMatchResponse.Match>> matchBatch(
+            List<ArticleEntity> candidateArticles,
+            List<ArticleGroupEntity> existingGroups,
+            Map<Long, Set<Long>> rejectedPairs) {
         LOGGER.info("Sending {} candidate articles and {} groups to Claude for group matching",
                 candidateArticles.size(), existingGroups.size());
-        final Map<String, Object> request = buildRequest(candidateArticles, existingGroups);
+        final Map<String, Object> request = buildRequest(candidateArticles, existingGroups, rejectedPairs);
         final Set<Long> articleIds = candidateArticles.stream().map(ArticleEntity::getId).collect(Collectors.toSet());
         final Set<Long> groupIds = existingGroups.stream().map(ArticleGroupEntity::getId).collect(Collectors.toSet());
 
@@ -84,6 +101,7 @@ public class ArticleGroupLlmMatcher {
                         e -> new ArticleGroupMatchingException("Claude API request failed: " + e.getStatusCode(), e))
                 .flatMap(this::parseClaudeResponse)
                 .map(matches -> filterHallucinations(matches, articleIds, groupIds))
+                .map(matches -> filterRejected(matches, rejectedPairs))
                 .doOnError(e -> LOGGER.error("Article group LLM matching failed", e));
     }
 
@@ -119,6 +137,13 @@ public class ArticleGroupLlmMatcher {
                 .toList();
     }
 
+    private List<LlmMatchResponse.Match> filterRejected(
+            List<LlmMatchResponse.Match> matches, Map<Long, Set<Long>> rejectedPairs) {
+        return matches.stream()
+                .filter(match -> !rejectedPairs.getOrDefault(match.articleId(), Set.of()).contains(match.groupId()))
+                .toList();
+    }
+
     private boolean isValidMatch(LlmMatchResponse.Match match, Set<Long> articleIds, Set<Long> groupIds) {
         final boolean valid = articleIds.contains(match.articleId()) && groupIds.contains(match.groupId());
         if (!valid) {
@@ -141,7 +166,10 @@ public class ArticleGroupLlmMatcher {
         return Optional.empty();
     }
 
-    private Map<String, Object> buildRequest(List<ArticleEntity> candidateArticles, List<ArticleGroupEntity> existingGroups) {
+    private Map<String, Object> buildRequest(
+            List<ArticleEntity> candidateArticles,
+            List<ArticleGroupEntity> existingGroups,
+            Map<Long, Set<Long>> rejectedPairs) {
         final StringBuilder promptText = new StringBuilder(PROMPT_HEADER);
         promptText.append("\n\nExisting groups (id: name):\n");
         for (final ArticleGroupEntity group : existingGroups) {
@@ -150,6 +178,13 @@ public class ArticleGroupLlmMatcher {
         promptText.append("\nUngrouped articles (id: name):\n");
         for (final ArticleEntity article : candidateArticles) {
             promptText.append(article.getId()).append(": ").append(article.getName()).append('\n');
+        }
+        if (!rejectedPairs.isEmpty()) {
+            promptText.append("\nRejected assignments - never suggest these group ids for these articles again ")
+                    .append("(articleId: groupIds):\n");
+            rejectedPairs.forEach((articleId, groupIds) -> promptText.append(articleId).append(": ")
+                    .append(groupIds.stream().sorted().map(String::valueOf).collect(Collectors.joining(", ")))
+                    .append('\n'));
         }
         final Map<String, Object> textBlock = Map.of("type", "text", "text", promptText.toString());
         final Map<String, Object> message = Map.of("role", "user", "content", List.of(textBlock));
